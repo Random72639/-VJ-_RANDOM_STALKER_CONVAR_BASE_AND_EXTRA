@@ -5378,6 +5378,7 @@ function ENT:KickDoorDown()
             if self:GetActivity() ~= ACT_MELEE_ATTACK1 and not self:IsBusy("Activites") then 
                 local ang = self:GetAngles()
                 self:RemoveAllGestures()
+                self:ClearSchedule()
                 self:SetTurnTarget(self.BreakDoor)
                 VJ.STOPSOUND(self.CurrentIdleSound)
 
@@ -5400,14 +5401,17 @@ function ENT:KickDoorDown()
                         self.BreakDoor = NULL
                         return
                     end
+
                     local rngSnd = mRng(85, 105)
                     VJ.EmitSound(self, "npc/metropolice/gear" .. mRng(1, 6) .. ".wav", rngSnd, rngSnd)
-                
+
                     local kickAnim = VJ.PICK(self.KickDownDoorAnims)
-                    self:PlayAnim("vjseq_" .. kickAnim, true, VJ.AnimDuration(self, kickAnim), false)
-                    self:SetState(VJ_STATE_ONLY_ANIMATION, VJ.AnimDuration(self, kickAnim))
-                
-                    VJ.EmitSound(self, self.SoundTbl_Suppressing, rngSnd, rngSnd)
+                    local kickT = VJ.AnimDuration(self, kickAnim)
+                    self:PlayAnim("vjseq_" .. kickAnim, true, kickT, false)
+                    self:SetState(VJ_STATE_ONLY_ANIMATION, kickT)
+                    if mRng(1, 2) == 1 then 
+                        VJ.EmitSound(self, self.SoundTbl_Suppressing, rngSnd, rngSnd)
+                    end 
                 
                     local doorBreak = VJ.PICK({"general_sds/doorbreak/doorbust1", "general_sds/doorbreak/doorbust2","ambient/materials/door_hit1.wav"})
                     local woodBreak = VJ.PICK({"physics/wood/wood_crate_break" .. mRng(1, 5) .. ".wav"})
@@ -5427,8 +5431,9 @@ function ENT:KickDoorDown()
                         door:SetCollisionGroup(COLLISION_GROUP_DEBRIS)
                         door:SetSolid(SOLID_NONE)
                 
+                        local visMaxDist = self.DoorBreakPlyVisMaxDist or 500
 						for _,ply in ipairs(player.GetAll()) do 
-							if ply:GetPos():Distance(door:NearestPoint(ply:GetPos())) <= self.DoorBreakPlyVisMaxDist and not VJ_CVAR_IGNOREPLAYERS and self.DoorBreakPlyVisFx then
+							if ply:GetPos():Distance(door:NearestPoint(ply:GetPos())) <= visMaxDist and not VJ_CVAR_IGNOREPLAYERS and self.DoorBreakPlyVisFx then
 								ply:ViewPunch(Angle(mRand(-360, 360), mRand(-360, 360), mRand(-360, 360)))
 							end
                         end
@@ -5456,17 +5461,14 @@ function ENT:KickDoorDown()
                                 end
                             end)
                         end
-                
                         self.NextBreakDownDoorT = curT + mRand(4.5, 10)
                         door:Remove()
                     else
                     end
                 end)
-                
             end
         end
     end
-    
     if not IsValid(self.BreakDoor) then
         self:SetState()
     end
