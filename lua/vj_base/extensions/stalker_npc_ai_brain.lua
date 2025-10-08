@@ -1199,7 +1199,7 @@ function ENT:ManageStrafeShoot()
     local distance = self:GetPos():Distance(ene:GetPos())
     local hasStrafeFire = self.HasStrafeFire or false
     local canStrafe = self.Weapon_Strafe or false
-    local maxDist = self.MaxDistStopStrafeFire 5000
+    local maxDist = self.MaxDistStopStrafeFire or 5000
 
     self.NextStrafeFireToggleT = self.NextStrafeFireToggleT or 0
     if curT < self.NextStrafeFireToggleT then return end
@@ -1225,7 +1225,7 @@ function ENT:ManageMoveAndShoot()
     local distance = self:GetPos():Distance(ene:GetPos())
     local hasMoveShoot = self.HasMoveAndShoot or false
     local canMoveShoot = self.Weapon_CanMoveFire or false
-    local maxDist = self.MaxDistStopStrafeFire 5000
+    local maxDist = self.MaxDistStopStrafeFire or 5000
 
     self.NextMoveFireToggleT = self.NextMoveFireToggleT or 0
     if curT < self.NextMoveFireToggleT then return end
