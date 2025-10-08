@@ -1271,7 +1271,7 @@ function ENT:ManageRandomVars()
             self.NextPanicOnCloseProxT = curT + mRand(5, 15)
             self.NextFindLootT = curT + mRand(5, 25)
             self.DeathAnimationChance = mRng(2,5)
-            self.NextAvoidCrosshairT = curT + mRand(4.25, 8.45)
+            self.Avoid_C_HairNextT = curT + mRand(4.25, 8.45)
             self.BloodDecalDistance = mRand(100,320)
             self.IdleDialogueDistance = mRng(350,650)
             self.NextIdleFidgetGestureAnimT = curT + mRand(1, 15)
@@ -4298,7 +4298,7 @@ function ENT:PanicOnDamageByEne(dmginfo)
         panicChance = math.max(1, math.floor(panicChance / 2))
     end
 
-    if hasNonMeleeWeapon and curTime >= self.Panic_DmgEne_NextT and mRng(1, 1) == 1 then
+    if hasNonMeleeWeapon and curTime >= self.Panic_DmgEne_NextT and mRng(1, panicChance) == 1 then
         self:ClearSchedule()
         timer.Simple(mRand(0.05, 0.45), function()
             if not IsValid(self) then return end
@@ -4659,15 +4659,15 @@ function ENT:TranslateActivity(act)
 		return ACT_BARNACLE_PULL 
     end 
 
-    if crouchActs[act] then
+    if crouchActs[act] then -- WHY DOES IT ONLY WORK WHEN THEY FOLLOW THE PLY???
         if not self.IsCurCrouchWalking then
             self.IsCurCrouchWalking = true
-            print("[Stealth] Entered crouch movement:", act)
+            print("USING CROUCH ACT:", act)
         end
     else
         if self.IsCurCrouchWalking then
             self.IsCurCrouchWalking = false
-            print("[Stealth] Exited crouch movement:", act)
+            print("NOT-U CROUCH ACT:", act)
         end
     end
 
@@ -4768,43 +4768,60 @@ function ENT:DefensiveWhenLowHealth()
     end
 end
 ---------------------------------------------------------------------------------------------------------------------------------------------
-ENT.CanAvoidCrosshair = true 
-ENT.CurrentlyAvoidingCrosshair = false 
-ENT.NextAvoidCrosshairT = 0
+ENT.Avoid_C_Hair = true 
+ENT.AvoidingC_Hair = false 
+ENT.Avoid_C_HairNextT = 0
+ENT.Avoid_C_HairMinDist = 850
+ENT.Avoid_C_HairGesAnim = true 
+ENT.Avoid_C_HairGesTbl = {"gesture_signal_takecover","gesture_signal_right","gesture_signal_left","gesture_signal_forward"}
+ENT.Avoid_C_HairGesChance = 3
 function ENT:SNPCMoveAwayFromCrosshair()
-    if GetConVar("vj_stalker_avoid_ply_crosshair"):GetInt()  ~= 1 or not IsValid(self) or self.VJ_IsBeingControlled or GetConVar("ai_ignoreplayers"):GetBool()  == 1 then
+    local crossConv = GetConVar("vj_stalker_avoid_ply_crosshair"):GetInt()
+    local ai_Conv = GetConVar("ai_ignoreplayers"):GetBool()
+    if crossConv ~= 1 or not IsValid(self) or self.VJ_IsBeingControlled or (ai_Conv == 1 or VJ_CVAR_IGNOREPLAYERS) then
         return false 
     end
-
-    if self.CurrentlyAvoidingCrosshair or
-       self.MovementType == VJ_MOVETYPE_STATIONARY or 
-       self.Flinching or 
-       self:IsBusy("Activities") or 
-       not self.Alerted or 
-       self:GetState() == VJ_STATE_ONLY_ANIMATION_CONSTANT or
-       self:GetState() == VJ_STATE_ONLY_ANIMATION or 
-       self:GetState() == VJ_STATE_ONLY_ANIMATION_NOATTACK or 
-       self.IsGuard or
-       self.CurrentlyHealSelf or
-       self.IsHumanDodging or
-       self:GetWeaponState() == VJ.WEP_STATE_RELOADING or
-       self:IsBusy() or
-       (self.NextAvoidCrosshairT and self.NextAvoidCrosshairT > CurTime()) then
-        return
+    local busy = self:GetState() == VJ_STATE_ONLY_ANIMATION_CONSTANT or self:GetState() == VJ_STATE_ONLY_ANIMATION or self:GetState() == VJ_STATE_ONLY_ANIMATION_NOATTACK or self:IsBusy("Activities") or self.CurrentlyHealSelf or self.IsHumanDodging or self.Flinching
+    local curT = CurTime()
+    local bScheds = self:GetCurrentSchedule() == 30 or self:GetCurrentSchedule() == 27 
+    if self.AvoidingC_Hair or
+        busy or 
+        bScheds or 
+        self.MovementType == VJ_MOVETYPE_STATIONARY or   
+        self:GetNPCState() == NPC_STATE_IDLE or  
+        not self.Alerted or 
+        self.IsGuard or
+        self:GetWeaponState() == VJ.WEP_STATE_RELOADING or
+        (self.Avoid_C_HairNextT and self.Avoid_C_HairNextT > curT) then
+        return false 
     end
-
     for _, ply in ipairs(player.GetAll()) do
-        if ply:Alive() and IsValid(ply) and (self:Disposition(ply) == D_HT or self:Disposition(ply) == D_FR) and self.CanAvoidCrosshair and not self:IsMoving() and not self.CurrentSchedule then
+        local ene = self:GetEnemy()
+        if IsValid(ene) and ene ~= ply then return end
+        if ply:Alive() and IsValid(ply) and (self:Disposition(ply) == D_HT or self:Disposition(ply) == D_FR) and self.Avoid_C_Hair and not self:IsMoving() and not self.CurrentSchedule and self:IsOnGround() then
+            local minDist = self.Avoid_C_HairMinDist or 1500
+            local dist = self:GetPos():Distance(ply:GetPos())
             local trace = ply:GetEyeTrace()
-            local gestureSignal = {"gesture_signal_takecover","gesture_signal_right","gesture_signal_left","gesture_signal_forward"}
-            local selectedGesAnim = VJ.PICK(gestureSignal) 
-            if trace.Entity == self then
+            local gesChance = self.Avoid_C_HairGesChance or 3 
+            local gesAnim = VJ.PICK(self.Avoid_C_HairGesTbl) 
+
+            local tr = util.TraceLine({
+            start = ply:EyePos(),
+            endpos = self:WorldSpaceCenter(),
+            filter = {ply, self}
+            })
+
+            if tr.Hit and tr.Entity ~= self then 
+                return false
+            end
+            if trace.Entity == self and dist >= minDist then
                 self:ClearSchedule()
                 self:StopMoving()
                 self:RemoveAllGestures()
-                self:SCHEDULE_COVER_ENEMY("TASK_RUN_PATH", function(x)
+                print("IM MIVUNG")
+                self.AvoidingC_Hair = true
+                self:SCHEDULE_COVER_ORIGIN("TASK_RUN_PATH", function(x)
                     x.DisableChasingEnemy = false
-                    x.CurrentlyAvoidingCrosshair = true
 
                     if mRng(1,2) == 1 then
                         x.CanShootWhenMoving = true   
@@ -4814,18 +4831,19 @@ function ENT:SNPCMoveAwayFromCrosshair()
                         x.TurnData = {Type = VJ.FACE_NONE, Target = nil}
                     end
                     
-                    if mRng(1,3) == 1 then
-                    self:PlayAnim("vjges_" .. selectedGesAnim, false) 
+                    if self.Avoid_C_HairGesAnim and mRng(1, gesChance) == 1 then
+                    self:PlayAnim("vjges_" .. gesAnim, false) 
                 end
             end)
-                self.TakingCoverT = CurTime() + mRand(1, 5)
-                self.NextChaseTime = CurTime() + mRand(1, 5)
-                self.NextAvoidCrosshairT = CurTime() + mRand(1.25, 10.25) 
+                local curT2 = CurTime()
+                self.TakingCoverT = curT2 + mRand(1, 5)
+                self.NextChaseTime = curT2 + mRand(1, 5)
+                self.Avoid_C_HairNextT = curT2 + mRand(1.25, 10.25) 
                 break
             end
         end
     end
-    self.CurrentlyAvoidingCrosshair = false
+    self.AvoidingC_Hair = false
 end
 ---------------------------------------------------------------------------------------------------------------------------------------------
 function ENT:CanFireQuickFlare() 
