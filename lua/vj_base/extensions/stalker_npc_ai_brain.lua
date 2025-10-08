@@ -755,8 +755,18 @@ local crouchActs = {
     [ACT_WALK_CROUCH_RPG] = true
 }
 
+ENT.Valid_CoverClassesTbl = {
+    ["prop_physics"] = true,
+    ["func_brush"] = true,
+    ["prop_static"] = true,
+    ["prop_dynamic"] = true
+}
 
-function ENT:ContextToThrowFlareAtEnemy()
+ENT.OnAlert_Cover = true 
+ENT.AlertCover_DistCheck = 1500
+
+
+/*function ENT:ContextToThrowFlareAtEnemy()
     if not IsValid(self) or not IsValid(self:GetEnemy()) or self:IsBusy("Activities") or self.VJ_IsBeingControlled or GetConVar("vj_stalker_throw_flares"):GetInt()  ~= 1 then return false end 
 
     local ene = self:GetEnemy()
@@ -872,7 +882,7 @@ function ENT:ThrowFlareAtEnemy(distToEnemy)
         self.IsThrowingFlareAtEne = false
         self.CanThrowFlareAtEnemy = true
     end)
-end
+end*/
 ---------------------------------------------------------------------------------------------------------------------------------------------
 function ENT:Init()
 end
@@ -970,9 +980,9 @@ function ENT:SetHeavyStats()
         self.FlinchChance = self.FlinchChance * mRng(2,4)
         self.ArmorSparking_Chance = self.ArmorSparking_Chance / mRng(2,4)
         self.RetreatAfterMeleeAttackChance = self.RetreatAfterMeleeAttackChance * mRng(2,4)
-
+        local chance = self.HeavySlowMoveChance or 3 
         if self.HeavyUnitHasSlowMoveChance then 
-            if mRng(1, self.HeavySlowMoveChance) == 1 then 
+            if mRng(1, chance) == 1 then 
                 print("Heavy unit has slow movement.")
                 self.Rng_FootStepSet = false 
                 self.HasSlowHeavyMovement = true 
@@ -1207,7 +1217,7 @@ function ENT:ManageStrafeShoot()
     self.NextStrafeFireToggleT = curT + (self.MoveFireToggleCooldown or 1)
 
     if hasStrafeFire then
-        if distance > maxDist and canStrafe then
+        if distance >= maxDist and canStrafe then
             self.Weapon_Strafe = false
         elseif distance <= maxDist and not canStrafe then
             self.Weapon_Strafe = true
@@ -1233,7 +1243,7 @@ function ENT:ManageMoveAndShoot()
     self.NextMoveFireToggleT = curT + self.MoveFireToggleCooldown
 
     if hasMoveShoot then
-        if distance => maxDist and canMoveShoot then
+        if distance >= maxDist and canMoveShoot then
             self.Weapon_CanMoveFire = false
         elseif distance <= maxDist and not canMoveShoot then
             self.Weapon_CanMoveFire = true
@@ -1717,34 +1727,24 @@ function ENT:ReactiveCoverBehavior()
     else
         if mRng(1, 2) == 1 then
             self:SCHEDULE_COVER_ORIGIN("TASK_RUN_PATH", function(x)
-            if mRng(1, 2) == 1 then 
-                x.CanShootWhenMoving = true
-                x.TurnData = {Type = VJ.FACE_ENEMY}
-            else
-                x.CanShootWhenMoving = false  
-                x.TurnData = {Type = VJ.FACE_ENEMY, Target = nil}
-            end 
-        end)
+                if mRng(1, 2) == 1 then 
+                    x.CanShootWhenMoving = true
+                    x.TurnData = {Type = VJ.FACE_ENEMY}
+                else
+                    x.CanShootWhenMoving = false  
+                    x.TurnData = {Type = VJ.FACE_ENEMY, Target = nil}
+                end 
+            end)
+        end
         coverDelay = math.Rand(1, 5)
     end
     print("Taken cover cuz ene is armed!!!!")
     self.TakingCoverT = CurTime() + coverDelay
 end
 ---------------------------------------------------------------------------------------------------------------------------------------------
-ENT.Valid_CoverClassesTbl = {
-    ["prop_physics"] = true,
-    ["func_brush"] = true,
-    ["prop_static"] = true,
-    ["prop_dynamic"] = true
-}
-
-ENT.OnAlert_Cover = true 
-ENT.AlertCover_DistCheck = 1500
-
 function ENT:TakeCover(enemy)
     if not self.OnAlert_Cover or self.VJ_IsBeingControlled then return false end 
     if not IsValid(enemy) or not self.PerformingAlertBehavior or self.IsGuard then return false end
-
     local curTime = CurTime()
     local selfPos = self:GetPos()
     local isBusy = self:IsBusy()
@@ -1757,7 +1757,6 @@ function ENT:TakeCover(enemy)
             break
         end
     end
-
     self:StopMoving()
     self:ClearSchedule()
 
@@ -1776,9 +1775,7 @@ function ENT:TakeCover(enemy)
                 x.TurnData = {Type = VJ.FACE_ENEMY, Target = nil}
             end 
         end)
-            print("Forced cover T1 (Enemy cover)")
             coverDelay = mRand(1.5, 3.5)
-
         elseif choice == 2 or (choice == 3 and mRng(1, 2) == 1) then
             self:SCHEDULE_COVER_ORIGIN("TASK_RUN_PATH", function(x)
             if mRng(1, 2) == 1 then 
@@ -1789,9 +1786,7 @@ function ENT:TakeCover(enemy)
                 x.TurnData = {Type = VJ.FACE_ENEMY, Target = nil}
             end 
         end)
-            print("Forced cover T2 (Origin cover)")
             coverDelay = mRand(1, 5)
-
         elseif choice == 3 and coverPos then
             self:SetLastPosition(coverPos)
             self:SCHEDULE_GOTO_POSITION("TASK_RUN_PATH", function(x)
@@ -1803,9 +1798,7 @@ function ENT:TakeCover(enemy)
                 x.TurnData = {Type = VJ.FACE_ENEMY, Target = nil}
             end 
         end)
-            print("Forced cover T3 (Prop-based cover)")
             coverDelay = mRand(1, 5)
-
         elseif choice == 3 and not coverPos then
             self:SCHEDULE_COVER_ORIGIN("TASK_RUN_PATH", function(x)
             if mRng(1, 2) == 1 then 
@@ -1816,10 +1809,8 @@ function ENT:TakeCover(enemy)
                 x.TurnData = {Type = VJ.FACE_ENEMY, Target = nil}
             end 
         end)
-            print("Fallback: No prop, using origin cover instead")
             coverDelay = mRand(1, 5)
         else
-            print("Forced cover canceled (unexpected state)")
             self.PerformingAlertBehavior = false
             return
         end
@@ -1839,7 +1830,6 @@ end
 
 function ENT:PerformAlertSignal(enemy)
     if not IsValid(enemy) or not self.PerformingAlertBehavior then return end
-    
     if not self:IsBusy() and enemy:Visible(self) then
         local distanceToEnemy = self:GetPos():Distance(enemy:GetPos())
         if distanceToEnemy > mRand(1200, 1525) then 
@@ -1934,12 +1924,14 @@ function ENT:FireFlareGun(enemy)
                 if IsValid(self) then
                     VJ.EmitSound(self, "vj_base/weapons/flaregun/single.wav", rngSnd, rngSnd)
                     local flareround = ents.Create("obj_vj_flareround")
+                    local y = mRand(-50,50)
+                    local z = mRand(10000,15000)
                     if IsValid(flareround) then
                         flareround:SetPos(RHand.Pos + Vector(0, 0, 10)) 
                         flareround:SetAngles(RHand.Ang)
                         flareround:SetOwner(self)
                         flareround:Spawn()
-                        flareround:GetPhysicsObject():ApplyForceCenter(Vector(0, mRand(-50,50), mRand(10000,15000)))
+                        flareround:GetPhysicsObject():ApplyForceCenter(Vector(0, y, z))
                     end
                 end
             end)
@@ -1955,9 +1947,10 @@ function ENT:FireFlareGun(enemy)
                     self.PerformingAlertBehavior = false
                 end
             end)
-            self.CombatFlareDeployT = CurTime() + mRand(15, 35)
-            self.NextFireFlareT = CurTime() + mRand(45, 125)
-            self.NextFireQuickFlareT = CurTime() + mRand(5, 25)
+            local cur = CurTime()
+            self.CombatFlareDeployT = cur + mRand(15, 35)
+            self.NextFireFlareT = cur + mRand(45, 125)
+            self.NextFireQuickFlareT = cur + mRand(5, 25)
         else
             self.PerformingAlertBehavior = false
         end
@@ -4105,9 +4098,9 @@ function ENT:OnDamaged(dmginfo, hitgroup, status)
     local minDmgConv = GetConVar("vj_stalker_min_dmg_cap"):GetInt()
     local minDmgSfxConv = GetConVar("vj_stalker_min_dmg_cap_sfx"):GetInt()
     local armorRichConv = GetConVar("vj_stalker_armor_ricochet"):GetInt()
-
+    local cancelDial = GetConVar("vj_stalker_dmg_cancel_dial"):GetInt()
     if status == "PreDamage" then
-        if GetConVar("vj_stalker_dmg_cancel_dial"):GetInt() == 1 and self.Dmg_Cancel_IdleDial and not self.Dead then
+        if cancelDial == 1 and self.Dmg_Cancel_IdleDial and not self.Dead then
             self.NextIdleSoundT_Reg = curT + mRand(0.25, 0.5)
             VJ.STOPSOUND(self.CurrentIdleSound)
         end 
@@ -4305,8 +4298,8 @@ function ENT:PanicOnDamageByEne(dmginfo)
         panicChance = math.max(1, math.floor(panicChance / 2))
     end
 
-    if hasNonMeleeWeapon and curTime >= self.Panic_DmgEne_NextT and mRng(1, panicChance) == 1 then
-        //self:ClearSchedule()
+    if hasNonMeleeWeapon and curTime >= self.Panic_DmgEne_NextT and mRng(1, 1) == 1 then
+        self:ClearSchedule()
         timer.Simple(mRand(0.05, 0.45), function()
             if not IsValid(self) then return end
             print("[PANIC IN DMGA]")
