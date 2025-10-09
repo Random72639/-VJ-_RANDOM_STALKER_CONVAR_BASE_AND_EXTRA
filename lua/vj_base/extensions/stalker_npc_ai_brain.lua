@@ -1715,6 +1715,7 @@ function ENT:ReactiveCoverBehavior()
 
     if choice == 1 and IsValid(enemy) and mRng(1, 2) == 1 then
         self:SCHEDULE_COVER_ENEMY("TASK_RUN_PATH", function(x)
+            x.DisableChasingEnemy = true
             if mRng(1, 2) == 1 then 
                 x.CanShootWhenMoving = true
                 x.TurnData = {Type = VJ.FACE_ENEMY}
@@ -1727,6 +1728,7 @@ function ENT:ReactiveCoverBehavior()
     else
         if mRng(1, 2) == 1 then
             self:SCHEDULE_COVER_ORIGIN("TASK_RUN_PATH", function(x)
+                x.DisableChasingEnemy = true
                 if mRng(1, 2) == 1 then 
                     x.CanShootWhenMoving = true
                     x.TurnData = {Type = VJ.FACE_ENEMY}
@@ -1778,6 +1780,7 @@ function ENT:TakeCover(enemy)
             coverDelay = mRand(1.5, 3.5)
         elseif choice == 2 or (choice == 3 and mRng(1, 2) == 1) then
             self:SCHEDULE_COVER_ORIGIN("TASK_RUN_PATH", function(x)
+                x.DisableChasingEnemy = true
             if mRng(1, 2) == 1 then 
                 x.CanShootWhenMoving = true
                 x.TurnData = {Type = VJ.FACE_ENEMY}
@@ -1790,6 +1793,7 @@ function ENT:TakeCover(enemy)
         elseif choice == 3 and coverPos then
             self:SetLastPosition(coverPos)
             self:SCHEDULE_GOTO_POSITION("TASK_RUN_PATH", function(x)
+            x.DisableChasingEnemy = true
             if mRng(1, 2) == 1 then 
                 x.CanShootWhenMoving = true
                 x.TurnData = {Type = VJ.FACE_ENEMY}
@@ -1801,6 +1805,7 @@ function ENT:TakeCover(enemy)
             coverDelay = mRand(1, 5)
         elseif choice == 3 and not coverPos then
             self:SCHEDULE_COVER_ORIGIN("TASK_RUN_PATH", function(x)
+            x.DisableChasingEnemy = true
             if mRng(1, 2) == 1 then 
                 x.CanShootWhenMoving = true
                 x.TurnData = {Type = VJ.FACE_ENEMY}
@@ -1841,6 +1846,7 @@ function ENT:PerformAlertSignal(enemy)
             if mRng(1, 3) == 1 and not self.IsGuard then 
                 self:StopMoving()
                 self:SCHEDULE_COVER_ORIGIN("TASK_RUN_PATH", function(x) 
+                    x.DisableChasingEnemy = false
                     x:EngTask("TASK_FACE_ENEMY", 0) 
                     x.CanShootWhenMoving = true 
                     x.TurnData = {Type = VJ.FACE_ENEMY} 
@@ -2165,6 +2171,7 @@ function ENT:OnGrenadeAttack(status, overrideEnt, landDir)
                     self:StopMoving()
                     if mRng(1, 2) == 1 then
                         self:SCHEDULE_COVER_ORIGIN("TASK_RUN_PATH", function(x)
+                            x.DisableChasingEnemy = true
                             if mRng(1, 2) == 1 then 
                                 x.CanShootWhenMoving = true
                                 x.TurnData = {Type = VJ.FACE_ENEMY}
@@ -2176,6 +2183,7 @@ function ENT:OnGrenadeAttack(status, overrideEnt, landDir)
                     end
                 else
                     self:SCHEDULE_COVER_ENEMY("TASK_RUN_PATH", function(x)
+                        x.DisableChasingEnemy = true
                         if mRng(1, 2) == 1 then 
                             x.CanShootWhenMoving = true
                             x.TurnData = {Type = VJ.FACE_ENEMY}
@@ -2222,6 +2230,7 @@ function ENT:OnGrenadeAttackExecute(status, grenade, overrideEnt, landDir, landi
                 self:StopMoving()
                 if mRng(1, 2) == 1 then
                     self:SCHEDULE_COVER_ORIGIN("TASK_RUN_PATH", function(x)
+                        x.DisableChasingEnemy = true
                         if mRng(1, 2) == 1 then 
                             x.CanShootWhenMoving = true
                             x.TurnData = {Type = VJ.FACE_ENEMY}
@@ -2232,6 +2241,7 @@ function ENT:OnGrenadeAttackExecute(status, grenade, overrideEnt, landDir, landi
                     end)
                 else
                     self:SCHEDULE_COVER_ENEMY("TASK_RUN_PATH", function(x)
+                        x.DisableChasingEnemy = true
                         if mRng(1, 2) == 1 then 
                             x.CanShootWhenMoving = true
                             x.TurnData = {Type = VJ.FACE_ENEMY}
@@ -4306,6 +4316,7 @@ function ENT:PanicOnDamageByEne(dmginfo)
             local pickedCover = false 
             if coverType == 1 then
                 self:SCHEDULE_COVER_ORIGIN("TASK_RUN_PATH", function(x)
+                    x.DisableChasingEnemy = true
                     if mRng(1, 2) == 1 then
                         x.CanShootWhenMoving = true
                         x.TurnData = {Type = VJ.FACE_ENEMY}
@@ -4317,6 +4328,7 @@ function ENT:PanicOnDamageByEne(dmginfo)
                 pickedCover = true
             elseif coverType == 2 and IsValid(enemy) then
                 self:SCHEDULE_COVER_ENEMY("TASK_RUN_PATH", function(x)
+                    x.DisableChasingEnemy = true
                     if mRng(1, 2) == 1 then
                         x.CanShootWhenMoving = true
                         x.TurnData = {Type = VJ.FACE_ENEMY}
@@ -4822,7 +4834,6 @@ function ENT:SNPCMoveAwayFromCrosshair()
                 self.AvoidingC_Hair = true
                 self:SCHEDULE_COVER_ORIGIN("TASK_RUN_PATH", function(x)
                     x.DisableChasingEnemy = false
-
                     if mRng(1,2) == 1 then
                         x.CanShootWhenMoving = true   
                         x.TurnData = {Type = VJ.FACE_ENEMY}
@@ -4830,7 +4841,6 @@ function ENT:SNPCMoveAwayFromCrosshair()
                         x.CanShootWhenMoving = false  
                         x.TurnData = {Type = VJ.FACE_NONE, Target = nil}
                     end
-                    
                     if self.Avoid_C_HairGesAnim and mRng(1, gesChance) == 1 then
                     self:PlayAnim("vjges_" .. gesAnim, false) 
                 end
@@ -6953,6 +6963,7 @@ function ENT:StartFlee(inCombat)
             if IsValid(self) then 
                 if inCombat then
                     self:SCHEDULE_COVER_ENEMY("TASK_RUN_PATH", function(x)
+                        x.DisableChasingEnemy = true
                         x.RunCode_OnFail = function()
                             self.NextDoAnyAttackT = 0
                         end
@@ -6963,6 +6974,7 @@ function ENT:StartFlee(inCombat)
                         self:StopMoving()
                         self:SetLastPosition(moveCheck)
                         self:SCHEDULE_GOTO_POSITION("TASK_RUN_PATH", function(x)
+                            x.DisableChasingEnemy = true
                             x.RunCode_OnFail = function()
                                 self.NextDoAnyAttackT = 0
                             end
