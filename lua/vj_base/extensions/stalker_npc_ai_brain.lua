@@ -2501,20 +2501,42 @@ function ENT:RetreatAfterMeleeAttack()
     end
 end
 ---------------------------------------------------------------------------------------------------------------------------------------------
-function ENT:MeleeAttackKnockbackVelocity(ent)
-    local forwardStrength = mRng(50, 100)
-    local upStrength = mRng(15, 65)
-    local sideStrength = mRng(-75, 75)
-    local mul = mRng(2,3)
-    
-    if self.IsHeavilyArmored then
-        forwardStrength = forwardStrength * mul
-        upStrength = upStrength * mul
-    end
+ENT.RagdollForce_BaseMult = 1 
+ENT.RagdollForce_UseRandomMult = true 
+ENT.RagdollForce_RandomMultMin = 0.65 
+ENT.RagdollForce_RandomMultMax = 1.45
+ENT.RagdollForce_HeavyArmorMultMin = 1.5 
+ENT.RagdollForce_HeavyArmorMultMax = 3.5 
 
-    return self:GetForward() * forwardStrength + self:GetUp() * upStrength + self:GetRight() * sideStrength
+function ENT:MeleeAttackKnockbackVelocity(ent)
+    self:Custom_AttackKnockback(ent)
 end
 
+function ENT:Custom_AttackKnockback(Hittarget)
+    local forwardStrength = math.Rand(50, 100)
+    local upStrength = math.Rand(15, 65)
+    local sideStrength = math.Rand(-75, 75)
+    local finalMult = self.RagdollForce_BaseMult or 1
+
+    if self.RagdollForce_UseRandomMult then
+        local rndMin = self.RagdollForce_RandomMultMin or 0.75
+        local rndMax = self.RagdollForce_RandomMultMax or 1.25
+        local randomMult = math.Rand(rndMin, rndMax)
+        finalMult = finalMult * randomMult
+    end
+
+    forwardStrength = forwardStrength * finalMult
+    upStrength = upStrength * finalMult
+    sideStrength = sideStrength * finalMult
+
+    if self.IsHeavilyArmored then
+        local armorMult = mRand(self.RagdollForce_HeavyArmorMultMin, self.RagdollForce_HeavyArmorMultMax) or 2.5
+        forwardStrength = forwardStrength * armorMult
+        upStrength = upStrength * armorMult
+    end
+    return self:GetForward() * forwardStrength + self:GetUp() * upStrength + self:GetRight() * sideStrength
+end 
+---------------------------------------------------------------------------------------------------------------------------------------------
 ENT.HasMeleeDmgBuffToAliens = true 
 
 ENT.CanBreakPlyAmror = true 
@@ -2728,47 +2750,50 @@ end
 ENT.PlyAnimInRepOnHeal = true
 ENT.HealerEntReact_Anim = {"hg_nod_yes"}
 ENT.HealedEntReact_Anim = {"hg_nod_yes", "g_fist", "g_fist_l"}
-
+ENT.Extra_HealAnimms = {"heal", "grendrop", "grenplace"}
 function ENT:OnMedicBehavior(status, statusData)
-    local heaAnims = VJ.PICK({"heal", "grendrop", "grenplace"})
+    local heaAnims = VJ.PICK(self.Extra_HealAnimms)
     self.AnimTbl_Medic_GiveHealth = "vjseq_" .. heaAnims
 
     if status == "BeforeHeal" then
         self:RemoveAllGestures()
     end
-
-    if status == "OnHeal" and self.PlyAnimInRepOnHeal and not (self:GetState() == VJ_STATE_ONLY_ANIMATION or self:GetState() == VJ_STATE_ONLY_ANIMATION_CONSTANT or self:GetState() == VJ_STATE_ONLY_ANIMATION_NOATTACK) and not self.Alerted then
+    
+    if status == "OnHeal" then
+        local busy = self:GetState() == VJ_STATE_ONLY_ANIMATION or self:GetState() == VJ_STATE_ONLY_ANIMATION_CONSTANT or self:GetState() == VJ_STATE_ONLY_ANIMATION_NOATTACK or self.Alerted or self:IsBusy()
         local healerResponse = VJ.PICK({"vjges_" .. VJ.PICK(self.HealerEntReact_Anim)})
-        self:StopMoving()
-        self:RemoveAllGestures()
+        local delay = mRand(0.1, 1.5)
+        if self.PlyAnimInRepOHeal then 
+            if busy or self.VJ_IsBeingControlled then return false end 
+            self:StopMoving()
+            self:RemoveAllGestures()
 
-        timer.Simple(mRand(0.2, 0.5), function()
-            if not (IsValid(self) and IsValid(statusData)) then return end
-            if mRng(1, 2) == 1 and statusData.IsVJBaseSNPC_Human and statusData.IsBusy and not statusData:IsBusy() then
-            
-                if istable(statusData.HealedEntReact_Anim) then
-                    local validAnims = {}
-                    for _, animName in ipairs(statusData.HealedEntReact_Anim) do
-                        local gestureName = "vjges_" .. animName
-                        local seqID = statusData:LookupSequence(gestureName)
-                        if seqID and seqID ~= -1 then
-                            table.insert(validAnims, gestureName)
+            timer.Simple(delay, function()
+                if not (IsValid(self) and IsValid(statusData)) then return end
+                if mRng(1, 2) == 1 and statusData.IsVJBaseSNPC_Human and not statusData:IsBusy() then
+                    if istable(statusData.HealedEntReact_Anim) then
+                        local validAnims = {}
+                        for _, animName in ipairs(statusData.HealedEntReact_Anim) do
+                            local gestureName = "vjges_" .. animName
+                            local seqID = statusData:LookupSequence(gestureName)
+                            if seqID and seqID ~= -1 then
+                                table.insert(validAnims, gestureName)
+                            end
+                        end
+                        if #validAnims > 0 then
+                            local chosen = VJ.PICK(validAnims)
+                            statusData:PlayAnim(chosen, false)
+                            print("HealedEntAnim: " .. chosen)
                         end
                     end
-                    
-                    if #validAnims > 0 then
-                        local chosen = VJ.PICK(validAnims)
-                        statusData:PlayAnim(chosen, false)
-                        print("HealedEntAnim: " .. chosen)
-                    end
                 end
-            end
-            if mRng(1, 2) == 1 and not self:IsBusy() then
-                self:PlayAnim(healerResponse, false)
-                print("Healer resp anim: " .. healerResponse)
-            end
-        end)
-    end
+                if mRng(1, 2) == 1 and not busy then
+                    self:PlayAnim(healerResponse, false)
+                    print("Healer resp anim: " .. healerResponse)
+                end
+            end)
+        end
+    end 
 end
 ---------------------------------------------------------------------------------------------------------------------------------------------
 ENT.Water_ExtinguishFire = true 
@@ -4152,7 +4177,7 @@ function ENT:OnDamaged(dmginfo, hitgroup, status)
                 if mRng(1, self.ToxDmg_Chance) == 1 and IsValid(self) then 
                     local snd = VJ.PICK(self.ToxDmg_CoughTbl) or {}
                     //self.CoughingSound = VJ.CreateSound(self, snd, rngSnd, rngSnd)
-                    self:PlaySoundSystem("Idle", snd)
+                    self:PlaySoundSystem("IdleDialogue", snd)
                     self.ToxDmg_NextT = curT + mRand(2.5, 5)
                 end 
             end 
@@ -4262,6 +4287,8 @@ function ENT:Armored_Richochet(dmginfo)
     if armorRichConv == 1 and self.Reinforced_Armor then
         local dmgType = dmginfo:GetDamageType()
         local chance = self.Reinforced_Armor_RichochetChance or 20 
+        local rngSnd = mRng(85, 105)
+        local ricoSnd = VJ.PICK(self.Rein_Armor_Richochet_Tbl)
         if self.Reinforced_Armor_Richochet and math.random(1, chance) == 1 and 
            (dmginfo:IsBulletDamage() or dmgType == DMG_BULLET or dmgType == DMG_AIRBOAT or 
             dmgType == DMG_BUCKSHOT or dmgType == DMG_SNIPER) then
@@ -4288,6 +4315,9 @@ function ENT:Armored_Richochet(dmginfo)
                 effectData:SetOrigin(startPos + reflection * 2000)
                 effectData:SetScale(5000)
                 util.Effect("Tracer", effectData)
+                if mRng(1, 2) == 1 then 
+                    VJ.EmitSound(self, ricoSnd, rngSnd, rngSnd)
+                end 
                 local bullet = {}
                 bullet.Src = startPos
                 bullet.Dir = reflection
@@ -4295,7 +4325,7 @@ function ENT:Armored_Richochet(dmginfo)
                 bullet.Num = 1
                 bullet.Attacker = attacker
                 bullet.Inflictor = dmginfo:GetInflictor()
-                bullet.Damage = math.random(5, 15)
+                bullet.Damage = mRng(5, 15)
                 bullet.Force = 5
                 bullet.Tracer = 1
                 bullet.TracerName = "Tracer"
@@ -4553,12 +4583,13 @@ function ENT:DetectLanding()
         local myPos = self:GetPos()
         local isInWater = bit.band(util.PointContents(myPos), CONTENTS_WATER) == CONTENTS_WATER
         local conv = GetConVar("vj_stalker_jump_land_particles"):GetInt() 
+        local pcfxScale = tonumber(self.Landing_FxScale)
         if conv == 1 then 
             if self.Landing_Effects and self.IsLanding and not isInWater then
                 if self.LargeLandFx then 
                     local effectData = EffectData()
                     effectData:SetOrigin(myPos)
-                    effectData:SetScale(self.Landing_FxScale)
+                    effectData:SetScale(pcfxScale)
                     util.Effect("ThumperDust", effectData) 
                 else 
                     local effectData = EffectData()
@@ -5012,12 +5043,12 @@ function ENT:FireQuickFlare()
 end
 ---------------------------------------------------------------------------------------------------------------------------------------------
 function ENT:OnPlayerSight(ent)
-    local friendlyConVar = GetConVar(self.FriendlyConvar)
-    if not friendlyConVar or friendlyConVar:GetInt() ~= 1 then return false end
+    local friendlyConVar = GetConVar(tostring(self.FriendlyConvar)):GetInt()
+    if not friendlyConVar or friendlyConVar ~= 1 then return false end
 
     if CurTime() < self.NextGreetPlyAnimT then return false end
     local ene = self:GetEnemy()
-    local busy = self:IsBusy() or  self:GetState() == VJ_STATE_ONLY_ANIMATION_CONSTANT or self:GetState() == VJ_STATE_ONLY_ANIMATION or self:GetState() == VJ_STATE_ONLY_ANIMATION_NOATTACK or
+    local busy = self:IsBusy() or self:GetState() == VJ_STATE_ONLY_ANIMATION_CONSTANT or self:GetState() == VJ_STATE_ONLY_ANIMATION or self:GetState() == VJ_STATE_ONLY_ANIMATION_NOATTACK 
     if ent:IsPlayer() and not VJ_CVAR_IGNOREPLAYERS and self:CheckRelationship(ent) == D_LI and self.PlayAnimWhenSpotFrPly and self:Visible(ent) then
         if not IsValid(self) or
             self.VJ_IsBeingControlled or
@@ -5081,10 +5112,9 @@ ENT.FollowPly_ReactTbl = {"hg_nod_yes", "hg_nod_right", "hg_nod_no", "hg_nod_lef
 ENT.FollowPly_ReactNextT = 0 
 function ENT:OnFollow(status, ent)
     if not self.FollowPly_React then return false end
-    local busy = self:IsBusy() or  self:GetState() == VJ_STATE_ONLY_ANIMATION_CONSTANT or self:GetState() == VJ_STATE_ONLY_ANIMATION or self:GetState() == VJ_STATE_ONLY_ANIMATION_NOATTACK or
+    local busy = self:IsBusy() or  self:GetState() == VJ_STATE_ONLY_ANIMATION_CONSTANT or self:GetState() == VJ_STATE_ONLY_ANIMATION or self:GetState() == VJ_STATE_ONLY_ANIMATION_NOATTACK 
     local ene = self:GetEnemy()
-    if self.VJ_IsBeingControlled or self:IsBusy() or self.Flinching or busy 
-       IsValid(ene) or self.Alerted then 
+    if self.VJ_IsBeingControlled or self:IsBusy() or self.Flinching or busy or IsValid(ene) or self.Alerted then 
         return false 
     end
 
