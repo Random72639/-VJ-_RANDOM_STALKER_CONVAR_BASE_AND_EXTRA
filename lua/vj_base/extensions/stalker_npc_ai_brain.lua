@@ -662,6 +662,7 @@ ENT.IsImmuneToHeadShots = false
 ENT.HeadshotSoundSfxChance = mRng(2,3)
 ENT.HeadshotInstaKillChance = 0
 ENT.HeadshotEffectsChance = mRng(2,3)
+ENT.Headshot_DoubleDmg = false 
 
 ENT.Headshot_ImpactFlinching = true 
 ENT.Headshot_NextFlinchT = 0 
@@ -2509,7 +2510,14 @@ ENT.RagdollForce_HeavyArmorMultMin = 1.5
 ENT.RagdollForce_HeavyArmorMultMax = 3.5 
 
 function ENT:MeleeAttackKnockbackVelocity(ent)
-    self:Custom_AttackKnockback(ent)
+    if not IsValid(ent) then
+        return self:GetForward() * math.random(100, 140) + self:GetUp() * 10
+    end
+    local vec = self:Custom_AttackKnockback(ent)
+    if not vec or not vec.IsVector or not vec:IsValid() then
+        return self:GetForward() * math.random(100, 140) + self:GetUp() * 10
+    end
+    return vec
 end
 
 function ENT:Custom_AttackKnockback(Hittarget)
@@ -2548,7 +2556,6 @@ ENT.RetreatAfterMeleeAttackChance = 4
 ENT.CanKnckPlyWepOutHand = true 
 ENT.PlyWeaponKnockOutChance = 6
 ENT.FrcPlyHolsterWeaponChance = 3 
-
 
 function ENT:OnMeleeAttackExecute(status, ent, isProp)
     if not IsValid(ent) then return false end
@@ -2900,7 +2907,7 @@ function ENT:ResetAfterFire()
     end
 
 
-    if GetConVar(self.FriendlyConvar):GetInt()  == 1 then
+    if GetConVar(tostring(self.FriendlyConvar)):GetInt()  == 1 then
         self:ManageFriendlyVars()
     end
 end
@@ -3539,7 +3546,8 @@ function ENT:Ele_CorpseDeathEffects(corpse)
 end
 
 function ENT:ManipulateCorpseFingers(corpse)
-    if mRng(1, self.ManipulateFingBoneChance) == 1 then return end
+    local manChance = self.ManipulateFingBoneChance or 4 
+    if mRng(1, manChance) == 1 then return end
     if not (self.DeathFingerBoneManipuation and GetConVar("vj_stalker_death_finger_manip"):GetInt() == 1) then return end
 
     local fingerPrefix = {"ValveBiped.Bip01_L_Finger", "ValveBiped.Bip01_R_Finger"}
@@ -3964,7 +3972,12 @@ function ENT:HandleHeadshot(dmginfo, hitgroup)
     local instalKillChance = self.HeadshotInstaKillChance 
     local headHitGroup = HITGROUP_HEAD
     local bulDmg = (dmginfo:IsBulletDamage() or dT == DMG_BULLET or dT == DMG_AIRBOAT or dT == DMG_BUCKSHOT or dT == DMG_SNIPER)
-
+    local rngSnd = mRng(75, 105)
+    local stopDmgConv = GetConVar("vj_stalker_helm_prev_dmg"):GetInt()
+    local armoredHelmConv = GetConVar("vj_stalker_armored_helmet"):GetInt()
+    local helmBreakConv = GetConVar("vj_stalker_breakable_helmet"):GetInt()
+    local instKillConv = GetConVar("vj_stalker_headshot_insa_kill"):GetInt()
+    local mindDmgConv = GetConVar("vj_stalker_headshot_min_dmg_check"):GetInt()
     if hitgroup == headHitGroup and bulDmg and not self.Immune_Bullet then
         isHeadshot = true
     else
@@ -3978,20 +3991,22 @@ function ENT:HandleHeadshot(dmginfo, hitgroup)
         end
     end
 
-    if self.Headshot_ImpactFlinching and CurTime() >= (self.Headshot_NextFlinchT or 0) and mRng(1, self.Headshot_FlinchChance) == 1 then
+    local curT = CurTime()
+    local flinchGes = self.Headshot_FlinchChance or 2
+    if self.Headshot_ImpactFlinching and curT >= (self.Headshot_NextFlinchT or 0) and mRng(1, flinchGes) == 1 then
         local flinchAnim = VJ.PICK(self.Headshot_ImpFlinchTbl)
         self:PlayAnim("vjges_" .. flinchAnim)
-        self.Headshot_NextFlinchT = CurTime() + mRand(0.5, 1.5)
+        self.Headshot_NextFlinchT = curT + mRand(0.5, 1.5)
     end
 
     local dmgAmount = dmginfo:GetDamage() or 0
     local ignoreHelmet = dmgAmount > (self.ArmoredHelmet_MaxDamageCap or 100) and self.ArmoredHelmet_DamageCap 
-    if self.ArmoredHelmet and isHeadshot and GetConVar("vj_stalker_armored_helmet"):GetInt() == 1 and not ignoreHelmet then
+    if self.ArmoredHelmet and isHeadshot and armoredHelmConv == 1 and not ignoreHelmet then
         if self.ArmoredHelmet_ImpSound and mRng(1, self.ArmoredHelmet_ImpSoundChance) == 1 then 
             self:PlaySoundSystem("Impact", self.SoundTbl_ExtraArmorImpacts)
         end 
-
-        if self.ArmoredHelmet_ImpSparkFx and mRng(1, self.ArmoredHelmet_SparkFxChance) == 1 then 
+        local sparkChance = self.ArmoredHelmet_SparkFxChance or 3
+        if self.ArmoredHelmet_ImpSparkFx and mRng(1, sparkChance) == 1 then 
             local dmgPos = dmginfo:GetDamagePosition()
             local offset = Vector(mRand(-3, 3),mRand(-3, 3),mRand(-3, 3))
             local spawnPos = dmgPos + offset
@@ -4006,18 +4021,18 @@ function ENT:HandleHeadshot(dmginfo, hitgroup)
         self.ArmoredHelmet_BreakLimit = self.ArmoredHelmet_BreakLimit or mRng(3,5)
         self.ArmoredHelmet_HitsTaken = (self.ArmoredHelmet_HitsTaken or 0) + 1
 
-        if self.ArmoredHelmet_BlockDamaged and GetConVar("vj_stalker_helm_prev_dmg"):GetInt() == 1 then
+        if self.ArmoredHelmet_BlockDamaged and stopDmgConv == 1 then
             dmginfo:SetDamage(0)
             isHeadshot = false
         end
 
-        if self.ArmoredHelmet_Break and self.ArmoredHelmet_HitsTaken >= self.ArmoredHelmet_BreakLimit and GetConVar("vj_stalker_breakable_helmet"):GetInt() == 1  then
+        if self.ArmoredHelmet_Break and self.ArmoredHelmet_HitsTaken >= self.ArmoredHelmet_BreakLimit and helmBreakConv == 1  then
             self.IsImmuneToHeadShots = false 
             self.ArmoredHelmet = false
             self.ArmoredHelmet_AffectFov = false
             self.ArmoredHelmet_BlockDamaged = false
             self.ArmoredHelmet_HitsTaken = 0
-            VJ.EmitSound(self, self.SoundTbl_ExtraArmorImpacts, mRng(85, 105), mRng(70, 125))
+            VJ.EmitSound(self, self.SoundTbl_ExtraArmorImpacts, rngSnd, rngSnd)
         end
     end
     
@@ -4026,16 +4041,20 @@ function ENT:HandleHeadshot(dmginfo, hitgroup)
         self:HeadshotSoundEffect(isHeadshot)
     end
 
-    if GetConVar("vj_stalker_headshot_insa_kill"):GetInt() == 1 then 
-        if not self.IsImmuneToHeadShots then 
-            local skipMinDmgCheck = GetConVar("vj_stalker_headshot_min_dmg_check"):GetInt() ~= 1
-            local passedMinDmg = dmginfo:GetDamage() > minDmgHd
-            if isHeadshot and mRng(1, instalKillChance) == 1 and (skipMinDmgCheck or passedMinDmg) then
-                self.Headshot_Death = true 
+    if instKillConv == 1 and isHeadshot and not self.IsImmuneToHeadShots then
+        local skipMinDmgCheck = mindDmgConv ~= 1
+        local passedMinDmg = dmginfo:GetDamage() > minDmgHd
+
+        if mRng(1, instaKillChance) == 1 and (skipMinDmgCheck or passedMinDmg) then
+            if self.Headshot_DoubleDmg then
+                local newDmg = dmginfo:GetDamage() * 2
+                dmginfo:SetDamage(newDmg)
+            else
+                self.Headshot_Death = true
                 dmginfo:SetDamage(self:GetMaxHealth() * 3)
             end
-        end 
-    end 
+        end
+    end
 end
 ---------------------------------------------------------------------------------------------------------------------------------------------
 function ENT:HeadshotDeathEffects()
