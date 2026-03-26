@@ -6,11 +6,14 @@
 
 //BIG FLAw, IF USING SHOTGUN OR SHORT RANGE WEAPON, AND IS ALONE, THE SNPC MAY STAND OUT IN THE OPEN AND STARE AT AN ENEMY
 //ADD COVER CHECKS FOR CERTIAN MECHANICS
+
 //BACKSTAB? MELEE ATTACKS DO MORE DMG IF ENE HAS BACK TURNED? 
 //MOVE WEAPON BURST FIRE LOGIC TO SNPC INSTEAD OF WEAPONS. (MUST IGNORE NON-AUTOMATICS)
+
 //MAKE SNPCS STRONG LIKE SENTRY'S IF ALL CONVS ARE DISABLES
-//IF ALERTED, E.G. SHOT, AND NEAR A DOOR, THE SNPCS WILL BREAK IT DOWN, LIKE WTF IS WRONG WITH YOU RANDOM.
+
 //MAKE MOST CUSTOM IDLE ANIMATIONS SUPPORT GESTURE LAYERING
+//IF AN ALLY DIES TOO CLOSE, AND AN ENE IS CLOSE, ADD DELAY BEFORE PUSHING/MIMIC FEAR OR HESITATION. THEY WANT TO LIVE AS WELL.
 
 local VectorRand    = VectorRand
 local Vector        = Vector
@@ -533,15 +536,15 @@ ENT.WeaponMuzzleAttachments = {"muzzle","muzzle_flash"} -- Weapon att's --
 ENT.WepFlashEntTbl = {}
 
     -- [Weapon switch mechanic] -- 
-ENT.HumanPrimaryWeapon = ""
-ENT.HumanSecondaryWeapon = ""
-ENT.WeaponSwitchT = 0
-ENT.CurrentWeapon = 0 -- 0 for primary, 1 for secondary -- 
 ENT.CanHumanSwitchWeapons = true 
 ENT.CanPickSecondaryWeapon = true
 ENT.IsHoldingPrimaryWeapon = false -- For when the SNPC is currently holding out their primary weapon -- 
 ENT.IsHoldingSecondaryWeapon = false -- For when the SNPC is currently holding out their secondary weapon -- 
 ENT.SecondaryWeaponInvTbl = {"weapon_vj_357","weapon_vj_9mmpistol","weapon_vj_glock17"} -- Valid secondary weapons the SNPC can choose
+ENT.HumanPrimaryWeapon = "" -- Empty by default, as init func will store the weapon the SNPC is spawned with
+ENT.HumanSecondaryWeapon = ""
+ENT.WeaponSwitchT = 0
+ENT.CurrentWeapon = 0 -- 0 for primary, 1 for secondary -- 
 
     -- [Drop sec wep on death] -- 
 ENT.Weapon_DropSecondary = true 
@@ -959,14 +962,6 @@ function ENT:PreInit()
     end)
 end
 
-function ENT:CertainAttCharacteristics() 
-    self.CanFireFlareGunSeq = false
-    self.SNPCGrenadeHandAttachment = "grenade_attachment" 
-    self.GrenadeAttackAttachment = "grenade_attachment"
-    self.Medic_SpawnPropOnHealAttachment = "grenade_attachment"
-    self.DropWeaponOnDeathAttachment = "grenade_attachment"
-end
-
 function ENT:RANDOM_CON_DEBUG()
     local conv = "vj_stalker_randoms_console_debug"
     if not self.RANDOMS_DEBUG then 
@@ -974,6 +969,42 @@ function ENT:RANDOM_CON_DEBUG()
             self.RANDOMS_DEBUG = true 
         end
     end
+end
+
+function ENT:ValidBreakableMats(pos)
+    local tr_water = util.TraceLine({
+        start = pos,
+        endpos = pos - Vector(0, 0, 40),
+        mask = MASK_WATER
+    })
+
+    if tr_water.Hit then return false end  -- Water 
+
+
+    local tr = util.TraceLine({
+        start = pos,
+        endpos = pos - Vector(0, 0, 40),
+        filter = self,
+        mask = MASK_NPCWORLDSTATIC
+    })
+
+    local valMats = {
+        [MAT_SAND] = true,
+        [MAT_DIRT] = true,
+        [MAT_FOLIAGE] = true,
+        [MAT_SLOSH] = true,
+        [85] = true
+    }
+
+    return tr.Hit and tr.HitWorld and valMats[tr.MatType] or false
+end
+---------------------------------------------------------------------------------------------------------------------------------------------
+function ENT:CertainAttCharacteristics() 
+    self.CanFireFlareGunSeq = false
+    self.SNPCGrenadeHandAttachment = "grenade_attachment" 
+    self.GrenadeAttackAttachment = "grenade_attachment"
+    self.Medic_SpawnPropOnHealAttachment = "grenade_attachment"
+    self.DropWeaponOnDeathAttachment = "grenade_attachment"
 end
 ---------------------------------------------------------------------------------------------------------------------------------------------
 function ENT:ManageFriendlyVars()
@@ -1346,6 +1377,7 @@ function ENT:ManageRandomVars()
     -- An attempt to make SNPCs behavior a bit more random --
     timer.Simple(0.1, function()
         if IsValid(self) then 
+
             local curT               = CurTime()
             local defaultFov         = self.SightAngle
             local cvar_viewangle     = GetConVar("vj_stalker_snpc_view_angle"):GetInt()
@@ -1360,6 +1392,7 @@ function ENT:ManageRandomVars()
             local infT  = curT + 9999999999999
             local defT  = curT + mRand(10, 20)
             local defTurn = self.TurningSpeed or 10
+
             self.Danger_DetectSiganlT = curT + mRand(1, 5)
             self.WeaponSwitchT = curT + mRand(20,50) 
             self.EvadeDanger_NextT = curT + mRand(1, 10)
@@ -1390,10 +1423,10 @@ function ENT:ManageRandomVars()
             end
 
             if not self.DeathAllyResponse then 
-                self.DeathAllyResponse = VJ.PICK({"OnlyAlert", true})  
+                self.DeathAllyResponse = table.Random({"OnlyAlert", true})  
             end 
 
-            local choice = VJ.PICK({"Both", "Moving", "Standing"})
+            local choice = table.Random({"Both", "Moving", "Standing"})
             self.ConstantlyFaceEnemy_Postures = choice
 
             if mRng(1,3) == 1 then 
@@ -1575,6 +1608,7 @@ function ENT:MngeExVarTimes()
 
     timer.Simple(0.1, function()
         if not IsValid(self) then return end
+        if not self.RANDOMS_DEBUG then return end 
         if self.CombatDamageResponse_Cooldown then 
             print("Combat Response:", self.CombatDamageResponse_Cooldown.a, self.CombatDamageResponse_Cooldown.b)
         end 
@@ -1621,7 +1655,7 @@ function ENT:WeaponFlashlight()
             end
         end
 
-        if not muzzleAttachment then
+        if not muzzleAttachment and self.RANDOMS_DEBUG then
             print("No valid muzzle att's was found for the weapon: " .. tostring(wep:GetClass()))
             return false
         end
@@ -1731,36 +1765,51 @@ function ENT:IsVJAnimationLockState()
     local state = self:GetState()
     local badState = (state == VJ_STATE_ONLY_ANIMATION_CONSTANT or state == VJ_STATE_ONLY_ANIMATION or state == VJ_STATE_ONLY_ANIMATION_NOATTACK or state == VJ_STATE_FREEZE)
     
-    if self.RANDOMS_DEBUG then
-        print("AnimState:", state, "Blocked:", badState)
-    end
+    //if self.RANDOMS_DEBUG then
+        //print("AnimState:", state, "Blocked:", badState)
+    //end
 
     return badState
 end
 ---------------------------------------------------------------------------------------------------------------------------------------------
 function ENT:OnCallForHelp(ally, isFirst)
-    if not IsValid(ally) or ally.VJ_IsBeingControlled or not ally.Ally_RespondCallForHelp then return false end 
-    if ally:GetClass() == self:GetClass() and not ally:IsBusy("Activities") and mRng(1, ally.Ally_ResponseCallForHelpAnimChance or 1) == 1 and ally.IsVJBaseSNPC and ally.IsVJBaseSNPC_Human then
+    self:Ally_CallForHelpReaction(ally) 
+end
+
+function ENT:Ally_CallForHelpReaction(ally)
+    if not ally.Ally_RespondCallForHelp then return end 
+    if not IsValid(ally) or ally.VJ_IsBeingControlled then return end 
+    if not ally.IsVJBaseSNPC or not ally.IsVJBaseSNPC_Human then return end 
+    if (ally:GetClass() == self:GetClass() or ally.VJ_NPC_Class == self.VJ_NPC_Class) and not ally:IsBusy("Activities") and mRng(1, ally.Ally_ResponseCallForHelpAnimChance or 1) == 1 then
     
-        local cfhTbl = istable(ally.Ally_CfhResponseAnim) and #ally.Ally_CfhResponseAnim > 0 and VJ.PICK(ally.Ally_CfhResponseAnim)
-        local baseCallHelpTbl = istable(ally.AnimTbl_CallForHelp) and #ally.AnimTbl_CallForHelp > 0 and VJ.PICK(ally.AnimTbl_CallForHelp)
+        local cfhTbl = istable(ally.Ally_CfhResponseAnim) and #ally.Ally_CfhResponseAnim > 0 and table.Random(ally.Ally_CfhResponseAnim)
+        local baseCallHelpTbl = istable(ally.AnimTbl_CallForHelp) and #ally.AnimTbl_CallForHelp > 0 and table.Random(ally.AnimTbl_CallForHelp)
         local responseAnim = nil
-        if cfhTbl then
-            responseAnim = "vjges_" .. cfhTbl
-        elseif baseCallHelpTbl then
+        local isGes = false
+
+        if cfhTbl then -- local to my SNPC, assumes input is gesture
+            isGes = true 
+            responseAnim = cfhTbl
+
+        elseif baseCallHelpTbl then -- Other allies
             responseAnim = baseCallHelpTbl
         end
-        local animT = ally:SequenceDuration(ally:LookupSequence(responseAnim))
-        if responseAnim then
-            ally:PlayAnim(responseAnim, true, animT, ally.CallForHelpAnimFaceEnemy)
-            ally.CallForHelpAnimCooldown = CurTime() + (ally.CallForHelpAnimCooldown or 0)
 
-            if mRng(1, 2) == 1 then 
-                ally:PlaySoundSystem("CallForHelp")
-            end 
-        end
+        if not responseAnim then return end 
+
+        local seq = self:LookupSequence(responseAnim)
+        if not seq or seq < 0  then return end 
+
+        local animT = ally:SequenceDuration(ally:LookupSequence(seq))
+
+        if isGes then 
+            local responseAnim = "vjges_" .. responseAnim
+        end 
+
+        ally:PlayAnim(responseAnim, true, animT, ally.CallForHelpAnimFaceEnemy)
+        ally.CallForHelpAnimCooldown = CurTime() + (ally.CallForHelpAnimCooldown or 0)
     end
-end
+end 
 ---------------------------------------------------------------------------------------------------------------------------------------------
 ENT.NextFireFlareT = 0
 ENT.FlareGunAttachment = {"anim_attachment_RH","grenade_attachment"} 
@@ -1772,11 +1821,15 @@ ENT.FireFlareSeq_OnAlert = true
 ENT.FireFlareSeq_Chance = 6
 ENT.FireFlareSeq_MaxDist = 7000
 function ENT:OnAlert(ent)
-    if self.VJ_IsBeingControlled or self:IsBusy() then return end 
     VJ.STOPSOUND(self.CurrentIdleSound)
+    if self.VJ_IsBeingControlled then return end 
+    if self:IsBusy() then return end 
     if self.PerformingAlertBehavior then return end
+
     self:ReactiveCoverBehavior()
+
     local enemy = self:GetEnemy()
+
     if IsValid(enemy) then
         local behavior = mRng(1, 3)
         self.PerformingAlertBehavior = true
@@ -1797,7 +1850,7 @@ ENT.ReactiveCoverNextT = 10
 ENT.NextReactiveCoverT = 0        
 
 function ENT:ReactiveCoverBehavior()
-    if not self.ReactiveCover_ArmedEne or self.VJ_IsBeingControlled then return false end
+    if not self.ReactiveCover_ArmedEne or self.VJ_IsBeingControlled then return end
     local busy = self:IsVJAnimationLockState() or self:IsBusy()
     if self.PerformingAlertBehavior or self.IsGuard or self.CurrentlyHealSelf or busy or not self:IsOnGround() then return end
     local cT = CurTime()
@@ -1818,13 +1871,15 @@ function ENT:ReactiveCoverBehavior()
     self.NextReactiveCoverT = cT + self.ReactiveCoverNextT + exDelay
     self:StopMoving()
     self:ClearSchedule()
+
     local choice = mRng(1, 2)
     local coverDelay = 0
     local coverPos = nil
     local dist = tonumber(self.AlertCover_DistCheck) or 1250
 
     if choice == 1 and IsValid(enemy) and mRng(1, 2) == 1 then
-        self:SCHEDULE_COVER_ENEMY("TASK_RUN_PATH", function(x)
+        local move = "TASK_RUN_PATH"
+        self:SCHEDULE_COVER_ENEMY(move, function(x)
             x.DisableChasingEnemy = true
             if mRng(1, 2) == 1 then 
                 x.CanShootWhenMoving = true
@@ -1835,9 +1890,10 @@ function ENT:ReactiveCoverBehavior()
             end 
         end)
         coverDelay = mRand(1.5, 3.5)
+        self.NextChaseTime = CurTime() + mRand(2, 5)
     else
         if mRng(1, 2) == 1 then
-            self:SCHEDULE_COVER_ORIGIN("TASK_RUN_PATH", function(x)
+            self:SCHEDULE_COVER_ORIGIN(move, function(x)
                 x.DisableChasingEnemy = true
                 if mRng(1, 2) == 1 then 
                     x.CanShootWhenMoving = true
@@ -1849,8 +1905,11 @@ function ENT:ReactiveCoverBehavior()
             end)
         end
         coverDelay = mRand(1, 5)
+        self.NextChaseTime = CurTime() + mRand(2, 5)
     end
-    print("Taken cover cuz ene is armed!!!!")
+    if self.RANDOMS_DEBUG then
+        print("Taken cover cuz ene is armed!!!!")
+    end 
     self.TakingCoverT = CurTime() + coverDelay
 end
 ---------------------------------------------------------------------------------------------------------------------------------------------
@@ -1940,7 +1999,7 @@ function ENT:TakeCover(enemy)
         end
 
         self.TakingCoverT = curTime + coverDelay
-
+        self.NextChaseTime = curTime + mRand(2, 5)
         if self.PerformingAlertBehavior then
             timer.Simple(flagResetT, function()
                 if IsValid(self) then
@@ -1955,14 +2014,17 @@ function ENT:PerformAlertSignal(enemy)
     if not self.PerformingAlertBehavior then return end 
     if not IsValid(enemy) then return end
     if not self:IsBusy() and enemy:Visible(self) then
+        
         local distanceToEnemy = self:GetPos():Distance(enemy:GetPos())
+
         if distanceToEnemy > mRand(1200, 1525) then 
-            local signalAnims = VJ.PICK({"gesture_signal_takecover","gesture_signal_right","gesture_signal_left","gesture_signal_halt","gesture_signal_advance","gesture_signal_forward","gesture_signal_group"})
+            local signalAnims = table.Random({"gesture_signal_takecover","gesture_signal_right","gesture_signal_left","gesture_signal_halt","gesture_signal_advance","gesture_signal_forward","gesture_signal_group"})
             self:PlayAnim("vjges_" .. signalAnims)
             self.AlertSignalChance = true
-            self.TakingCoverT = CurTime() + mRand(1, 4)
-
-            if mRng(1, 3) == 1 and not self.IsGuard then 
+            local c = CurTime()
+            self.TakingCoverT = c + mRand(1, 4)
+            self.NextChaseTime = c + mRand(1, 5)
+            if mRng(1, 3) == 1 and not self.IsGuard and not self.MovementType == VJ_MOVETYPE_STATIONARY then 
                 self:StopMoving()
                 self:SCHEDULE_COVER_ORIGIN("TASK_RUN_PATH", function(x) 
                     x.DisableChasingEnemy = false
@@ -1971,7 +2033,6 @@ function ENT:PerformAlertSignal(enemy)
                     x.TurnData = {Type = VJ.FACE_ENEMY} 
                 end)
             end
-
             timer.Simple(mRand(2, 4), function()
                 if IsValid(self) then
                     self.AlertSignalChance = false
@@ -2145,7 +2206,7 @@ function ENT:SaveCurrentWeapon()
 end
 
 function ENT:PickSecondaryWeapon()
-    if not IsValid(self) or GetConVar("vj_stalker_weapon_switching"):GetInt() ~= 1 then return end 
+    if not IsValid(self) then return end 
     if not self.CanPickSecondaryWeapon then return end
     local chosenWeapon = VJ.PICK(self.SecondaryWeaponInvTbl)
     if chosenWeapon then
@@ -2160,16 +2221,20 @@ ENT.Sts_SeqWepAnim = {"drawpistol"}
 ENT.Sts_GesWepAnim = {"unholster_pistol","unholster_pistol2"}
 ENT.Stp_SeqWepAnim = {"smgdraw"} 
 ENT.Stp_GesWepAnim = {"weapon_draw_gesture","unholster_heavy","unholster_heavy2","unholster_light"}
-ENT.WepSwitchRange_Max = 2500 -- If over this value, don't switch to weapon 
+ENT.WepSwitchRange_Max = 2500 -- If an enemy over this distance, don't switch weapons. 
 ENT.PrimaryWepIdleSwitchDelay = {25, 90} 
 ENT.NextIdleWeaponSwitchT = 0 
 ENT.Wep_InvSwithcSound = true 
 
 function ENT:WeaponSwitchMechanic()
+    if not self.CanHumanSwitchWeapons then return end 
+
     local wepSwitchConv = GetConVar("vj_stalker_weapon_switching"):GetInt() 
-    local debugging = self.RANDOMS_DEBUG
     if wepSwitchConv ~= 1 then return end 
-    if self:IsBusy("Activities") or self.VJ_IsBeingControlled or not IsValid(self) then
+
+    local debugging = self.RANDOMS_DEBUG
+
+    if self.VJ_IsBeingControlled or not IsValid(self) then
         return 
     end
 
@@ -2178,9 +2243,10 @@ function ENT:WeaponSwitchMechanic()
     local ene = self:GetEnemy()
     local curWep = self:GetActiveWeapon()
     local maxDistSqr = self.WepSwitchRange_Max * self.WepSwitchRange_Max
+
     if not isstring(self.HumanPrimaryWeapon) or self.HumanPrimaryWeapon == "" or not weapons.GetStored(self.HumanPrimaryWeapon) or
        not isstring(self.HumanSecondaryWeapon) or self.HumanSecondaryWeapon == "" or not weapons.GetStored(self.HumanSecondaryWeapon) then
-        return false
+        return 
     end
 
     if not IsValid(self.SecondaryWeaponEntity) then
@@ -2189,11 +2255,15 @@ function ENT:WeaponSwitchMechanic()
             self:SelectWeapon(self.HumanPrimaryWeapon) 
         end
     end
+
     if IsValid(ene) then 
         local badEne = (ene.VJ_ID_Boss or ene.IsVJBaseSNPC_Tank)
-        if self.CanHumanSwitchWeapons and not badEne and self:GetWeaponState() ~= VJ.WEP_STATE_RELOADING and self:GetPos():DistToSqr(ene:GetPos()) < maxDistSqr and not self:IsBusy() and ct > self.WeaponSwitchT and IsValid(curWep) and not curWep.IsMeleeWeapon and not self:IsMoving() then
+        if self:IsBusy() then return end 
+        if self:GetWeaponState() == VJ.WEP_STATE_RELOADING then return end 
+        if self:IsVJAnimationLockState() then return end 
+        if not badEne and self:GetPos():DistToSqr(ene:GetPos()) < maxDistSqr and ct > self.WeaponSwitchT and IsValid(curWep) and not curWep.IsMeleeWeapon and not self:IsMoving() then
 
-            VJ.EmitSound(self, self.DrawNewWeaponSound, 85, 115)
+            VJ.EmitSound(self, self.DrawNewWeaponSound, 85, 100)
             if self.CurrentWeapon == 0 and curWep:Clip1() > 1 then
                 self:RemoveAllGestures()
                 local anim = VJ.PICK({"vjseq_" .. VJ.PICK(self.Sts_SeqWepAnim),"vjges_" .. VJ.PICK(self.Sts_GesWepAnim)})
@@ -2222,14 +2292,17 @@ function ENT:WeaponSwitchMechanic()
                 self.WeaponSwitchT = ct + mRand(5, 25)
             end
 
-        elseif not IsValid(ene) and self.CurrentWeapon == 1 and ct > self.NextIdleWeaponSwitchT and self:GetNPCState() == NPC_STATE_IDLE and not self.Alerted then
+            local npcStat = self:GetNPCState()
+        elseif not IsValid(ene) and self.CurrentWeapon == 1 and ct > self.NextIdleWeaponSwitchT and npcStat == NPC_STATE_IDLE and npcStat ~= NPC_STATE_ALERT and npcStat ~= NPC_STATE_COMBAT then
 
             if IsValid(self.WeaponInventory.Primary) and isstring(self.HumanPrimaryWeapon) and self.HumanPrimaryWeapon ~= "" and weapons.GetStored(self.HumanPrimaryWeapon) then 
                 self:RemoveAllGestures()
+
                 local anim = VJ.PICK({"vjseq_" .. VJ.PICK(self.Stp_SeqWepAnim),"vjges_" .. VJ.PICK(self.Stp_GesWepAnim)})
                 if anim then 
                     self:PlayAnim(anim, true, VJ.AnimDuration(self, anim), false)
                 end 
+
                 self:DoChangeWeapon(self.WeaponInventory.Primary, true)
 
                 self.CurrentWeapon = 0
@@ -2424,10 +2497,12 @@ function ENT:OnGrenadeAttack(status, overrideEnt, landDir)
         self:RemoveAllGestures()
         local ene = self:GetEnemy()
         local distToEnemy = (IsValid(ene) and self:GetPos():DistToSqr(ene:GetPos())) or (self.GrenThro_EneTooClose or 1250)
-
+        local debugging = self.RANDOMS_DEBUG
         if not self.VJ_IsBeingControlled and self.HasAltGrenThrowAnims then
             if distToEnemy <= self.NPC_GrenadeCloseProxDist and mRng(1, 3) ~= 1 then
-                print("Close-range gren throw")
+                if debugging then 
+                    print("Close-range gren throw")
+                end 
                 local throwAnim = table.Random(self.GrenThrow_Close)
                 if throwAnim then 
                     self.AnimTbl_GrenadeAttack = "vjseq_" .. throwAnim
@@ -2440,7 +2515,9 @@ function ENT:OnGrenadeAttack(status, overrideEnt, landDir)
             local throwType  = mRng(1, 3)
 
             if throwType == 1 then
-                print("L-Handed grenade throw")
+                if debugging then 
+                    print("L-Handed grenade throw")
+                end 
                 local throwAnim = table.Random(self.GrenThrow_L)
                 if throwAnim then 
                     self.AnimTbl_GrenadeAttack = "vjseq_" .. throwAnim
@@ -2448,7 +2525,9 @@ function ENT:OnGrenadeAttack(status, overrideEnt, landDir)
                 end 
 
             elseif throwType == 2 and not self.IsGuard and not self:IsMoving() then
-                print("Ges-gren throw")
+                if debugging then 
+                    print("Ges-gren throw")
+                end 
                 local throwAnim = table.Random(self.GrenThrow_Gesture)
                 if throwAnim then 
                     self.CurrentGrenadeThrow_IsGesture = true 
@@ -2470,7 +2549,9 @@ function ENT:OnGrenadeAttack(status, overrideEnt, landDir)
                 end 
 
             elseif throwType == 3 and self.HasRightHandedGrenThrowAnim then
-                print("R-Handed greb throw")
+                if debugging then 
+                    print("R-Handed greb throw")
+                end 
                 local throwAnim = table.Random(self.GrenThrow_R)
                 if throwAnim then 
                     self.AnimTbl_GrenadeAttack = "vjseq_" .. throwAnim
@@ -3605,8 +3686,8 @@ ENT.React_FrIFire_AnimTbl = {"g_noway_big", "hg_nod_no", "g_fistshake"} -- shuol
 ENT.React_FrIFire_Chance = 3
 ENT.React_FrIFire_NextT = 0 
 function ENT:React_DmgFrPly(attacker, dmginfo)
-    if not IsValid(self) or self.VJ_IsBeingControlled then return end
     if not self.React_FriFire then return end
+    if not IsValid(self) or self.VJ_IsBeingControlled then return end
 
     local cT = CurTime()
     if cT < (self.React_FrIFire_NextT or 0) then return end
@@ -3615,31 +3696,25 @@ function ENT:React_DmgFrPly(attacker, dmginfo)
     local ene = self:GetEnemy()
     if IsValid(ene) and self:Visible(ene) then return end
     if not IsValid(attacker) or not attacker:IsPlayer() then return end
-
     if self._ReactFrFirePending then return end
-    self._ReactFrFirePending = true
+
     local chance = tonumber(self.React_FrIFire_Chance) or 5
-    if mRng(1, chance) ~= 1 then
-        self._ReactFrFirePending = false
-        return
-    end
+    if mRng(1, chance) ~= 1 then return end 
+
+    self._ReactFrFirePending = true
+ 
+    if self:IsMoving() then self:StopMoving() end 
+    self:RemoveAllGestures()
 
     local annoyedAnim = table.Random(self.React_FrIFire_AnimTbl)
-    if not annoyedAnim then
-        self._ReactFrFirePending = false
-        return
-    end
+    if not annoyedAnim then return end
 
-    self:StopMoving()
-    self:RemoveAllGestures()
     timer.Simple(mRand(0.15, 0.95), function()
-        if IsValid(self) then
-            self:PlayAnim("vjges_" .. annoyedAnim, false)
-            self.React_FrIFire_NextT = CurTime() + mRand(2, 10)
-        end
-        if IsValid(self) then
-            self._ReactFrFirePending = false
-        end
+        if not IsValid(self) then return end 
+        local seqName = "vjges_" .. annoyedAnim
+        self:PlayAnim(seqName, false)
+        self.React_FrIFire_NextT = CurTime() + mRand(2, 10)
+        self._ReactFrFirePending = false
     end)
 end
 ---------------------------------------------------------------------------------------------------------------------------------------------
@@ -3845,9 +3920,15 @@ function ENT:GetOrCreateDissolver()
 end
 
 function ENT:Ele_CorpseDeathEffects(corpse)
-    if GetConVar("vj_stalker_ele_death_fx"):GetInt() ~= 1 then return false end 
+    if not IsValid(corpse) then return end 
+    if not self.Corpse_EleDeathEffects then return end 
+
+    local conv = GetConVar("vj_stalker_ele_death_fx")
+    if conv:GetInt() ~= 1 then return end 
+
     local sparkChance = self.Corpse_EleDeathEffects_Chance
-    if self.Corpse_EleDeathEffects and mRng(1, sparkChance) == 1 then
+
+    if mRng(1, sparkChance) == 1 then
         local duration = mRand(1, 15) or 10 
         local interval = mRand(0.05, 0.95) or 0.5
         local repetitions = duration / interval 
@@ -3924,8 +4005,12 @@ function ENT:ManipulateCorpseFingers(corpse)
 end
 
 function ENT:ApplyCorpseTwitching(corpse)
+    if not self.HasPostMortemTwitching then return end 
+
     local twitchConv =  GetConVar("vj_stalker_body_twitching"):GetInt()
     if twitchConv ~= 1 then return end 
+
+    if corpse:IsOnFire() then return end 
 
     local twChance      = tonumber(self.CorpseTwitchChance) or 5 
     local twitchReps    = tonumber(self.CorpseTwitchReps) or 3 
@@ -3938,7 +4023,7 @@ function ENT:ApplyCorpseTwitching(corpse)
     local twitchType    = mRng(1, 2)
     local totalLife     = tonumber(mRand(minLife, maxLife)) 
 
-    if self.HasPostMortemTwitching and mRng(1, twChance) == 1 then
+    if mRng(1, twChance) == 1 then
         timer.Simple(totalLife, function()
             if not IsValid(corpse) then return end
             local function TwitchRep(count)
@@ -3991,7 +4076,8 @@ end
 //TODO 
 -- MAYBE ADD DIFFERENT STAT SETS BASED ON CERTAIN DMG? SHOCK OR FIRE CAUSE MORE ERATIC WRITHING?
 function ENT:ApplyCorpseRoll(corpse, duration, interval)
-    if not IsValid(corpse) or self.Headshot_Death then return end
+    if not IsValid(corpse) then return end
+    if self.Headshot_Death then return end 
     local isHeadshot = self.Headshot_Death or hitgroup == HITGROUP_HEAD
     local conv = GetConVar("vj_stalker_body_writhe"):GetInt()
     local chance = tonumber(self.DC_Writhe_Chance) or 10 
@@ -4115,9 +4201,10 @@ function ENT:ApplyCorpseRoll(corpse, duration, interval)
 end
 
 function ENT:RngDeathEyePos(body)
+    if not self.Corpse_RngEyePos then return end 
     local eyePosConv = GetConVar("vj_stalker_corpse_rng_eyepos"):GetInt()
     if eyePosConv ~= 1 then return end 
-    if not IsValid(body) or not self.Corpse_RngEyePos then return end
+    if not IsValid(body) then return end
     local chance = tonumber(self.Corpse_RngEyePos_Chance) or 3
     if mRng(1, chance) ~= 1 then return end
     local side = mRand(-0.65, 0.65)
@@ -4167,10 +4254,14 @@ function ENT:RngFaceFlexPos(body)
 end
 
 function ENT:Corpse_GrabRngWound(corpse)
+    if not self.CorpseWndGrabbing then return end 
+
     local conv = GetConVar("vj_stalker_death_wound_grabbing"):GetInt()
     if conv ~= 1 then return end 
+
     if not IsValid(corpse) or self.Headshot_Death then return end 
-    if not self.CorpseWndGrabbing then return end 
+
+    if corpse:IsOnFire() then return end 
 
     local delayT = tonumber(self.CorpseWndGrabDelay) or 0.25
     local grabChance = tonumber(self.CorpseWndGrabChance) or 10 
@@ -4262,9 +4353,12 @@ function ENT:Corpse_GrabRngWound(corpse)
 end
 
 function ENT:Corpse_ExtraPhysics(corpse)
+    if not self.ApplyHeadshotDeathPhys then return end 
     if not IsValid(corpse) then return end 
+    if self.IsCurrentlyIncapacitated then return end 
+
     local appliedCustomPhysics = false
-    if self.Headshot_Death and self.ApplyHeadshotDeathPhys and not self.IsCurrentlyIncapacitated then
+    if self.Headshot_Death then
         local downForce = -self.HeadShot_PhysDownFrc or 200 
         local rngForBackForce = self.HeadShot_PhysForwardFrc or mRand(-200, 200) 
         local pullForce = VectorRand() * rngForBackForce + Vector(0, 0, mRand(-300, -650))
@@ -4308,7 +4402,7 @@ function ENT:Corpse_ExtraPhysics(corpse)
                 elseif choices == 2 then 
                     dampVal = 0.05
                 else 
-                    dampVal = mRand(0.25, 0.55) -- Lighter 
+                    dampVal = mRand(0.15, 0.7) -- Lighter 
                 end 
 
                 local hsLinDamp = dampVal
@@ -4322,7 +4416,7 @@ function ENT:Corpse_ExtraPhysics(corpse)
                     phys:ApplyForceCenter(vel)
 
                     local rngVelEnhance = mRand(0.5, 2)
-                    local rngAng =  vR * math.random(100, 800)
+                    local rngAng =  vR * mRng(100, 800)
                     local rngTrq = vR * mRand(100, 250)
                     
                     phys:AddAngleVelocity(rngAng * rngVelEnhance)
@@ -4374,6 +4468,7 @@ function ENT:HandleHeadshot(dmginfo, hitgroup)
     local mindDmgConv     = GetConVar("vj_stalker_headshot_min_dmg_check"):GetInt()
     local manBoneLook     = tostring(self.Headshot_SearchBone)
     local imnBullet       = self.Immune_Bullet
+
     if hitgroup == headHitGroup and bulDmg and not imnBullet then
         isHeadshot = true
     else
@@ -4473,9 +4568,11 @@ function ENT:HandleHeadshot(dmginfo, hitgroup)
 end
 ---------------------------------------------------------------------------------------------------------------------------------------------
 function ENT:HeadshotDeathEffects()
+    if not self.Headshot_Death then return end
+
     local headConv = GetConVar("vj_stalker_headshot_fx")
     if headConv:GetInt() ~= 1 then return end 
-    if not self.Headshot_Death then return end
+
     if not IsValid(self) then return end 
 
     local hsGore = VJ.PICK(self.GoreOrGibSounds)
@@ -4495,6 +4592,7 @@ function ENT:HeadshotDeathEffects()
     if not headAttachment or not headAttachmentName then
         return false
     end
+
     local goreSnd = GetConVar("vj_stalker_headshot_gore_sound"):GetInt() 
     local rngSnd = mRng(65, 95)
     if mRng(1, effectChance) == 1 then
@@ -4507,6 +4605,7 @@ function ENT:HeadshotDeathEffects()
         local bloodT = mRand(1, 3.25)
         local gibAmount = tonumber(self.Headshot_GibMaxAm) or 3 
         local bloodeffect = ents.Create("info_particle_system")
+
         bloodeffect:SetKeyValue("effect_name", "blood_advisor_puncture_withdraw")
         bloodeffect:SetPos(gibPos)
         bloodeffect:SetAngles(headAttachment.Ang)
@@ -4534,7 +4633,7 @@ function ENT:HeadshotSoundEffect(hasBeenHeadshot)
     local hsSfxChance = self.HeadshotSoundSfxChance
     local conv = GetConVar("vj_stalker_headshot_sfx"):GetInt()
     local hS = table.Random(self.SoundTbl_OnHeadshot)
-    local rngSnd = math.random(85, 105)
+    local rngSnd = mRng(85, 105)
     if hS == false or hS == nil then return end
     if not IsValid(self) or conv ~= 1 then return end 
     if self.Headshot_Death_Sfx and hasBeenHeadshot and mRng(1, hsSfxChance) == 1 then
@@ -4699,7 +4798,7 @@ function ENT:OnDamaged(dmginfo, hitgroup, status)
     local cancelDial = GetConVar("vj_stalker_dmg_cancel_dial"):GetInt()
 
     if status == "PreDamage" then
-
+        self:GibWhenDamaged(dmginfo)
         self:Extra_LayeredGesFlinching(dmginfo)
         self:Blast_FlinchGesture(dmginfo)
         self:HandleReinforcedArmorImpact(dmginfo)
@@ -4805,12 +4904,13 @@ end
 
 function ENT:Handle_OnFirePain(dmginfo)
     if not IsValid(self) then return end
-    if not dmginfo or not dmginfo.GetDamageType then return end
     local firePainConv = 1
+
     local cv = GetConVar("vj_stalker_fire_dmg_vo")
     if cv then firePainConv = cv:GetInt() end
 
     if firePainConv ~= 1 then return end
+
     if not self.HasFireSpecPain or not self.HasSounds then return end
     local dmgType = dmginfo:GetDamageType()
     if self.Immune_Fire then return end
@@ -4962,13 +5062,14 @@ ENT.Panic_DmgEne_Chance = 12
 
 function ENT:PanicOnDamageByEne(dmginfo)
     if not self.Panic_DmgEne then return end 
+
     local conv = GetConVar("vj_stalker_panic_after_dmg"):GetInt() 
     if conv ~= 1 then return end
+
     if self.VJ_IsBeingControlled then return end
     if not self:Alive() then return end 
 
     local busy = self:IsBusy() or self:IsVJAnimationLockState() 
-
     if busy then return end
 
     local panicChance = tonumber(self.Panic_DmgEne_Chance)
@@ -4978,8 +5079,10 @@ function ENT:PanicOnDamageByEne(dmginfo)
     local coverType = mRng(1, 3)
     local bScheds = self:GetCurrentSchedule() == 30 or self:GetCurrentSchedule() == 27 
     local disp = self:Disposition(attacker)
+
     if disp == D_LI or disp == D_NU then return end 
-    if bScheds then return false end 
+
+    if bScheds then return end 
     if not IsValid(attacker) and not IsValid(enemy) then return end
 
     local wep = self:GetActiveWeapon()
@@ -5171,14 +5274,15 @@ function ENT:DamagedByShockFx()
     local entIndex = self:EntIndex()
     local endTime = curT + stunDuration
 
+    if not self:Alive() then return end 
     timer.Create("TeslaEffectTimer_" .. entIndex, 0.1, math.ceil(stunDuration / 0.1), function()
-        if IsValid(self) and self:Alive() then
+        if IsValid(self) then
             util.Effect("TeslaHitBoxes", teslaEffectData, true, true)
         end
     end)
 
     local function EmitShockSoundAndEffect()
-        if not IsValid(self) or not self:Alive() then return end
+        if not IsValid(self) then return end
         if CurTime() > endTime then return end
         local sndRng = mRng(85, 105)
         local sndTbl = {"ambient/energy/zap" .. mRng(1, 9) .. ".wav"}
@@ -5208,9 +5312,11 @@ function ENT:DamagedByShockFx()
     end)
 end
 ---------------------------------------------------------------------------------------------------------------------------------------------
+ENT.LandingOnGround_Anim = "jump_holding_land"
 function ENT:DetectLanding()
     if not self.Detect_LandAnim then return end 
     if self.IsLanding then return end 
+
     local cT = CurTime()
     if not IsValid(self) or cT < (self.NextLandAnimCheckT) then
         return
@@ -5219,12 +5325,22 @@ function ENT:DetectLanding()
     local rngSnd = mRng(75, 115)
     local rngVol = mRng(65, 80)
 
-    local landAnim = "jump_holding_land"
+    local landAnim = self.LandingOnGround_Anim
+    if not landAnim then return end 
+    
+    local selectAnim;
+    if landAnim then 
+        if istable(landAnim) then
+            selectAnim = table.Random(landAnim)
+        elseif isstring(landAnim) then 
+            selectAnim = landAnim
+        end
+    end 
 
     local seq = self:GetSequence()
     local currentSequence = seq and self:GetSequenceName(seq) or ""
     
-    if currentSequence == landAnim or self:GetActivity() == ACT_LAND then
+    if currentSequence == selectAnim or self:GetActivity() == ACT_LAND then
         self.IsLanding = true  
 
         local landSnds = table.Random({"general_sds/land_sound/jumplanding.wav","general_sds/land_sound/jumplanding2.wav","general_sds/land_sound/jumplanding3.wav","general_sds/land_sound/jumplanding4.wav","general_sds/land_sound/landing.mp3"})
@@ -5239,12 +5355,14 @@ function ENT:DetectLanding()
             VJ.EmitSound(self, selectGrunt, rngVol, rngSnd)
         end 
         
-        local landDuration = self:SequenceDuration(self:LookupSequence(landAnim)) or VJ.AnimDuration(self, landAnim) or 1 
+        local landDuration = self:SequenceDuration(self:LookupSequence(selectAnim))  or 1 
         local myPos = self:GetPos()
         local isInWater = bit.band(util.PointContents(myPos), CONTENTS_WATER) == CONTENTS_WATER
         local conv = GetConVar("vj_stalker_jump_land_particles"):GetInt() 
         local pcfxScale = tonumber(self.Landing_FxScale)
+
         if conv == 1 then 
+            if not self:ValidBreakableMats(self:GetPos()) then return end 
             if self.Landing_Effects and self.IsLanding and not isInWater then
                 if self.LargeLandFx then 
                     local effectData = EffectData()
@@ -5281,32 +5399,40 @@ function ENT:OnWeaponStrafe()
         self.IsCrouchFiring = false
     end
 end
-
+---------------------------------------------------------------------------------------------------------------------------------------------
 ENT.Danger_DetectSiganlT = 0
 function ENT:OnDangerDetected(dangerType, data)
+    self:Handle_IsPanickingState()
+end
+
+function ENT:Handle_IsPanickingState()
     if not self.CanDetectDangers then return end 
+
+    local shareDel = mRand(1, 5) or 3 
     local curT = CurTime()
     local gestureSignal = VJ.PICK(self.DetectDangerReactAnim)
     local animChance = self.DetectDangerAnimChance
 
-    if curT > self.Danger_DetectSiganlT and  mRng(1, animChance) == 1 and self.HasDetectDangerAnim then
-        self:PlayAnim("vjges_" .. gestureSignal, false) 
-        self.Danger_DetectSiganlT = curT + mRand(1, 10)
+    if self.HasDetectDangerAnim then 
+        if curT > self.Danger_DetectSiganlT and  mRng(1, animChance) == 1 then
+            self:PlayAnim("vjges_" .. gestureSignal, false) 
+            self.Danger_DetectSiganlT = curT + mRand(1, 10)
+        end 
     end 
 
-    if not IsValid(self) or self.IsDetectingDanger or mRng(1, 2) ~= 1 then return end
+    if self.IsDetectingDanger or mRng(1, 2) ~= 1 then return end
     self.IsDetectingDanger = true
 
-    local panicDuration = self.IsPanickedStateT + mRand(5, 10)
+    local panicDuration = self.IsPanickedStateT + mRand(3, 6)
     timer.Simple(panicDuration, function()
         if not IsValid(self) then return end
         self.IsDetectingDanger = false
-
         self.NextDangerDetectionT = curT + mRand(1, 2)
-        self.TakingCoverT = curT + mRand(1, 5)
+        self.NextChaseTime = curT + shareDel * 2 
+        self.TakingCoverT = curT + shareDel
     end)
-end
-
+end 
+---------------------------------------------------------------------------------------------------------------------------------------------
 ENT.CanTakeCovSigAnim = true
 ENT.SignalTakeCover_FlwPlyChance = 4 
 ENT.NextTakeCovSigCrouchT = 0
@@ -5362,12 +5488,14 @@ ENT.Copy_IsCrouching = false
 ENT.Copy_NextShiftT = 0  
 
 function ENT:CopyPlayerStance() -- ran in on think
-    if not self.Copy_PlyCrouchStance or not self.IsFollowing then return end
+    if not self.Copy_PlyCrouchStance then return end
+    if not self.IsFollowing then return end 
 
     local followData = self.FollowData
     if not followData then return end
     local followEnt = followData.Target
     local disp = self:Disposition(followEnt)
+
     if not IsValid(followEnt) or not followEnt:IsPlayer() or not followEnt:Alive() then return end
     if not followEnt:IsOnGround() or disp ~= D_LI or self:IsBusy("Activities") then return end
 
@@ -5476,9 +5604,11 @@ function ENT:TranslateActivity(act)
         end 
     end 
 
-    if act == ACT_RUN and self.IsDetectingDanger then
-        return self:TranslateActivity(act == ACT_RUN and ACT_RUN_PROTECTED)
-    end
+    if self.IsDetectingDanger then 
+        if act == ACT_RUN then
+            return self:TranslateActivity(act == ACT_RUN and ACT_RUN_PROTECTED or ACT_RUN_CROUCH)
+        end
+    end 
 
     if act == ACT_IDLE and not self:OnGround() and not self:IsMoving() then
         return self:TranslateActivity(act == ACT_IDLE and ACT_GLIDE)
@@ -5538,14 +5668,16 @@ end
 ENT.AtVeryLowHealth = false
 ENT.CanBecomeDefensiveAtLowHP = false
 function ENT:DefensiveWhenLowHealth()
-    if not IsValid(self) or self:Health() <= 0 or not self.CanBecomeDefensiveAtLowHP or self.CombatChaseSateGreen then return end
+    if not self.CanBecomeDefensiveAtLowHP then return end 
+    if not self:Alive() then return end 
+    if not IsValid(self) or self.CombatChaseSateGreen then return end
 
     local defRetDist = self.Weapon_RetreatDistance
     local defChaseEne = self.DisableChasingEnemy
     local defOcDelay = self.Weapon_OcclusionDelayMinDist
     local health = self:Health()
     local maxHealth = self:GetMaxHealth()
-    local lowHealthThreshold = maxHealth * 0.25
+    local lowHealthThreshold = maxHealth * mRand(0.3, 0.45)
 
     if health <= lowHealthThreshold then
         self.Weapon_OcclusionDelayMinDist = 1
@@ -5595,8 +5727,7 @@ function ENT:Avoid_PlyCrosshair()
 
     if busy or 
         bScheds or    
-        self:GetNPCState() == NPC_STATE_IDLE or  
-        not self.Alerted or 
+        self:GetNPCState() == NPC_STATE_IDLE or   
         self:GetWeaponState() == VJ.WEP_STATE_RELOADING or
         (self.Avoid_C_HairNextT and self.Avoid_C_HairNextT > curT) then
         return  
@@ -5690,8 +5821,12 @@ function ENT:GestureSignalAnimHelper()
 end 
 ---------------------------------------------------------------------------------------------------------------------------------------------
 function ENT:CanFireQuickFlare() 
-    if GetConVar("vj_stalker_fire_quick_flares"):GetInt() ~= 1 then return false end
     if not self.AllowedToLaunchQuickFlare then return false end 
+
+    local conv = GetConVar("vj_stalker_fire_quick_flares")
+    if conv:GetInt() ~= 1 then return false end
+
+    if self.IsFiringQuickFlare then return false end 
     if self:IsBusy() or self.VJ_IsBeingControlled then return false end
 
     local enemy = self:GetEnemy()
@@ -5707,7 +5842,7 @@ function ENT:CanFireQuickFlare()
         return false 
     end
 
-    if self.Flinching or self.IsFiringQuickFlare or self.IsHoldingSecondaryWeapon then return false end
+    if self.Flinching or self.IsHoldingSecondaryWeapon then return false end
     if self.WeaponAttackState == VJ.WEP_ATTACK_STATE_FIRE_STAND or self.DoingWeaponAttack then return false end
     
     if wep.IsMeleeWeapon or wep.HoldType == "pistol" or wep.HoldType == "revolver" or wep.HoldType == "rpg" then return false end
@@ -5743,6 +5878,7 @@ function ENT:FireQuickFlare()
     local eneData = self.EnemyData or {}
     local cT = CurTime()
     local vec = Vector(mRand(-30, 30), mRand(-30, 30), 0)
+    
     if self:Visible(enemy) then
         aimPos = enemy:GetPos() + vec
     elseif self:VisibleVec(eneData.VisiblePos) and enemy:GetPos():Distance(eneData.VisiblePos) <= self.FireQuickFlareMax and self.FireQuickFlareAtLastEnePos then
@@ -5826,9 +5962,12 @@ end
 function ENT:OnPlayerSight(ent)
     if self.SpotFr_PlyAnim then 
         if VJ_CVAR_IGNOREPLAYERS then return end
+        if self.IsFollowing or self.FollowingPlayer then return end 
         if self.VJ_IsBeingControlled then return end 
+
         local friendlyConVar = GetConVar(tostring(self.FriendlyConvar)):GetInt()
         if not friendlyConVar or friendlyConVar ~= 1 then return end
+
         if self:GetNPCState() ~= NPC_STATE_IDLE then return end 
 
         local cT = CurTime()
@@ -5842,15 +5981,12 @@ function ENT:OnPlayerSight(ent)
         if not istable(tbl) or #tbl == 0 then return end
 
         if ent:IsPlayer() and disp == D_LI and self:Visible(ent) then
-            if self.IsFollowing or
-                self.FollowingPlayer or
-                self:GetWeaponState() == VJ.WEP_STATE_RELOADING or
+            if self:GetWeaponState() == VJ.WEP_STATE_RELOADING or
                 self.WeaponAttackState == VJ.WEP_ATTACK_STATE_FIRE_STAND or
                 self.Medic_Status or
                 IsValid(ene) or
                 busy or
-                not self:IsOnGround() or 
-                self.Alerted then
+                not self:IsOnGround() then
                 return 
             end
             
@@ -5870,7 +6006,7 @@ function ENT:OnPlayerSight(ent)
                             self:StopMoving()
                             self:SetTarget(ent)
                             self:SCHEDULE_FACE("TASK_FACE_TARGET")
-                            self:PlayAnim("vjseq_" .. seqSpotAnim, true, aT, false) -- Dunno why, but anims are totall screwed lol
+                            self:PlayAnim("vjseq_" .. seqSpotAnim, true, aT, false) -- Dunno why, but anims are totall screwed, maybe I got conflicting addon :(
                             if self.RANDOMS_DEBUG then 
                                 print("On spot player, we are playing a sequence animation!")
                             end 
@@ -5918,11 +6054,11 @@ end
 function ENT:React_ToPlyFollow(state, entity)
     if not self.FollowPly_Reaction then return end
     if self:Health() <= 0 then return end
-
+    if self.VJ_IsBeingControlled then return end 
     local busy = self.Flinching or self:IsBusy() or self:IsVJAnimationLockState() 
     local ene = self:GetEnemy()
     
-    if self.VJ_IsBeingControlled or IsValid(ene) or self.Alerted then 
+    if IsValid(ene) or self:GetNPCState() ~= NPC_STATE_IDLE then 
         return  
     end
 
@@ -5963,9 +6099,11 @@ ENT.Fidget_AnimTbl = {"fidget_scratch_face","fidget_wipe_hand","fidget_wipe_face
 function ENT:Idle_FidgetAnim()
     if self.PlayFidgetAnims then
         if self.VJ_IsBeingControlled or IsValid(self:GetEnemy()) then return end
-        if self:GetNPCState() ~= NPC_STATE_IDLE then return end 
 
-        if self:IsVJAnimationLockState()  or self:IsBusy() or not self:IsOnGround() or self.Dead or self.CurrentSchedule or self.Alerted or self.PlayingFidgetAnim then
+        local npcState = self:GetNPCState()
+        if npcState ~= NPC_STATE_IDLE or npcState == NPC_STATE_ALERT or npcState == NPC_STATE_COMBAT then return end 
+
+        if self:IsVJAnimationLockState() or self:IsBusy() or not self:IsOnGround() or self.CurrentSchedule or self.PlayingFidgetAnim then
             return
         end
 
@@ -5988,10 +6126,12 @@ function ENT:Idle_FidgetAnim()
                     animSelected = self.Fidget_AnimTbl
                 end
             end
+
             if not animSelected then return end 
+            
             self.PlayingFidgetAnim = true
             timer.Simple(mRand(0.25, 1), function()
-                if not IsValid(self) or self:IsBusy() or self.Alerted then
+                if not IsValid(self) or self:IsBusy() then
                     self.PlayingFidgetAnim = false
                     return
                 end
@@ -6363,7 +6503,14 @@ function ENT:CanPickUpWeapon()
 end
 ---------------------------------------------------------------------------------------------------------------------------------------------
 -- DOOR STACKING? MAYBE HAVE IT SO THEY ONLY DO BREAK DOOR IF ALLY IS WITHIN X RANGE?
--- Add tolerance or smthing for 45 degeess
+-- Add tolerance or smthing for 45 degeess.
+
+ENT.PostBreakDoor_Reaction = true
+ENT.PostBreakDoor_Anim = {"gesture_signal_takecover","gesture_signal_forward","gesture_signal_group","gesture_signal_halt"}
+ENT.PostBreakDoor_Chance = 2
+ENT.PostBreakDoor_NextT = 0 
+ENT.AlliesReact_Breach = true 
+ENT.AlliesReact_BreachNextT = 0
 function ENT:KickDoorDown()
     if not self.AllowedToKickDownDoors then return end 
 
@@ -6381,9 +6528,13 @@ function ENT:KickDoorDown()
     local pos = self:GetPos()
     local eneVisAlert = (IsValid(enemy) and not self:Visible(enemy) and self:GetNPCState() == NPC_STATE_COMBAT)
 
-    if busy or self:IsMoving() or self.IsFollowing or 
-       self:GetWeaponState() == VJ.WEP_STATE_RELOADING or self.WeaponAttackState == VJ.WEP_ATTACK_STATE_FIRE_STAND or self.Flinching then
+    if self:IsMoving() or self.IsFollowing or self:GetWeaponState() == VJ.WEP_STATE_RELOADING or self.WeaponAttackState == VJ.WEP_ATTACK_STATE_FIRE_STAND or self.Flinching then
         return 
+    end
+
+    local allyConv = GetConVar("vj_stalker_kickdoor_req_allies")
+    if allyConv and allyConv:GetInt() == 1 then
+        if not self:Allies_Check(1500) then return end
     end
     
     if curT > self.NextBreakDownDoorT then
@@ -6404,10 +6555,22 @@ function ENT:KickDoorDown()
             end
         else
             if self:IsBusy() or not IsValid(self.BreakDoor) or not self.BreakDoor:Visible(self) then
+                local door = self.BreakDoor
+                door.IsBeingKicked = nil
                 self.BreakDoor = NULL
                 return
             end
-            
+
+            local door = self.BreakDoor
+            if not IsValid(door) then return end
+
+            if door.IsBeingKicked then
+                self.BreakDoor = NULL
+                return
+            end
+
+            door.IsBeingKicked = true
+
             if self:GetActivity() ~= ACT_MELEE_ATTACK1 and not self:IsBusy("Activites") then 
                 local ang = self:GetAngles()
 
@@ -6417,13 +6580,15 @@ function ENT:KickDoorDown()
                 VJ.STOPSOUND(self.CurrentIdleSound)
 
                 timer.Simple(mRand(0.65, 0.95), function()
-                    if not IsValid(self) or not IsValid(self.BreakDoor) or self.Dead then 
+                    if not IsValid(self) or not IsValid(self.BreakDoor) then 
+                        door.IsBeingKicked = nil
                         self.BreakDoor = NULL
                         return 
                     end
                 
                     local enemy = self:GetEnemy()
                     if IsValid(enemy) and self:Visible(enemy) and self:GetPos():DistToSqr(enemy:GetPos()) <= (800 * 800) then
+                        door.IsBeingKicked = nil
                         self.BreakDoor = NULL
                         return
                     end
@@ -6431,7 +6596,9 @@ function ENT:KickDoorDown()
                     local desiredYaw = (self.BreakDoor:GetPos() - self:GetPos()):Angle().y
                     local currentYaw = self:GetAngles().y
                     local yawDiff = math_abs(math.AngleDifference(currentYaw, desiredYaw))
+
                     if yawDiff > 15 then
+                        door.IsBeingKicked = nil
                         self.BreakDoor = NULL
                         return
                     end
@@ -6445,26 +6612,30 @@ function ENT:KickDoorDown()
 
                     if seq and seq > 0 then
                         local kickT = self:SequenceDuration(seq) or 1 
-                    end 
-
-                    local teleSnd = table.Random({self.SoundTbl_Suppressing, self.SoundTbl_BeforeMeleeAttack})
-                    if kickAnim then 
-                        self:PlayAnim("vjseq_" .. kickAnim, true, kickT, false)
-                        self:SetState(VJ_STATE_ONLY_ANIMATION, kickT)
-                        if teleSnd and mRng(1, 2) == 1 then 
-                            VJ.EmitSound(self, teleSnd, rngVol, rngSnd)
+                        local teleSnd = table.Random({self.SoundTbl_Suppressing, self.SoundTbl_BeforeMeleeAttack})
+                        if kickAnim then 
+                            self:PlayAnim("vjseq_" .. kickAnim, true, kickT, false)
+                            self:SetState(VJ_STATE_ONLY_ANIMATION, kickT)
+                            if teleSnd and mRng(1, 2) == 1 then 
+                                VJ.EmitSound(self, teleSnd, rngVol, rngSnd)
+                            end 
                         end 
                     end 
                     
+             
                     local doorBreak = table.Random({"general_sds/doorbreak/doorbust1", "general_sds/doorbreak/doorbust2","ambient/materials/door_hit1.wav"})
                     local woodBreak = table.Random({"physics/wood/wood_crate_break" .. mRng(1, 5) .. ".wav"})
                     local furnBreak = table.Random({"physics/wood/wood_furniture_break" .. mRng(1, 2) .. ".wav"})
                     local door = self.BreakDoor
                 
                     if IsValid(door) and door:GetClass() == "prop_door_rotating" then
+
+                        door.HasBeenDestroyed = true
+
                         VJ.EmitSound(self, doorBreak .. ".wav", rngVol, rngSnd)
                         VJ.EmitSound(door, woodBreak, rngVol, rngSnd)
-                        if mRng(1, 2) == 1 and IsValid(self) then 
+
+                        if mRng(1, 2) == 1 then 
                             VJ.EmitSound(door, furnBreak, rngVol, rngSnd)
                         end
                         
@@ -6476,12 +6647,14 @@ function ENT:KickDoorDown()
                         door:SetCollisionGroup(COLLISION_GROUP_DEBRIS)
                         door:SetSolid(SOLID_NONE)
                 
-                        local visMaxDist = self.DoorBreakPlyVisMaxDist or 500
-						for _,ply in ipairs(player.GetAll()) do 
-							if ply:GetPos():Distance(door:NearestPoint(ply:GetPos())) <= visMaxDist and not VJ_CVAR_IGNOREPLAYERS and self.DoorBreakPlyVisFx then
-								ply:ViewPunch(Angle(mRand(-360, 360), mRand(-360, 360), mRand(-360, 360)))
-							end
-                        end
+                        if self.DoorBreakPlyVisFx then 
+                            local visMaxDist = self.DoorBreakPlyVisMaxDist or 500
+                            for _,ply in ipairs(player.GetAll()) do 
+                                if ply:GetPos():Distance(door:NearestPoint(ply:GetPos())) <= visMaxDist and not VJ_CVAR_IGNOREPLAYERS then
+                                    ply:ViewPunch(Angle(mRand(-360, 360), mRand(-360, 360), mRand(-360, 360)))
+                                end
+                            end
+                        end 
                         
                         local brokenDoorProp = ents.Create("prop_physics")
 						brokenDoorProp:PhysicsInit(SOLID_VPHYSICS)
@@ -6506,9 +6679,106 @@ function ENT:KickDoorDown()
                                 end
                             end)
                         end
+
                         self.NextBreakDownDoorT = curT + mRand(4.5, 10)
                         door:Remove()
-                    else
+
+
+                        if self.AlliesReact_Breach then
+                            print("[DoorBreach] ally reaction block entered")
+
+                            for _, ally in ipairs(ents.FindInSphere(self:GetPos(), 1000)) do
+                                if not ally.IsVJBaseSNPC then continue end 
+                                if not IsValid(ally) then continue end
+                                if ally == self then continue end
+                                if not ally:IsNPC() then continue end
+                                if CurTime() < self.AlliesReact_BreachNextT then continue end 
+
+                                local disp = ally:Disposition(self)
+                                if disp ~= D_LI and disp ~= D_NU then
+                                    continue
+                                end
+
+                                if mRng(1, 2) ~= 1 then
+                                    continue
+                                end
+
+                                if ally.IsGuard or ally.MovementType == VJ_MOVETYPE_STATIONARY then
+                                    continue
+                                end
+
+                                if ally:IsBusy() or ally:IsMoving() or not ally:Alive() or ally:IsVJAnimationLockState() then
+                                    continue
+                                end
+
+                                local allyEnemy = ally:GetEnemy()
+                                if IsValid(allyEnemy) and mRng(1, 2) == 1 then
+                                    continue
+                                end
+
+                                local sched = ally.GetCurrentSchedule and ally:GetCurrentSchedule() or nil
+                                if sched == SCHED_TAKE_COVER_FROM_ENEMY or sched == SCHED_HIDE_AND_RELOAD or sched == SCHED_TAKE_COVER_FROM_ORIGIN then
+                                    continue
+                                end
+
+                                ally:ClearSchedule()
+                                ally:SetLastPosition(ally:GetPos() + VectorRand() * 750)
+                                ally:SetSchedule(SCHED_TAKE_COVER_FROM_ENEMY)
+                                ally.AlliesReact_BreachNextT = CurTime() + mRand(1, 10)
+                            end
+                        end
+
+                        if self.PostBreakDoor_Reaction then 
+                            if mRng(1, self.PostBreakDoor_Chance or 2) == 1 then 
+                                timer.Simple(math.Rand(1.5, 2), function()
+                                    if not IsValid(self) then return end
+                                    if self:IsBusy() or self:IsMoving() or not self:IsOnGround() then return end
+                                    if CurTime() <= self.PostBreakDoor_NextT then return end
+
+                                    local enemy = self:GetEnemy()
+                                    if IsValid(enemy) and self:Visible(enemy) then return end
+
+                                    local allyConv = GetConVar("vj_stalker_kickdoor_req_allies")
+                                    if allyConv and allyConv:GetInt() == 1 then
+                                        if not self:Allies_Check(1500) then return end
+                                    end
+
+                                    local curAct = self:GetActivity()
+                                    if curAct == ACT_IDLE_AIM_AGITATED or curAct == ACT_RANGE_ATTACK1 or curAct == ACT_MELEE_ATTACK1 then
+                                        return
+                                    end
+
+                                    self:ClearSchedule()
+
+                                    local anim = self.PostBreakDoor_Anim
+                                    if not anim then return end
+
+                                    local flinchAnim
+                                    if istable(anim) then
+                                        flinchAnim = table.Random(anim)
+                                    elseif isstring(anim) then
+                                        flinchAnim = anim
+                                    end
+
+                                    if not flinchAnim then return end
+
+                                    local blockedGestures = {2152, 2147, 2148, 2149}
+                                    for _, act in ipairs(blockedGestures) do
+                                        if self:IsPlayingGesture(act) then return end
+                                    end
+
+                                    local seq = self:LookupSequence(flinchAnim)
+                                    if not seq or seq <= 0 then return end
+
+                                    local layer = self:AddGestureSequence(seq, true)
+                                    if layer then
+                                        self:SetLayerPlaybackRate(layer, math.Rand(0.65, 1))
+                                    end
+
+                                    self.PostBreakDoor_NextT = CurTime() + math.Rand(1, 10)
+                                end)
+                            end 
+                        end 
                     end
                 end)
             end
@@ -6876,13 +7146,13 @@ function ENT:PlaceCombatFlare()
             anim = self.PlaceFlareAnimation 
         end 
     end 
-
-    local seq = self:LookUpSequence(anim)
+    if not anim then return end 
+    local seq = self:LookupSequence(anim)
     if not seq or seq < 0 then return end 
 
     local aT = self:SequenceDuration(seq) or 1 
     local spwnDel =mRand(0.45, 0.65)
-    self:PlayAnim("vjseq_" .. seq, true, aT, false)
+    self:PlayAnim("vjseq_" .. anim, true, aT, false)
     timer.Simple(spwnDel, function()
         if not IsValid(self) then return end
 
@@ -7099,6 +7369,8 @@ function ENT:PlayFlashlightReaction()
 end
 ---------------------------------------------------------------------------------------------------------------------------------------------
 ENT.IsAlone_VJEneConv = "vj_stalker_lm_tr_vj_creature"
+
+//this needs to be ignored if ene is beyond firing distance
 function ENT:IfSelfIsLoneMember()
     if not self.HasAloneAiBehaviour or self.VJ_IsBeingControlled then return end
     if not self.CanAlly then return end 
@@ -7149,13 +7421,6 @@ function ENT:IfSelfIsLoneMember()
     end
 end
 ---------------------------------------------------------------------------------------------------------------------------------------------
- -- [Current bugs] -- 
- // SNPC's bone's resetting can be delayed
- // SNPCS stay leaning, despite them moving around/not resetting properly sometimes. 
- // Leaning can stack??? Uncommon cases of SNPCs sometimes leaning, but would lean again, with their bone manipulation getting worse?
- // SNPCs can leave the spot they were leaning from with their bones still manipulated and not resetted.
- // SNPCs lean for no reason. E.g, snpc is far away or on a high surface. 
-
 ENT.CanWeLean            = true
 ENT.CurrentlyLeaning     = false
 ENT.NextLeanTime         = 0
@@ -7173,15 +7438,8 @@ local BONE_PELVIS = "ValveBiped.Bip01_Pelvis"
 local BONE_SPINE  = "ValveBiped.Bip01_Spine"
 local BONE_SPINE1 = "ValveBiped.Bip01_Spine1"
 
-function ENT:ResetLean()
-    local cT = CurTime()
-    self.CurrentlyLeaning   = false
-    self.TargetLeanAngle    = ZERO_ANGLE
-    self.CurrentLeanAngle   = ZERO_ANGLE
-    self.LeanOriginPos      = nil
-    self.LastStateChange    = cT
-    self.LeanCooldownUntil  = cT + mRand(2.5, 6.5)
 
+function ENT:ForceBoneReset()
     local pelvis = self:LookupBone(BONE_PELVIS)
     local spine  = self:LookupBone(BONE_SPINE)
     local spine1 = self:LookupBone(BONE_SPINE1)
@@ -7189,6 +7447,27 @@ function ENT:ResetLean()
     if pelvis then self:ManipulateBoneAngles(pelvis, ZERO_ANGLE) end
     if spine  then self:ManipulateBoneAngles(spine,  ZERO_ANGLE) end
     if spine1 then self:ManipulateBoneAngles(spine1, ZERO_ANGLE) end
+end
+
+
+function ENT:ResetLean()
+    local cT = CurTime()
+
+    self.CurrentlyLeaning   = false
+    self.TargetLeanAngle    = ZERO_ANGLE
+    self.CurrentLeanAngle   = ZERO_ANGLE
+    self.LeanOriginPos      = nil
+    self.LastStateChange    = cT
+    self.LeanCooldownUntil  = cT + math.Rand(2.5, 6.5)
+
+    self:ForceBoneReset()
+    for i = 1, 3 do
+        timer.Simple(i * 0.05, function()
+            if IsValid(self) then
+                self:ForceBoneReset()
+            end
+        end)
+    end
 end
 
 function ENT:CheckLeanReset()
@@ -7207,12 +7486,12 @@ function ENT:CheckLeanReset()
         return
     end
 
-    if self.LeanOriginPos and pos:DistToSqr(self.LeanOriginPos) > 25^2 then
+    if self.LeanOriginPos and pos:DistToSqr(self.LeanOriginPos) > (25 * 25) then
         self:ResetLean()
         return
     end
 
-    if math_abs(enemy:GetPos().z - pos.z) > 120 then
+    if math.abs(enemy:GetPos().z - pos.z) > 120 then
         self:ResetLean()
         return
     end
@@ -7223,20 +7502,38 @@ function ENT:CheckLeanReset()
     end
 end
 
+
 function ENT:ContextToLean()
-    self:CheckLeanReset()
+    if not self.CanWeLean then return end
+
+    local conv = GetConVar("vj_stalker_can_lean")
+    if not conv or conv:GetInt() ~= 1 then return end
+
     local cT = CurTime()
-    if GetConVar("vj_stalker_can_lean"):GetInt() ~= 1 then return end
-    if self.VJ_IsBeingControlled or not self.CanWeLean then return end
+
+    if self.CurrentlyLeaning and not IsValid(self:GetEnemy()) then
+        self:ResetLean()
+        return
+    end
+
+    if self:IsMoving() then
+        if self.CurrentlyLeaning then
+            self:ResetLean()
+        end
+        return
+    end
+
+    self:CheckLeanReset()
+
+    if self.VJ_IsBeingControlled then return end
     if self.LeanCooldownUntil > cT then return end
-    if self:IsMoving() then return end
 
     local wep = self:GetActiveWeapon()
     if not IsValid(wep) then return end
 
     if not self.CurrentlyLeaning
     and cT > self.NextLeanTime
-    and cT > self.TakingCoverT then
+    and cT > (self.TakingCoverT or 0) then
         self:CustomLean()
     end
 
@@ -7246,9 +7543,10 @@ function ENT:ContextToLean()
         self.TargetLeanAngle
     )
 
-    self.CurrentLeanAngle.p = math_Clamp(self.CurrentLeanAngle.p, -18, 18)
-    self.CurrentLeanAngle.y = math_Clamp(self.CurrentLeanAngle.y, -22, 22)
-    self.CurrentLeanAngle.r = math_Clamp(self.CurrentLeanAngle.r, -12, 12)
+
+    self.CurrentLeanAngle.p = math.Clamp(self.CurrentLeanAngle.p, -18, 18)
+    self.CurrentLeanAngle.y = math.Clamp(self.CurrentLeanAngle.y, -22, 22)
+    self.CurrentLeanAngle.r = math.Clamp(self.CurrentLeanAngle.r, -12, 12)
 
     local pelvis = self:LookupBone(BONE_PELVIS)
     local spine  = self:LookupBone(BONE_SPINE)
@@ -7257,24 +7555,15 @@ function ENT:ContextToLean()
     local a = self.CurrentLeanAngle
 
     if pelvis then
-        self:ManipulateBoneAngles(
-            pelvis,
-            Angle(0, -a.y * 0.25, -a.r * 0.25)
-        )
+        self:ManipulateBoneAngles(pelvis, Angle(0, -a.y * 0.25, -a.r * 0.25))
     end
 
     if spine then
-        self:ManipulateBoneAngles(
-            spine,
-            Angle(a.p * 0.6, a.y * 0.6, a.r * 0.6)
-        )
+        self:ManipulateBoneAngles(spine, Angle(a.p * 0.6, a.y * 0.6, a.r * 0.6))
     end
 
     if spine1 then
-        self:ManipulateBoneAngles(
-            spine1,
-            Angle(a.p * 0.4, a.y * 0.4, a.r * 0.4)
-        )
+        self:ManipulateBoneAngles(spine1, Angle(a.p * 0.4, a.y * 0.4, a.r * 0.4))
     end
 end
 
@@ -7282,9 +7571,13 @@ function ENT:CustomLean()
     local enemy = self:GetEnemy()
     if not IsValid(enemy) then return end
     if self:IsMoving() then return end
+    if self.CurrentlyLeaning then return end
 
     local pos = self:GetPos()
     local traceStart = pos + self:OBBCenter()
+
+    local dist = pos:DistToSqr(enemy:GetPos())
+    if dist > (1200 * 1200) or dist < (200 * 200) then return end
 
     local tr = util.TraceLine({
         start  = traceStart,
@@ -7292,14 +7585,9 @@ function ENT:CustomLean()
         filter = { self }
     })
 
-    if not tr.HitWorld and not IsValid(tr.Entity) then
-        if self.CurrentlyLeaning then
-            self:ResetLean()
-        end
-        return
-    end
+    if tr.Entity == enemy or self:Visible(enemy) then return end
 
-    local right = mRand(18, 28)
+    local right = math.Rand(18, 28)
     local up    = 45
 
     local trR = util.TraceLine({
@@ -7318,36 +7606,43 @@ function ENT:CustomLean()
     local newState = false
 
     if trR.Entity == enemy then
-        newAngle = Angle(12, 20, 6)
+        newAngle = Angle(12, 30, 6)
         newState = true
     elseif trL.Entity == enemy then
-        newAngle = Angle(-12, -20, -6)
+        newAngle = Angle(-12, -30, -6)
         newState = true
     end
+
     local cT = CurTime()
-    if newState and cT - self.LastStateChange > self.StateChangeDelay then
+
+    if newState and (cT - self.LastStateChange > self.StateChangeDelay) then
         self.CurrentlyLeaning = true
         self.TargetLeanAngle  = newAngle
-        self.LeanOriginPos    = pos
+        self.LeanOriginPos    = Vector(pos.x, pos.y, pos.z)
         self.LastStateChange  = cT
-        self.NextLeanTime     = cT + mRand(2, 6)
+        self.NextLeanTime     = cT + math.Rand(2, 6)
+
         self:SetTurnTarget("Enemy")
         self:StopMoving()
-    elseif self.CurrentlyLeaning and not newState then
-        self:ResetLean()
     end
 end
 ---------------------------------------------------------------------------------------------------------------------------------------------
 function ENT:SeekOutMedic()
     if not IsValid(self) then return end
-    if self.VJ_IsBeingControlled or self.IsGuard or self.Dead or self.IsMedic or self:IsOnFire() then
+    if not self.CanSeekOutMedic then return end 
+    if self.IsGuard or self.MovementType == VJ_MOVETYPE_STATIONARY then return end 
+    if self.IsMedic then return end 
+    if not self:IsOnGround() then return end 
+    if not self:Alive() then return end 
+
+    if self.VJ_IsBeingControlled or self:IsOnFire() then
         return 
     end
 
     local cT = CurTime()
     local ene = self:GetEnemy()
 
-    if not self.CanSeekOutMedic or IsValid(ene) or self:IsBusy() or cT < (self.NextMedicSeekT or 0) then
+    if IsValid(ene) or self:IsBusy() or cT < (self.NextMedicSeekT or 0) then
         return 
     end
 
@@ -7365,6 +7660,11 @@ function ENT:SeekOutMedic()
             local disp = self:Disposition(ent)
             if disp == D_LI and (not self:IsUnreachable(ent)) and not ent:IsBusy() then
                 local dSqr = myPos:DistToSqr(ent:GetPos())
+                
+                if nearestDistSqr > (seekRng * seekRng) then
+                    return
+                end
+
                 if dSqr < nearestDistSqr then
                     nearestMedic = ent
                     nearestDistSqr = dSqr
@@ -7380,6 +7680,11 @@ function ENT:SeekOutMedic()
     local noMoveDistSqr = noMoveDist * noMoveDist
 
     if IsValid(nearestMedic) then
+        if not nearestMedic:Alive() or nearestMedic:IsBusy() or not nearestMedic.IsMedic then
+            self.CurrentMedicTarget = nil
+            return
+        end
+        
         self.CurrentMedicTarget = nearestMedic
         self.NextMedicSeekT = cT + cool
 
@@ -7391,8 +7696,9 @@ function ENT:SeekOutMedic()
             local offsetX = (randFnInt(-60, 60))
             local offsetY = (randFnInt(-60, 60))
             local targetPos = nearestMedic:GetPos() + nearestMedic:GetForward() * offsetX + nearestMedic:GetRight() * offsetY
+            local move = table.Random({"TASK_RUN_PATH", "TASK_WALK_PATH"})
             self:SetLastPosition(targetPos)
-            self:SCHEDULE_GOTO_POSITION(VJ.PICK({"TASK_RUN_PATH", "TASK_WALK_PATH"}), function(x)
+            self:SCHEDULE_GOTO_POSITION(move, function(x)
                 x.CanShootWhenMoving = true
                 x.TurnData = {Type = VJ.FACE_ENEMY}
             end)
@@ -7409,17 +7715,26 @@ ENT.PlyFlash_AlrAlerted = false
 ENT.PlyFlash_CheckInterval = 0.35
 ENT.PlyFlash_NextCheck = 0
 function ENT:PlyFlash_IdleAlert()
-    local conv = GetConVar("vj_stalker_ply_flashlight_alert"):GetInt()
     if not self.PlyFlash_Aware or not IsValid(self) then return end
-    if conv ~= 1 then return false end 
+
+    local conv = GetConVar("vj_stalker_ply_flashlight_alert"):GetInt()
+    if conv ~= 1 then return end 
+
+    if VJ_CVAR_IGNOREPLAYERS then return end 
+
+    if self.VJ_IsBeingControlled then return end 
+
     local curT = CurTime()
-    if self.PlyFlash_NextCheck and curT < (self.PlyFlash_NextCheck or 0) then return false end
+
+    if self.PlyFlash_NextCheck and curT < (self.PlyFlash_NextCheck or 0) then return end
     self.PlyFlash_NextCheck = curT + (self.PlyFlash_CheckInterval or 0.35)
+
+    local npcState = self:GetNPCState()
     local ene = self:GetEnemy()
-    if not IsValid(self) or IsValid(ene) or self.Alerted or self:IsBusy("Activities") or (self:GetNPCState() ~= NPC_STATE_IDLE and not self.PlyFlash_AlrAlerted) then
+    if not IsValid(self) or IsValid(ene) or npcState == NPC_STATE_COMBAT or self:IsBusy("Activities") or (npcState ~= NPC_STATE_IDLE and not self.PlyFlash_AlrAlerted) then
         return
     end
-    if self.VJ_IsBeingControlled or VJ_CVAR_IGNOREPLAYERS then return false end 
+
     local plyAll = player.GetAll()
     local plyFlshDist = tonumber(self.PlyFlash_CntctDist) or 800 
     local traceFunc = util.TraceLine
@@ -7445,6 +7760,7 @@ function ENT:PlyFlash_IdleAlert()
                 filter = {self, ply},
                 mask = MASK_VISIBLE
             })
+
             if tr.Entity == self or (not tr.Hit and tr.Fraction > 0.9) then
                     if self.PlyFlash_Aware then
                         local disp = self:Disposition(ply) 
@@ -7454,8 +7770,9 @@ function ENT:PlyFlash_IdleAlert()
                                 print("Player flashlight detected!, ply hostile: ", ply:GetName())
                                 self:ClearSchedule()
                                 self:SetEnemy(ply, true)
-                                self:UpdateEnemyMemory(ply, ply:GetPos())
-                                self:ForceSetEnemy(ply, ply:GetPos())
+                                local plyPos = ply:GetPos()
+                                self:UpdateEnemyMemory(ply, plyPos)
+                                self:ForceSetEnemy(ply, plyPos)
                                 if self:GetNPCState() ~= NPC_STATE_COMBAT then
                                     self:SetNPCState(NPC_STATE_ALERT)
                                 end
@@ -7479,6 +7796,7 @@ function ENT:PlyFlash_IdleAlert()
     return false
 end
 ---------------------------------------------------------------------------------------------------------------------------------------------
+//playing aruond with someone else code, most likely will remove later.
 ENT.LegAngle_GesMoving = true
 ENT.Leg_45DegAng = true 
 ENT.Leg_90DegAng = true 
@@ -8413,7 +8731,7 @@ ENT.FootSteps = {
 ENT.OnFirePain = {"st_brutal_deaths/brutal_scream/rus_screams_fire/scream_157.wav","st_brutal_deaths/brutal_scream/rus_screams_fire/scream_158.wav","st_brutal_deaths/brutal_scream/rus_screams_fire/scream_159.wav","st_brutal_deaths/brutal_scream/rus_screams_fire/scream_160.wav","st_brutal_deaths/brutal_scream/rus_screams_fire/scream_161.wav","st_brutal_deaths/brutal_scream/rus_screams_fire/scream_162.wav","st_brutal_deaths/brutal_scream/rus_screams_fire/scream_163.wav","st_brutal_deaths/brutal_scream/rus_screams_fire/506.wav"}
 
 //General universal sounds
-ENT.GoreOrGibSounds                  = {"wrhf/gibs/fullbodygib-1.wav", "wrhf/gibs/fullbodygib-2.wav", "wrhf/gibs/fullbodygib-3.wav"} -- need to change path soon 
+ENT.GoreOrGibSounds                  = {"general_sds/gibs_gore/gutexplosion-1.wav", "general_sds/gibs_gore/gutexplosion-2.wav", "general_sds/gibs_gore/gutexplosion-3.wav", "general_sds/gibs_gore/fullbodygib-1.wav", "general_sds/gibs_gore/fullbodygib-2.wav", "general_sds/gibs_gore/fullbodygib-3.wav"} -- need to change path soon 
 ENT.SoundTbl_MeleeAttackExtra        = {"npc/zombie/claw_strike1.wav","npc/zombie/claw_strike2.wav","npc/zombie/claw_strike3.wav"}
 ENT.SoundTbl_MeleeAttackMiss         = {"npc/zombie/claw_miss1.wav","npc/zombie/claw_miss2.wav"}
 ENT.SoundTbl_MeleeAttack             = {"npc/zombie/claw_strike1.wav","npc/zombie/claw_strike2.wav","npc/zombie/claw_strike3.wav"}
@@ -8636,6 +8954,7 @@ function ENT:SetAnimationTranslations(wepHoldType)
             self.AnimationTranslations[ACT_RELOAD_LOW] 					= reloadLow
             self.AnimationTranslations[ACT_IDLE] 				        = idle
             self.AnimationTranslations[ACT_IDLE_ANGRY] 					= idleAngry
+            self.AnimationTranslations[ACT_IDLE_AIM_AGITATED] 			= idleAngry
             self.AnimationTranslations[ACT_WALK_AGITATED] 				= walkAgitated
             self.AnimationTranslations[ACT_WALK] 						= walk
             self.AnimationTranslations[ACT_WALK_AIM] 					= walkAim
@@ -8679,6 +8998,7 @@ function ENT:SetAnimationTranslations(wepHoldType)
             self.AnimationTranslations[ACT_RELOAD_LOW] 					= reloadLow
             self.AnimationTranslations[ACT_IDLE] 				        = idle
             self.AnimationTranslations[ACT_IDLE_ANGRY] 					= idleAngry
+            self.AnimationTranslations[ACT_IDLE_AIM_AGITATED] 			= idleAngry
             self.AnimationTranslations[ACT_WALK_AGITATED] 				= walkAgitated
             self.AnimationTranslations[ACT_WALK] 						= walk
             self.AnimationTranslations[ACT_WALK_AIM] 					= walkAim
@@ -8722,6 +9042,7 @@ function ENT:SetAnimationTranslations(wepHoldType)
             self.AnimationTranslations[ACT_RANGE_ATTACK1_LOW] 			= rangeAttackLow		
             self.AnimationTranslations[ACT_IDLE] 						= idle
             self.AnimationTranslations[ACT_IDLE_ANGRY] 					= idleAngry
+            self.AnimationTranslations[ACT_IDLE_AIM_AGITATED] 			= idleAngry
             self.AnimationTranslations[ACT_WALK] 						= walk
             self.AnimationTranslations[ACT_WALK_AGITATED] 				= walkAgitated
             self.AnimationTranslations[ACT_WALK_AIM] 					= walkAim
@@ -8762,7 +9083,8 @@ function ENT:SetAnimationTranslations(wepHoldType)
             self.AnimationTranslations[ACT_GESTURE_RELOAD]              = "vjges_" .. gesReload
             self.AnimationTranslations[ACT_RANGE_ATTACK1_LOW] 			= rangeAttackLow
             self.AnimationTranslations[ACT_IDLE] 				        = idle
-            self.AnimationTranslations[ACT_IDLE_ANGRY] 					= idleAngry			
+            self.AnimationTranslations[ACT_IDLE_ANGRY] 					= idleAngry	
+            self.AnimationTranslations[ACT_IDLE_AIM_AGITATED] 			= idleAngry		
             self.AnimationTranslations[ACT_WALK] 						= walk
             self.AnimationTranslations[ACT_WALK_AGITATED] 				= walkAgitated
             self.AnimationTranslations[ACT_WALK_AIM] 				    = walkAim
@@ -8795,6 +9117,7 @@ function ENT:SetAnimationTranslations(wepHoldType)
             self.AnimationTranslations[ACT_COVER]                       = cover
             self.AnimationTranslations[ACT_IDLE]                        = idle
             self.AnimationTranslations[ACT_IDLE_ANGRY] 					= idleAngry
+            self.AnimationTranslations[ACT_IDLE_AIM_AGITATED] 			= idleAngry
             self.AnimationTranslations[ACT_RANGE_ATTACK1] 				= rangeAttack
             self.AnimationTranslations[ACT_GESTURE_RANGE_ATTACK1] 		= gestRangeAttack
             self.AnimationTranslations[ACT_RANGE_ATTACK1_LOW] 			= rangeAttackLow
@@ -8839,12 +9162,96 @@ ENT.MaxSmallGibs = 15
 ENT.MaxLargeGibs = 15 
 ENT.Gib_ParticleChance = 3 
 ENT.Gib_ParticleTbl = {"blood_impact_red_01","blood_advisor_pierce_spray","blood_impact_red_01_goop","blood_impact_red_01_chunk"}
+ENT.Gib_BloodColor = "Red" -- can either be "Yellow" or "Red"
+ENT.Gib_Type = "Human" -- "Human" or "Alien"
+
+ENT.SpawnGib_OnDmg = true 
+ENT.SpawnGib_OnDmgChance = 5
+ENT.SpawnGib_OnDmgNextT = 0 
+ENT.SpawnGib_OnDmgThresh = 30
+ENT.SpawnGib_OnDmgSound = true 
+ENT.SpawnGib_OnDmgSoundChance = 3
+function ENT:GibWhenDamaged(dmginfo)
+    if not self.SpawnGib_OnDmg then return end 
+
+    local conv = GetConVar("vj_stalker_damage_gibs")
+    if not conv or conv:GetInt() ~= 1 then return end 
+
+    if not self:Alive() then return end 
+    if CurTime() < self.SpawnGib_OnDmgNextT then return end 
+
+    local attacker = dmginfo:GetAttacker()
+    if not IsValid(attacker) then return end 
+
+    local dmgT = dmginfo:GetDamageType()
+
+    local function HasDmgType(t)
+        return bit.band(dmgT, t) ~= 0
+    end
+
+    if HasDmgType(DMG_FALL) or HasDmgType(DMG_RADIATION) or HasDmgType(DMG_REMOVENORAGDOLL) or HasDmgType(DMG_NEVERGIB) or HasDmgType(DMG_SONIC) or HasDmgType(DMG_NERVEGAS) or HasDmgType(DMG_POISON) or HasDmgType(DMG_DISSOLVE) or HasDmgType(DMG_BURN) or HasDmgType(DMG_SLOWBURN) or HasDmgType(DMG_MISSILEDEFENSE) or HasDmgType(DMG_PHYSGUN) or HasDmgType(DMG_SHOCK) or HasDmgType(DMG_DROWN) or HasDmgType(DMG_VEHICLE) then return end 
+
+    local dmg = dmginfo:GetDamage()
+    if dmg < (self.SpawnGib_OnDmgThresh or 30) then return end 
+
+    if mRng(1, self.SpawnGib_OnDmgChance or 20) ~= 1 then return end 
+
+    local gibType = self:DetermineGibType()
+    if not gibType then return end 
+
+    local pos = dmginfo:GetDamagePosition()
+    if not pos or not isvector(pos) or pos == vector_origin then
+        pos = self:WorldSpaceCenter()
+    end
+
+    if self.SpawnGib_OnDmgSound then
+        if mRng(1, self.SpawnGib_OnDmgSoundChance or 3) == 1 then
+            local tbl = self.GoreOrGibSounds
+
+            if istable(tbl) and #tbl > 0 then
+                VJ.EmitSound(self, tbl[mRng(1, #tbl)], 70, 100) 
+            elseif isstring(tbl) then
+                VJ.EmitSound(self, tbl, 70, 100)
+            end
+        end
+    end 
+
+    local particle = table.Random({"blood_impact_red_01", "blood_impact_red_01_goop", "blood_impact_red_01_chunk"})
+    if particle then
+        ParticleEffect(particle, pos, Angle(0,0,0), self)
+    end 
+
+    self:CreateGibEntity("obj_vj_gib", gibType .. "Small", {Pos = pos})
+
+    self.SpawnGib_OnDamageNextT = CurTime() + mRand(1, 5)
+end
+
+function ENT:DetermineGibType()
+    if not self.Gib_Type then return end 
+    return (self.Gib_Type == "Alien" and "UseAlien_") or "UseHuman_"
+end 
 
 function ENT:Spawn_Gibs()
+
     local minimalGibs = GetConVar("vj_stalker_minimal_gib"):GetBool()
     local maxSmallG = minimalGibs and math.ceil(self.MaxSmallGibs / 2) or self.MaxSmallGibs
     local maxLargeG = minimalGibs and math.ceil(self.MaxLargeGibs / 2) or self.MaxLargeGibs
+
+    local gibType = self:DetermineGibType()
+
+    local gibCloudYellow    = VJ.Color2Byte(Color(math.Rand(180, 255), math.Rand(170, 220), math.Rand(10, 65)))
+    local gibCloudRed       = VJ.Color2Byte(Color(mRng(50, 200), mRng(1, 100), mRng(1, 100)))
+    local selectCol         = gibCloudRed
+
+    if self.Gib_BloodColor ~= false and self.Gib_BloodColor ~= nil then 
+        if self.Gib_BloodColor == "Red" then 
+            selectCol = gibCloudRed 
+        elseif self.Gib_BloodColor == "Yellow" then 
+            selectCol = gibCloudYellow
+        end
     
+    end 
+
     if self.HasGibOnDeathEffects then
         local gibOrigin = self:GetPos() + self:OBBCenter()
         local randOffset = Vector(mRand(-25, 25), mRand(-25, 25), mRand(5, 35))
@@ -8880,10 +9287,12 @@ function ENT:Spawn_Gibs()
         if gibSounds and gibSounds ~= false then 
             VJ.EmitSound(self, gibSounds, rngSnd, rngSnd)
         end 
+
+        local bloodCloudScale   = mRng(75, 225)
         local bloodeffect = EffectData()
         bloodeffect:SetOrigin(gibOrigin)
-        bloodeffect:SetColor(VJ_Color2Byte(Color(mRng(65, 155),mRng(5, 35),mRng(5, 35))))
-        bloodeffect:SetScale(mRng(100, 205))
+        bloodeffect:SetColor(selectCol)
+        bloodeffect:SetScale(bloodCloudScale)
         util.Effect("VJ_Blood1", bloodeffect)
 
         local bloodspray = EffectData()
@@ -8899,29 +9308,33 @@ function ENT:Spawn_Gibs()
     end 
 
     local gibs = {}
-    for i = 1, mRng(5, maxSmallG) do gibs[#gibs+1] = "UseHuman_Small" end
-    for i = 1, mRng(5, maxLargeG) do gibs[#gibs+1] = "UseHuman_Big" end
-    if self.HasExtraGibVariants and not minimalGibs then
-        gibs[#gibs+1] = "models/vj_base/gibs/human/heart.mdl"
-        for i = 1,mRng(1, 2) do
-            gibs[#gibs+1] = "models/vj_base/gibs/human/liver.mdl"
-            gibs[#gibs+1] = "models/vj_base/gibs/human/lung.mdl"
+    for i = 1, mRng(5, maxSmallG) do gibs[#gibs+1] = gibType .. "Small" end
+    for i = 1, mRng(5, maxLargeG) do gibs[#gibs+1] = gibType .. "Big" end
+
+    if self.HasExtraGibVariants then  
+        if self.Gib_Type == "Human" and not minimalGibs then
+            gibs[#gibs+1] = "models/vj_base/gibs/human/heart.mdl"
+            for i = 1,mRng(1, 2) do
+                gibs[#gibs+1] = "models/vj_base/gibs/human/liver.mdl"
+                gibs[#gibs+1] = "models/vj_base/gibs/human/lung.mdl"
+            end
+            if mRng(1, 2) == 1 then
+                gibs[#gibs+1] = "models/vj_base/gibs/human/brain.mdl"
+            end
+            for i = 1,mRng(1, 2) do
+                gibs[#gibs+1] = "models/vj_base/gibs/human/eye.mdl"
+            end
+            for i = 1,mRng(3, 24) do
+                gibs[#gibs+1] = "models/gibs/hgibs_rib.mdl"
+            end
+            table.Add(gibs, {"models/gibs/hgibs.mdl","models/gibs/hgibs_scapula.mdl","models/gibs/hgibs_spine.mdl"})
+            local intestineAmount = mRng(1, 8)
+
+            for i = 1, intestineAmount do
+                self:CreateGibEntity("intestine_gib", intestineAmount, {BloodType = selectCol, Pos = gibOrigin})
+            end
         end
-        if mRng(1, 2) == 1 then
-            gibs[#gibs+1] = "models/vj_base/gibs/human/brain.mdl"
-        end
-        for i = 1,mRng(1, 2) do
-            gibs[#gibs+1] = "models/vj_base/gibs/human/eye.mdl"
-        end
-        for i = 1,mRng(3, 24) do
-            gibs[#gibs+1] = "models/gibs/hgibs_rib.mdl"
-        end
-        table.Add(gibs, {"models/gibs/hgibs.mdl","models/gibs/hgibs_scapula.mdl","models/gibs/hgibs_spine.mdl"})
-        local intestineAmount = mRng(1, 8)
-        for i = 1, intestineAmount do
-            self:CreateGibEntity("intestine_gib", intestineAmount, {BloodType = "Red", Pos = gibOrigin})
-        end
-    end
+    end 
 
     local maxParticles = math.floor(#gibs / 2)
     local particlesSpawned = 0
@@ -8929,12 +9342,13 @@ function ENT:Spawn_Gibs()
     for _, gibModel in ipairs(gibs) do
         local gibPos = self:LocalToWorld(self:OBBCenter() + Vector(mRng(-45, 45),mRng(-45, 45),mRng(10, 45)))
         local gibAng = Angle(mRand(-55, 55), mRand(-55, 55), mRand(-55, 55))
-        local bloodParticle = VJ.PICK(self.Gib_ParticleTbl) or {}
+        local bloodParticle = (istable(self.Gib_ParticleTbl) and #self.Gib_ParticleTbl > 0) and table.Random(self.Gib_ParticleTbl) or nil
         local pcfxP = PATTACH_POINT_FOLLOW
         local pcfxChance = tonumber(self.Gib_ParticleChance) or 5 
-        self:CreateGibEntity("obj_vj_gib", gibModel, {BloodType = "Red", Pos = gibPos, Ang = gibAng}, function(gibEnt)
+
+        self:CreateGibEntity("obj_vj_gib", gibModel, {BloodType = selectCol, Pos = gibPos, Ang = gibAng}, function(gibEnt)
             if minimalGibs or not self.Gibs_UniquePcfx then return end 
-            if particlesSpawned < maxParticles and mRng(1, pcfxChance) == 1 and bloodParticle ~= "" then
+            if particlesSpawned < maxParticles and mRng(1, pcfxChance) == 1 and isstring(bloodParticle) and bloodParticle ~= ""then
                 ParticleEffectAttach(bloodParticle, pcfxP, gibEnt, 0)
                 particlesSpawned = particlesSpawned + 1
             end
@@ -8943,8 +9357,10 @@ function ENT:Spawn_Gibs()
 end
 
 function ENT:Custom_GibEffects()
+    if not IsValid(self) then return end 
     local conv = GetConVar("vj_stalker_gib"):GetInt()
-    if not IsValid(self) or conv ~= 1 then return end
+    if conv ~= 1 then return end
+
     local gibChance = tonumber(self.ChanceToGib) or 3  
     local gibDthConv = GetConVar("vj_stalker_gib_death_sounds"):GetInt() 
     if mRng(1, 3) == 1 then
@@ -8955,11 +9371,14 @@ function ENT:Custom_GibEffects()
         self.HasDeathAnimation = false
         self.GibbedOnDeath = true
 
+        self:Spawn_Gibs()
+        
         if gibDthConv == 1 then 
-            local gibDeathSound = VJ.PICK(self.SoundTbl_GibDeath)
+            local tbl = self.SoundTbl_GibDeath
+            if not tbl then return end 
+            local gibDeathSound = table.Random(tbl)
             VJ.EmitSound(self, gibDeathSound, mRng(60, 75), mRng(85, 115))
         end 
-        self:Spawn_Gibs()
     end 
 end
 

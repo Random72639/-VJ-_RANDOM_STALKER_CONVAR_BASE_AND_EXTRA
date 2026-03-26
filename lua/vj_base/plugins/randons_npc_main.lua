@@ -44,6 +44,7 @@ VJ.AddPlugin("Random's S.T.A.L.K.E.R. Base", "NPC")
         AddConvars["vj_stalker_cus_ragdoll_blood"] = 1 -- Custom ragdoll blood?
         AddConvars["vj_stalker_shovedback"] = 1 -- Shove back mechanic?
         AddConvars["vj_stalker_kickdoor"] = 1 -- Door kick?
+		AddConvars["vj_stalker_kickdoor_req_allies"] = 1 -- Door kicking requires nearby allies?
         AddConvars["vj_stalker_brutal_pain_vo"] = 1 -- Brutal Pain?
         AddConvars["vj_stalker_brutal_death_vo"] = 1 -- Brutal Death?
         AddConvars["vj_stalker_brutal_cry_vo"] = 1 -- Brutal cry for help?
@@ -108,10 +109,11 @@ VJ.AddPlugin("Random's S.T.A.L.K.E.R. Base", "NPC")
         AddConvars["vj_stalker_ply_flashlight_alert"] = 1 -- Alert to ply flashlight (Ene ply solo)? 
 		AddConvars["vj_stalker_no_fire_delay"] = 0 -- Removes fire delay from all weapons.
 		AddConvars["vj_stalker_dynamic_firing"] = 0 -- Change fire type on ene dist?
-
-		AddConvars["vj_stalker_corpse_rng_faceflex"] = 0 -- Change fire type on ene dist?
-		AddConvars["vj_stalker_corpse_rng_eyelids"] = 0 -- Change fire type on ene dist?
-		AddConvars["vj_stalker_corpse_rng_eyepos"] = 0 -- Change fire type on ene dist?
+		AddConvars["vj_stalker_damage_gibs"] = 0 -- Spawn gib on damage
+		
+		AddConvars["vj_stalker_corpse_rng_faceflex"] = 0 -- Corpse rng face
+		AddConvars["vj_stalker_corpse_rng_eyelids"] = 0 -- corpse rng eyelids
+		AddConvars["vj_stalker_corpse_rng_eyepos"] = 0 -- Corpse rng eyepos
 
         // Extra Credits \\
 		-- ["pekena_larva"] - Free jump grunt & landing sounds.
@@ -135,11 +137,14 @@ if CLIENT then
 			end
 
 			panel:AddControl( "Label", {Text = "Notice: Only admins can change this settings."})
-			panel:AddControl("Button",{Text = "#vjbase.menu.general.reset.everything", Command = "vj_stalker_heal_self 0\n vj_stalker_can_lean 0\n vj_stalker_corpse_rng_eyepos 0\n vj_stalker_corpse_rng_eyelids 0\n vj_stalker_corpse_rng_faceflex 0\n vj_stalker_death_wound_grabbing 0\n vj_stalker_radio_death_cancel 0\n vj_stalker_dent_dodge_requires_move 0\n vj_stalker_randoms_console_debug 0\n vj_stalker_dynamic_firing 0\n vj_stalker_minimal_gib 0\n vj_stalker_no_fire_delay 0\n vj_stalker_ply_flashlight_alert 0\n vj_stalker_dmg_cancel_dial 0\n vj_stalker_ron_death_sounds 0\n vj_stalker_panic_after_dmg 0\n vj_stalker_min_dmg_cap_sfx 0\n vj_stalker_min_dmg_cap 0\n vj_stalker_body_writhe 0\n vj_stalker_body_twitching 0\n vj_stalker_drop_seq_wep 0\n vj_stalker_breakable_helmet 0\n vj_stalker_helm_prev_dmg 0\n vj_stalker_armored_helmet 0\n vj_stalker_tracer_crack 0\n vj_stalker_fire_smoke 0\n vj_stalker_tracer_tip_light 0\n vj_stalker_tracer_glow 0\n vj_stalker_tracer_imp_light 0\n vj_stalker_cus_wep_muz_flash 0\n vj_stalker_override_all_wep_tracers 0\n vj_stalker_cus_wep_tracer 0\n vj_stalker_inst_corpse_dissolve 0\n vj_stalker_corpse_dissolve_wep 0\n vj_stalker_corpse_dissolve 0\n vj_stalker_ele_death_fx 0\n vj_stalker_flatline 0\n vj_stalker_headshot_min_dmg_check 0\n vj_stalker_headshot_kill_chance 3\n vj_stalker_rng_combat_var_times 0\n vj_stalker_place_flares_ally_vis_check 0\n vj_stalker_place_flares_ally_check 0\n vj_stalker_looting 0\n vj_stalker_npc_copy_ply_stance 0\n vj_stalker_shove_wall_collide 0\n vj_stalker_ges_flinch 0\n vj_stalker_armor_spark 0\n vj_stalker_coughing 0\n vj_stalker_snpc_view_angle 177\n vj_stalker_reposition_while_reloading 0\n vj_stalker_headshot_gore_sound 0\n vj_stalker_dent_dodge_requires_visibility 0\n vj_stalker_death_ex_crpse_phys 0\n vj_stalker_death_finger_manip 0\n vj_stalker_red_grenade_trail 0\n vj_stalker_extended_delay 0\n vj_stalker_throw_flares 0\n vj_stalker_cus_ragdoll_blood 0\n vj_stalker_place_flares 0\n vj_stalker_fire_quick_flares 0\n vj_stalker_jump_land_particles 0\n vj_stalker_flash_blind_fri 0\n vj_stalker_flash_blind_ene 0\n vj_stalker_lm_tr_vj_creature 0\n vj_stalker_limited_grenades 0\n vj_stalker_lp_wep 0\n vj_stalker_radio_chatter 0\n vj_stalker_headshot_sfx 0\n vj_stalker_disable_headshot_death_anim 0\n vj_stalker_gib_death_sounds 0\n vj_stalker_armor_ricochet 0\n vj_stalker_headshot_fx 0\n vj_stalker_headshot_insa_kill 0\n vj_stalker_never_forget 0\n vj_stalker_passively_dodge_incom_danger 0\n vj_stalker_brutal_cry_vo 0\n vj_stalker_fire_dmg_vo 0\n vj_stalker_brutal_death_vo 0\n vj_stalker_brutal_pain_vo 0\n vj_stalker_kickdoor 0\n vj_stalker_shovedback 0\n vj_stalker_fire_flares 0\n vj_stalker_avoid_ply_crosshair 0\n vj_stalker_gren_trail 0\n vj_stalker_wep_flashlight 0\n vj_stalker_dodging 0\n vj_stalker_death_anims 0\n vj_stalker_fire_react 0\n vj_stalker_mil_faction_friendly 0\n vj_stalker_weapon_switching 0\n vj_stalker_gib 0\n vj_stalker_taunt 0\n vj_stalker_incapacitated 0"})
+			panel:AddControl("Button",{Text = "#vjbase.menu.general.reset.everything", Command = "vj_stalker_kickdoor_req_allies 0\n vj_stalker_damage_gibs 0\n vj_stalker_heal_self 0\n vj_stalker_can_lean 0\n vj_stalker_corpse_rng_eyepos 0\n vj_stalker_corpse_rng_eyelids 0\n vj_stalker_corpse_rng_faceflex 0\n vj_stalker_death_wound_grabbing 0\n vj_stalker_radio_death_cancel 0\n vj_stalker_dent_dodge_requires_move 0\n vj_stalker_randoms_console_debug 0\n vj_stalker_dynamic_firing 0\n vj_stalker_minimal_gib 0\n vj_stalker_no_fire_delay 0\n vj_stalker_ply_flashlight_alert 0\n vj_stalker_dmg_cancel_dial 0\n vj_stalker_ron_death_sounds 0\n vj_stalker_panic_after_dmg 0\n vj_stalker_min_dmg_cap_sfx 0\n vj_stalker_min_dmg_cap 0\n vj_stalker_body_writhe 0\n vj_stalker_body_twitching 0\n vj_stalker_drop_seq_wep 0\n vj_stalker_breakable_helmet 0\n vj_stalker_helm_prev_dmg 0\n vj_stalker_armored_helmet 0\n vj_stalker_tracer_crack 0\n vj_stalker_fire_smoke 0\n vj_stalker_tracer_tip_light 0\n vj_stalker_tracer_glow 0\n vj_stalker_tracer_imp_light 0\n vj_stalker_cus_wep_muz_flash 0\n vj_stalker_override_all_wep_tracers 0\n vj_stalker_cus_wep_tracer 0\n vj_stalker_inst_corpse_dissolve 0\n vj_stalker_corpse_dissolve_wep 0\n vj_stalker_corpse_dissolve 0\n vj_stalker_ele_death_fx 0\n vj_stalker_flatline 0\n vj_stalker_headshot_min_dmg_check 0\n vj_stalker_headshot_kill_chance 3\n vj_stalker_rng_combat_var_times 0\n vj_stalker_place_flares_ally_vis_check 0\n vj_stalker_place_flares_ally_check 0\n vj_stalker_looting 0\n vj_stalker_npc_copy_ply_stance 0\n vj_stalker_shove_wall_collide 0\n vj_stalker_ges_flinch 0\n vj_stalker_armor_spark 0\n vj_stalker_coughing 0\n vj_stalker_snpc_view_angle 177\n vj_stalker_reposition_while_reloading 0\n vj_stalker_headshot_gore_sound 0\n vj_stalker_dent_dodge_requires_visibility 0\n vj_stalker_death_ex_crpse_phys 0\n vj_stalker_death_finger_manip 0\n vj_stalker_red_grenade_trail 0\n vj_stalker_extended_delay 0\n vj_stalker_throw_flares 0\n vj_stalker_cus_ragdoll_blood 0\n vj_stalker_place_flares 0\n vj_stalker_fire_quick_flares 0\n vj_stalker_jump_land_particles 0\n vj_stalker_flash_blind_fri 0\n vj_stalker_flash_blind_ene 0\n vj_stalker_lm_tr_vj_creature 0\n vj_stalker_limited_grenades 0\n vj_stalker_lp_wep 0\n vj_stalker_radio_chatter 0\n vj_stalker_headshot_sfx 0\n vj_stalker_disable_headshot_death_anim 0\n vj_stalker_gib_death_sounds 0\n vj_stalker_armor_ricochet 0\n vj_stalker_headshot_fx 0\n vj_stalker_headshot_insa_kill 0\n vj_stalker_never_forget 0\n vj_stalker_passively_dodge_incom_danger 0\n vj_stalker_brutal_cry_vo 0\n vj_stalker_fire_dmg_vo 0\n vj_stalker_brutal_death_vo 0\n vj_stalker_brutal_pain_vo 0\n vj_stalker_kickdoor 0\n vj_stalker_shovedback 0\n vj_stalker_fire_flares 0\n vj_stalker_avoid_ply_crosshair 0\n vj_stalker_gren_trail 0\n vj_stalker_wep_flashlight 0\n vj_stalker_dodging 0\n vj_stalker_death_anims 0\n vj_stalker_fire_react 0\n vj_stalker_mil_faction_friendly 0\n vj_stalker_weapon_switching 0\n vj_stalker_gib 0\n vj_stalker_taunt 0\n vj_stalker_incapacitated 0"})
 			panel:ControlHelp("\nTHIS WILL RESET EVERY CONVAR, SETTING THEM ALL TO 0! USE AT YOUR OWN DISCRETION!\n") 
 
-			//panel:AddControl("Checkbox", {Label = "?", Command = ""}) 
+			//panel:AddControl("Checkbox", {Label = "?", Command = ""}) --
 			//panel:ControlHelp(".")  
+
+			panel:AddControl("Checkbox", {Label = "Spawn gibs when damaged?", Command = "vj_stalker_damage_gibs"}) 
+			panel:ControlHelp("Chance to spawn a gib whne the SNPC is damaged.")  
 
 			panel:AddControl("Checkbox", {Label = "Enable self healing?", Command = "vj_stalker_heal_self"}) 
 			panel:ControlHelp("Enabling this feautre allows the SNPCs to be able to heal themselves.")  
@@ -287,6 +292,9 @@ if CLIENT then
 
 			panel:AddControl("Checkbox", {Label = "Allowed to have brutal death vo?", Command = "vj_stalker_brutal_death_vo"}) --  Brutal death vo
 			panel:ControlHelp("Switches the SNPCs death/killed sound vo to more brutal vo.")
+
+			panel:AddControl("Checkbox", {Label = "Door breaking requires nearby allies?", Command = "vj_stalker_kickdoor_req_allies"}) 
+			panel:ControlHelp("SNPCs will only break down doors if there are allies nearby to aid them.")  
 
 			panel:AddControl("Checkbox", {Label = "Allowed to kick down doors?", Command = "vj_stalker_kickdoor"}) -- Kick door
 			panel:ControlHelp("This allows the SNPCs to have the ability to kick down the doors.")
