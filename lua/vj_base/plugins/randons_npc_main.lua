@@ -85,12 +85,14 @@ VJ.AddPlugin("Random's S.T.A.L.K.E.R. Base", "NPC")
         AddConvars["vj_stalker_rng_combat_var_times"] = 1 -- Rng var times?
 		AddConvars["vj_stalker_heal_self"] = 1 -- Self healing?
         AddConvars["vj_stalker_flatline"] = 1 -- Flatline?
+        AddConvars["vj_stalker_wep_fire_adapt"] = 1 -- Weapon adaption?
         AddConvars["vj_stalker_ele_death_fx"] = 1 -- Ele death fx?
         AddConvars["vj_stalker_corpse_dissolve"] = 1 -- Corpse dissolve?
         AddConvars["vj_stalker_inst_corpse_dissolve"] = 1 -- Instantly dissolve corpse?
         AddConvars["vj_stalker_corpse_dissolve_wep"] = 1 -- Corpse dissolve weapon?
         AddConvars["vj_stalker_cus_wep_tracer"] = 0 -- Cus wep tracer?
-        AddConvars["vj_stalker_override_all_wep_tracers"] = 0 -- All tracers?
+        AddConvars["vj_stalker_override_all_wep_tracers_yel"] = 0 -- All tracers (Yellow)?
+		AddConvars["vj_stalker_override_all_wep_tracers_whi"] = 0 -- All tracers (White)?
         AddConvars["vj_stalker_tracer_imp_light"] = 0 -- Imp light?
         AddConvars["vj_stalker_tracer_glow"] = 0 -- Subtle light?
         AddConvars["vj_stalker_tracer_tip_light"] = 0 -- Tip light?
@@ -137,20 +139,17 @@ if CLIENT then
 			end
 
 			panel:AddControl( "Label", {Text = "Notice: Only admins can change this settings."})
-			panel:AddControl("Button",{Text = "#vjbase.menu.general.reset.everything", Command = "vj_stalker_kickdoor_req_allies 0\n vj_stalker_damage_gibs 0\n vj_stalker_heal_self 0\n vj_stalker_can_lean 0\n vj_stalker_corpse_rng_eyepos 0\n vj_stalker_corpse_rng_eyelids 0\n vj_stalker_corpse_rng_faceflex 0\n vj_stalker_death_wound_grabbing 0\n vj_stalker_radio_death_cancel 0\n vj_stalker_dent_dodge_requires_move 0\n vj_stalker_randoms_console_debug 0\n vj_stalker_dynamic_firing 0\n vj_stalker_minimal_gib 0\n vj_stalker_no_fire_delay 0\n vj_stalker_ply_flashlight_alert 0\n vj_stalker_dmg_cancel_dial 0\n vj_stalker_ron_death_sounds 0\n vj_stalker_panic_after_dmg 0\n vj_stalker_min_dmg_cap_sfx 0\n vj_stalker_min_dmg_cap 0\n vj_stalker_body_writhe 0\n vj_stalker_body_twitching 0\n vj_stalker_drop_seq_wep 0\n vj_stalker_breakable_helmet 0\n vj_stalker_helm_prev_dmg 0\n vj_stalker_armored_helmet 0\n vj_stalker_tracer_crack 0\n vj_stalker_fire_smoke 0\n vj_stalker_tracer_tip_light 0\n vj_stalker_tracer_glow 0\n vj_stalker_tracer_imp_light 0\n vj_stalker_cus_wep_muz_flash 0\n vj_stalker_override_all_wep_tracers 0\n vj_stalker_cus_wep_tracer 0\n vj_stalker_inst_corpse_dissolve 0\n vj_stalker_corpse_dissolve_wep 0\n vj_stalker_corpse_dissolve 0\n vj_stalker_ele_death_fx 0\n vj_stalker_flatline 0\n vj_stalker_headshot_min_dmg_check 0\n vj_stalker_headshot_kill_chance 3\n vj_stalker_rng_combat_var_times 0\n vj_stalker_place_flares_ally_vis_check 0\n vj_stalker_place_flares_ally_check 0\n vj_stalker_looting 0\n vj_stalker_npc_copy_ply_stance 0\n vj_stalker_shove_wall_collide 0\n vj_stalker_ges_flinch 0\n vj_stalker_armor_spark 0\n vj_stalker_coughing 0\n vj_stalker_snpc_view_angle 177\n vj_stalker_reposition_while_reloading 0\n vj_stalker_headshot_gore_sound 0\n vj_stalker_dent_dodge_requires_visibility 0\n vj_stalker_death_ex_crpse_phys 0\n vj_stalker_death_finger_manip 0\n vj_stalker_red_grenade_trail 0\n vj_stalker_extended_delay 0\n vj_stalker_throw_flares 0\n vj_stalker_cus_ragdoll_blood 0\n vj_stalker_place_flares 0\n vj_stalker_fire_quick_flares 0\n vj_stalker_jump_land_particles 0\n vj_stalker_flash_blind_fri 0\n vj_stalker_flash_blind_ene 0\n vj_stalker_lm_tr_vj_creature 0\n vj_stalker_limited_grenades 0\n vj_stalker_lp_wep 0\n vj_stalker_radio_chatter 0\n vj_stalker_headshot_sfx 0\n vj_stalker_disable_headshot_death_anim 0\n vj_stalker_gib_death_sounds 0\n vj_stalker_armor_ricochet 0\n vj_stalker_headshot_fx 0\n vj_stalker_headshot_insa_kill 0\n vj_stalker_never_forget 0\n vj_stalker_passively_dodge_incom_danger 0\n vj_stalker_brutal_cry_vo 0\n vj_stalker_fire_dmg_vo 0\n vj_stalker_brutal_death_vo 0\n vj_stalker_brutal_pain_vo 0\n vj_stalker_kickdoor 0\n vj_stalker_shovedback 0\n vj_stalker_fire_flares 0\n vj_stalker_avoid_ply_crosshair 0\n vj_stalker_gren_trail 0\n vj_stalker_wep_flashlight 0\n vj_stalker_dodging 0\n vj_stalker_death_anims 0\n vj_stalker_fire_react 0\n vj_stalker_mil_faction_friendly 0\n vj_stalker_weapon_switching 0\n vj_stalker_gib 0\n vj_stalker_taunt 0\n vj_stalker_incapacitated 0"})
+			panel:AddControl("Button",{Text = "#vjbase.menu.general.reset.everything", Command = "vj_stalker_override_all_wep_tracers_whi 0\n vj_stalker_wep_fire_adapt 0\n vj_stalker_kickdoor_req_allies 0\n vj_stalker_damage_gibs 0\n vj_stalker_heal_self 0\n vj_stalker_can_lean 0\n vj_stalker_corpse_rng_eyepos 0\n vj_stalker_corpse_rng_eyelids 0\n vj_stalker_corpse_rng_faceflex 0\n vj_stalker_death_wound_grabbing 0\n vj_stalker_radio_death_cancel 0\n vj_stalker_dent_dodge_requires_move 0\n vj_stalker_randoms_console_debug 0\n vj_stalker_dynamic_firing 0\n vj_stalker_minimal_gib 0\n vj_stalker_no_fire_delay 0\n vj_stalker_ply_flashlight_alert 0\n vj_stalker_dmg_cancel_dial 0\n vj_stalker_ron_death_sounds 0\n vj_stalker_panic_after_dmg 0\n vj_stalker_min_dmg_cap_sfx 0\n vj_stalker_min_dmg_cap 0\n vj_stalker_body_writhe 0\n vj_stalker_body_twitching 0\n vj_stalker_drop_seq_wep 0\n vj_stalker_breakable_helmet 0\n vj_stalker_helm_prev_dmg 0\n vj_stalker_armored_helmet 0\n vj_stalker_tracer_crack 0\n vj_stalker_fire_smoke 0\n vj_stalker_tracer_tip_light 0\n vj_stalker_tracer_glow 0\n vj_stalker_tracer_imp_light 0\n vj_stalker_cus_wep_muz_flash 0\n vj_stalker_override_all_wep_tracers_yel 0\n vj_stalker_cus_wep_tracer 0\n vj_stalker_inst_corpse_dissolve 0\n vj_stalker_corpse_dissolve_wep 0\n vj_stalker_corpse_dissolve 0\n vj_stalker_ele_death_fx 0\n vj_stalker_flatline 0\n vj_stalker_headshot_min_dmg_check 0\n vj_stalker_headshot_kill_chance 3\n vj_stalker_rng_combat_var_times 0\n vj_stalker_place_flares_ally_vis_check 0\n vj_stalker_place_flares_ally_check 0\n vj_stalker_looting 0\n vj_stalker_npc_copy_ply_stance 0\n vj_stalker_shove_wall_collide 0\n vj_stalker_ges_flinch 0\n vj_stalker_armor_spark 0\n vj_stalker_coughing 0\n vj_stalker_snpc_view_angle 177\n vj_stalker_reposition_while_reloading 0\n vj_stalker_headshot_gore_sound 0\n vj_stalker_dent_dodge_requires_visibility 0\n vj_stalker_death_ex_crpse_phys 0\n vj_stalker_death_finger_manip 0\n vj_stalker_red_grenade_trail 0\n vj_stalker_extended_delay 0\n vj_stalker_throw_flares 0\n vj_stalker_cus_ragdoll_blood 0\n vj_stalker_place_flares 0\n vj_stalker_fire_quick_flares 0\n vj_stalker_jump_land_particles 0\n vj_stalker_flash_blind_fri 0\n vj_stalker_flash_blind_ene 0\n vj_stalker_lm_tr_vj_creature 0\n vj_stalker_limited_grenades 0\n vj_stalker_lp_wep 0\n vj_stalker_radio_chatter 0\n vj_stalker_headshot_sfx 0\n vj_stalker_disable_headshot_death_anim 0\n vj_stalker_gib_death_sounds 0\n vj_stalker_armor_ricochet 0\n vj_stalker_headshot_fx 0\n vj_stalker_headshot_insa_kill 0\n vj_stalker_never_forget 0\n vj_stalker_passively_dodge_incom_danger 0\n vj_stalker_brutal_cry_vo 0\n vj_stalker_fire_dmg_vo 0\n vj_stalker_brutal_death_vo 0\n vj_stalker_brutal_pain_vo 0\n vj_stalker_kickdoor 0\n vj_stalker_shovedback 0\n vj_stalker_fire_flares 0\n vj_stalker_avoid_ply_crosshair 0\n vj_stalker_gren_trail 0\n vj_stalker_wep_flashlight 0\n vj_stalker_dodging 0\n vj_stalker_death_anims 0\n vj_stalker_fire_react 0\n vj_stalker_mil_faction_friendly 0\n vj_stalker_weapon_switching 0\n vj_stalker_gib 0\n vj_stalker_taunt 0\n vj_stalker_incapacitated 0"})
 			panel:ControlHelp("\nTHIS WILL RESET EVERY CONVAR, SETTING THEM ALL TO 0! USE AT YOUR OWN DISCRETION!\n") 
 
-			//panel:AddControl("Checkbox", {Label = "?", Command = ""}) --
+			//panel:AddControl("Checkbox", {Label = "?", Command = ""}) -- 
 			//panel:ControlHelp(".")  
-
-			panel:AddControl("Checkbox", {Label = "Spawn gibs when damaged?", Command = "vj_stalker_damage_gibs"}) 
-			panel:ControlHelp("Chance to spawn a gib whne the SNPC is damaged.")  
-
-			panel:AddControl("Checkbox", {Label = "Enable self healing?", Command = "vj_stalker_heal_self"}) 
-			panel:ControlHelp("Enabling this feautre allows the SNPCs to be able to heal themselves.")  
 
 			panel:AddControl("Checkbox", {Label = "Enable console print debugging?", Command = "vj_stalker_randoms_console_debug"}) 
 			panel:ControlHelp("This will print our information into the console when certian SNPC events are tiggered. (Intended for debugging.)") 
+
+			panel:AddControl("Checkbox", {Label = "Enable self healing?", Command = "vj_stalker_heal_self"}) 
+			panel:ControlHelp("Enabling this feautre allows the SNPCs to be able to heal themselves.")  
 
 			panel:AddControl("Checkbox", {Label = "Enable friendly military faction?", Command = "vj_stalker_mil_faction_friendly"}) -- Friendly military
 			panel:ControlHelp("This allows the military faction to be friendly to the player, and their allies.")
@@ -266,15 +265,6 @@ if CLIENT then
 			panel:AddControl("Checkbox", {Label = "Enable radio chatter?", Command = "vj_stalker_radio_chatter"}) -- Radio chatter
 			panel:ControlHelp("This will enable/disable some SNPCs having radios, where you can hear radio chatter coming through them.")
 
-			panel:AddControl("Checkbox", {Label = "Can the SNPCs be gibbed?", Command = "vj_stalker_gib"}) -- Gibbing ability 
-			panel:ControlHelp("This allows the SNPCs to be gibbed from certain damage types.")
-
-			panel:AddControl("Checkbox", {Label = "Minimal gibbing effects?", Command = "vj_stalker_minimal_gib"}) 
-			panel:ControlHelp("[For Lower End PCs] This convar disables most of the excess gib models, disables the paprticles attached to each gib, and reduce the amount of gibs in total.")
-
-			panel:AddControl("Checkbox", {Label = "Unique death sounds when being gibbed?", Command = "vj_stalker_gib_death_sounds"}) -- Gib death sounds
-			panel:ControlHelp("This will enable specific unique death sounds when gibbed.")
-
 			panel:AddControl("Checkbox", {Label = "Allowed to forget enemies?", Command = "vj_stalker_never_forget"}) -- Never reset on enemy
 			panel:ControlHelp("This will make it so the SNPCs won't forget an enemies existance if they are out of sight for too long.")
 
@@ -325,6 +315,25 @@ if CLIENT then
 					
 			panel:AddControl("Checkbox", {Label = "Can The SNPCs be incapacitated?", Command = "vj_stalker_incapacitated"}) -- Downing system
 			panel:ControlHelp("This allows the SNPCs to be incapacitated under certain conditions.")
+
+
+			-- Gibbing SEG
+			panel:AddControl( "Label", {Text = "\nNotice: SNPC [Gibbing/Gibs] Specific ConVars. \n"})
+
+
+
+			panel:AddControl("Checkbox", {Label = "Spawn gibs when damaged?", Command = "vj_stalker_damage_gibs"}) 
+			panel:ControlHelp("Chance to spawn a gib whne the SNPC is damaged.")  
+
+			panel:AddControl("Checkbox", {Label = "Can the SNPCs be gibbed?", Command = "vj_stalker_gib"}) -- Gibbing ability 
+			panel:ControlHelp("This allows the SNPCs to be gibbed from certain damage types.")
+
+			panel:AddControl("Checkbox", {Label = "Minimal gibbing effects?", Command = "vj_stalker_minimal_gib"}) 
+			panel:ControlHelp("[For Lower End PCs] This convar disables most of the excess gib models, disables the paprticles attached to each gib, and reduce the amount of gibs in total.")
+
+			panel:AddControl("Checkbox", {Label = "Unique death sounds when being gibbed?", Command = "vj_stalker_gib_death_sounds"}) -- Gib death sounds
+			panel:ControlHelp("This will enable specific unique death sounds when gibbed.")
+
 
 			-- HeadShot SEG
 			panel:AddControl( "Label", {Text = "\nNotice: SNPC [Headshot] Specific ConVars. \n"})
@@ -394,6 +403,8 @@ if CLIENT then
 			-- Weapon SEG
 			panel:AddControl( "Label", {Text = "\nNotice: SNPC [Weapon] Specific ConVars. \n"})
 
+			panel:AddControl("Checkbox", {Label = "SNPC weapon fire type adaption?", Command = "vj_stalker_wep_fire_adapt"}) 
+			panel:ControlHelp("The SNPCs will automatically adjust their automatic weapons firing method in accordance to their enemies range, altering their firing speed, spread, and time until fire.")  
 
 			panel:AddControl("Checkbox", {Label = "Enable switching to secondary weapon?", Command = "vj_stalker_weapon_switching"}) -- Weapon switching
 			panel:ControlHelp("This allows the SNPCs to be able to switch to a secondary weapon under certain conditions.")
@@ -404,7 +415,10 @@ if CLIENT then
 			panel:AddControl("Checkbox", {Label = "Enable alternative muzzle flash (Custom Weapons)?", Command = "vj_stalker_cus_wep_muz_flash"}) -- Custom weapons (Mine)
 			panel:ControlHelp("This changes the default muzzle flash particles to a different one. This convar only affects custom VJ Base weapons made by me.")
 
-			panel:AddControl("Checkbox", {Label = "Override all default VJ bullet tracers?", Command = "vj_stalker_override_all_wep_tracers"}) -- All tracers
+			panel:AddControl("Checkbox", {Label = "Override all default VJ bullet tracers (Yellow)?", Command = "vj_stalker_override_all_wep_tracers_yel"}) -- All tracers
+			panel:ControlHelp("Any VJ Base weapon equiped by my SNPCs will use the custom tracer effects made by me.")
+
+			panel:AddControl("Checkbox", {Label = "Override all default VJ bullet tracers (White)?", Command = "vj_stalker_override_all_wep_tracers_whi"}) -- All tracers
 			panel:ControlHelp("Any VJ Base weapon equiped by my SNPCs will use the custom tracer effects made by me.")
 
 			panel:AddControl("Checkbox", {Label = "Enable custom tracer impact dynamic light?", Command = "vj_stalker_tracer_imp_light"}) -- Imp light
