@@ -10,10 +10,13 @@
 //BACKSTAB? MELEE ATTACKS DO MORE DMG IF ENE HAS BACK TURNED? 
 //MOVE WEAPON BURST FIRE LOGIC TO SNPC INSTEAD OF WEAPONS. (MUST IGNORE NON-AUTOMATICS)
 
-//MAKE SNPCS STRONG LIKE SENTRY'S IF ALL CONVS ARE DISABLES
-
 //MAKE MOST CUSTOM IDLE ANIMATIONS SUPPORT GESTURE LAYERING
 //IF AN ALLY DIES TOO CLOSE, AND AN ENE IS CLOSE, ADD DELAY BEFORE PUSHING/MIMIC FEAR OR HESITATION. THEY WANT TO LIVE AS WELL.
+
+//MAKE SNPCS MORE PRONE TO TAKING COVER WHEN ALLY DIES TOO CLOSE, OR UNKNOWN THREAT
+//ADD WAY TO FORCE IDLE GESTURE FIDGET ANIM TO STOP WHEN WE DETECT AN ENEMY.
+//SMALL HELP FUNCTION TO APPLY TIME TO NEXTCHASE VAR
+//IMPROVE PLACING FLARES FUNCTION
 
 local VectorRand    = VectorRand
 local Vector        = Vector
@@ -614,7 +617,8 @@ ENT.Investigate_NextAnimT = 0
     -- [Loot items mechanic] -- 
 ENT.AllowedToLoot = true
 ENT.LootableEntities = {"arc9_ammo","arc9_ammo_big","item_rpg_round","item_ammo_pistol","item_ammo_pistol_large","item_ammo_smg1","item_ammo_smg1_grenade","item_ammo_smg1_large","item_ammo_ar2","item_ammo_ar2_altfire","item_ammo_ar2_large","item_ammo_357","item_ammo_357_large","item_ammo_crossbow","item_box_buckshot","item_battery","weapon_frag",}
-ENT.NextFindLootT = 1
+ENT.NextFindLootT = 0
+ENT.FindLootChance = 4 -- 1 in 'x' chance to even bother running the code, where if not landing on 1, we return early and add extra delay before the next chance the SNPC can search for loot.
 ENT.FindLootDistance = 2250 
 
     -- [Dmg by shock fx] -- 
@@ -953,7 +957,6 @@ function ENT:PreInit()
             self:ManageRandomVars()
             self:MngeExVarTimes()
             self:MngBurnToDeathVO()
-            self:Handle_WepFireDelay()
         end
     end)
 end
@@ -1369,8 +1372,8 @@ function ENT:ManageMoveAndShoot()
     end
 end
 ---------------------------------------------------------------------------------------------------------------------------------------------
+-- Randomization and hanlding of internal variables
 function ENT:ManageRandomVars()
-    -- An attempt to make SNPCs behavior a bit more random --
     timer.Simple(0.1, function()
         if IsValid(self) then 
 
@@ -1389,6 +1392,7 @@ function ENT:ManageRandomVars()
             local defT  = curT + mRand(10, 20)
             local defTurn = self.TurningSpeed or 10
 
+            self.NextPeekUpT = curT + mRand(3, 10)
             self.Danger_DetectSiganlT = curT + mRand(1, 5)
             self.WeaponSwitchT = curT + mRand(20,50) 
             self.EvadeDanger_NextT = curT + mRand(1, 10)
@@ -1520,32 +1524,6 @@ function ENT:ManageRandomVars()
         end 
     end)
 end
-
-function ENT:Handle_WepFireDelay()
-    local cvExtDelay = GetConVar("vj_stalker_ext_fire_delay")
-    local cvNoDelay  = GetConVar("vj_stalker_no_fire_delay")
-    local wep = self:GetActiveWeapon()
-    if not IsValid(wep) then return end
-    if wep.NPC_TimeUntilFire == nil then return end
-    wep._VJ_Def_NPC_TimeUntilFire = wep._VJ_Def_NPC_TimeUntilFire or wep.NPC_TimeUntilFire
-
-    local extDelay = cvExtDelay and cvExtDelay:GetInt() == 1
-    local noDelay  = cvNoDelay  and cvNoDelay:GetInt() == 1
-    if noDelay then
-        wep.NPC_TimeUntilFire = 0
-        print("Weapon time until fire = " .. wep.NPC_TimeUntilFire)
-        return
-    end
-    if extDelay then
-        local delay = mRand(0.5, 2.55)
-        print("Weapon time until fire = " .. wep.NPC_TimeUntilFire)
-        wep.NPC_TimeUntilFire = wep._VJ_Def_NPC_TimeUntilFire + delay
-    else 
-        print("Weapon time until fire = " .. wep.NPC_TimeUntilFire)
-        wep.NPC_TimeUntilFire = wep._VJ_Def_NPC_TimeUntilFire
-    end
-end 
-
 
 ENT.Rng_MoveHideTime = true
 ENT.Rng_SrafeTime = true
@@ -2519,7 +2497,7 @@ function ENT:OnGrenadeAttack(status, overrideEnt, landDir)
                     self.GrenadeAttackAttachment = "anim_attachment_LH"
                 end 
 
-            elseif throwType == 2 and not self.IsGuard and not self:IsMoving() then
+            elseif throwType == 2 and not self.IsGuard and self.MovementType ~= VJ_MOVETYPE_STATIONARY then
                 if debugging then 
                     print("Ges-gren throw")
                 end 
@@ -2528,18 +2506,22 @@ function ENT:OnGrenadeAttack(status, overrideEnt, landDir)
                     self.CurrentGrenadeThrow_IsGesture = true 
                     self.AnimTbl_GrenadeAttack = "vjges_" .. throwAnim
                     self.GrenadeAttackAttachment = "anim_attachment_LH"
-                    local moveTy = "TASK_RUN_PATH"
-                    if self.ForceMoveOnGesGrenThrow and mRng(1, forceGesGrenMoveChance) == 1 then
-                        self:StopMoving()
-                        if mRng(1,2) == 1 then
-                            self:SCHEDULE_COVER_ORIGIN(moveTy, function(x)
-                                self:VJ_Schedule_TaskStuff(x)
-                            end)
-                        else
-                            self:SCHEDULE_COVER_ENEMY(moveTy, function(x)
-                                self:VJ_Schedule_TaskStuff(x)
-                            end)
-                        end
+                    //timer.Simple(mRand(0.1, 0.25) function()
+                        //if IsValid(self) then
+                        local moveTy = "TASK_RUN_PATH"
+                        if self.ForceMoveOnGesGrenThrow and mRng(1, forceGesGrenMoveChance) == 1 then
+                            self:StopMoving()
+                            if mRng(1,2) == 1 then
+                                self:SCHEDULE_COVER_ORIGIN(moveTy, function(x)
+                                    self:VJ_Schedule_TaskStuff(x)
+                                end)
+                            else
+                                self:SCHEDULE_COVER_ENEMY(moveTy, function(x)
+                                    self:VJ_Schedule_TaskStuff(x)
+                                end)
+                            end
+                        //end
+                    //end)
                     end
                 end 
 
@@ -3700,7 +3682,10 @@ ENT.React_FrIFire_Chance = 3
 ENT.React_FrIFire_NextT = 0 
 function ENT:React_DmgFrPly(attacker, dmginfo)
     if not self.React_FriFire then return end
-    if not IsValid(self) or self.VJ_IsBeingControlled then return end
+    if not IsValid(attacker) or not attacker:IsPlayer() then return end
+    if self:IsVJAnimationLockState() then return end 
+    if self.VJ_IsBeingControlled then return end
+    if not self:Alive() then return end 
 
     local cT = CurTime()
     if cT < (self.React_FrIFire_NextT or 0) then return end
@@ -3708,7 +3693,7 @@ function ENT:React_DmgFrPly(attacker, dmginfo)
 
     local ene = self:GetEnemy()
     if IsValid(ene) and self:Visible(ene) then return end
-    if not IsValid(attacker) or not attacker:IsPlayer() then return end
+
     if self._ReactFrFirePending then return end
 
     local chance = tonumber(self.React_FrIFire_Chance) or 5
@@ -4800,6 +4785,11 @@ function ENT:Extra_LayeredGesFlinching(dmginfo)
     end
 end
 
+function ENT:Handle_FriendlyFire(dmginfo)
+    local conv = GetConVar("vj_stalker_friendly_fire")
+    if not conv or conv:GetInt() ~= 1 then return end 
+end
+
 function ENT:OnDamaged(dmginfo, hitgroup, status)   
 
     local dmgType = dmginfo:GetDamageType()
@@ -5500,7 +5490,7 @@ ENT.Copy_PlyCrouchStance = true
 ENT.Copy_IsCrouching = false
 ENT.Copy_NextShiftT = 0  
 
-function ENT:CopyPlayerStance() -- ran in on think
+function ENT:CopyPlayerStance() 
     if not self.Copy_PlyCrouchStance then return end
     if not self.IsFollowing then return end 
 
@@ -5576,6 +5566,69 @@ function ENT:StealthMovement()
     end
 end
 
+ENT.UseCrouchIdleAnim = true 
+
+ENT.Play_PeekupAnim = true 
+ENT.Play_PeekupAnimChance = 4
+ENT.PeekUpAnim = "crouch_peek_up_cmb_b"
+ENT.NextPeekUpT = 0
+ENT.Idle_CoverActs = {[ACT_COVER] = true, [ACT_COVER_LOW] = true, [ACT_HL2MP_IDLE_CROUCH_PASSIVE] = true, [ACT_COVER_LOW_RPG] = true, [ACT_COVER_SMG1_LOW] = true}
+
+function ENT:Idle_CoverPeekUp()
+    if not self.Play_PeekupAnim then return end
+    if self.VJ_IsBeingControlled then return end
+    if not self:IsOnGround() then return end
+    if self:IsMoving() then return end
+    if self:IsBusy() or self:IsVJAnimationLockState() then return end
+    if self:GetNPCState() ~= NPC_STATE_IDLE then return end
+    if CurTime() < self.NextPeekUpT then return end
+    local delayT = mRand(5, 30)
+
+    local anim = self.PeekUpAnim
+    if not anim or anim == "" then
+        self.NextPeekUpT = CurTime() + delayT
+        return
+    end
+
+    local seqPeek = self:LookupSequence(anim)
+    if not seqPeek or seqPeek < 0 then 
+        self.NextPeekUpT = CurTime() + delayT
+        return 
+    end
+
+    local seq = self:GetSequence()
+    if not seq or seq < 0 then
+        self.NextPeekUpT = CurTime() + delayT
+        return
+    end
+
+    local activity = self:GetSequenceActivity(seq)
+    if not activity or activity < 0 then
+        self.NextPeekUpT = CurTime() + delayT
+        return
+    end
+
+    if not self.Idle_CoverActs[activity] then
+        return
+    end
+
+    if mRng(1, self.Play_PeekupAnimChance or 3) ~= 1 then
+        self.NextPeekUpT = CurTime() + delayT
+        return
+    end
+
+    local dur = self:SequenceDuration(seqPeek)
+    if not dur or dur <= 0 then
+        self.NextPeekUpT = CurTime() + delayT
+        return
+    end
+
+    self.NextPeekUpT = CurTime() + dur + delayT
+    self:RemoveAllGestures()
+    self:StopMoving()
+    self:PlayAnim(anim, true, dur, false, {OnFinish = function(interrupted, animName)end})
+end
+
 
 function ENT:TranslateActivity(act)
     local ene = self:GetEnemy()
@@ -5591,18 +5644,21 @@ function ENT:TranslateActivity(act)
     end
 
     if self.Copy_PlyCrouchStance then 
-        if self.Copy_IsCrouching then 
-            if act == ACT_RUN then
-                return ACT_RUN_CROUCH or ACT_WALK_CROUCH_AIM  
-            end
-            if act == ACT_IDLE then
+        if act == ACT_IDLE and act ~= ACT_COVER then
+            if self.Copy_IsCrouching then 
                 return ACT_COVER
-            end
-            if act == ACT_WALK then
+            end 
+        elseif act == ACT_RUN and (act ~= ACT_RUN_CROUCH or act ~= ACT_WALK_CROUCH_AIM) then
+            if self.Copy_IsCrouching then 
+                return ACT_RUN_CROUCH or ACT_WALK_CROUCH_AIM  
+            end 
+        elseif act == ACT_WALK and act ~= ACT_WALK_CROUCH then
+            if self.Copy_IsCrouching then 
                 return ACT_WALK_CROUCH 
             end 
-        end
-    end  
+        end 
+    end
+      
 
 	if self:IsEFlagSet(EFL_IS_BEING_LIFTED_BY_BARNACLE) then
 		return ACT_BARNACLE_PULL 
@@ -5840,8 +5896,9 @@ function ENT:CanFireQuickFlare()
     if conv:GetInt() ~= 1 then return false end
 
     if self.IsFiringQuickFlare then return false end 
-    if self:IsBusy() or self.VJ_IsBeingControlled then return false end
-
+    if self:IsBusy() or self.VJ_IsBeingControlled or self:IsVJAnimationLockState() then return false end
+    if self:GetWeaponState() == VJ.WEP_STATE_RELOADING then return false end 
+    
     local enemy = self:GetEnemy()
     if not IsValid(enemy) then return false end
 
@@ -5877,7 +5934,7 @@ function ENT:CanFireQuickFlare()
         end
     end
 
-    if self:IsBusy("Activities") or self:GetWeaponState() == VJ.WEP_STATE_RELOADING or self.AttackType or cT < self.TakingCoverT then return end
+    if self.AttackType or cT < self.TakingCoverT then return false end
 
     return true, enemy, distanceToEnemy
 end
@@ -5903,6 +5960,7 @@ function ENT:FireQuickFlare()
 
     self.IsFiringQuickFlare = true
     local fireAnim;
+
     if self.AnimTbl_WeaponAttackSecondary and self.AnimTbl_WeaponAttackSecondary ~= false then
         if istable(self.AnimTbl_WeaponAttackSecondary) then 
             fireAnim = table.Random(self.AnimTbl_WeaponAttackSecondary)
@@ -5912,11 +5970,12 @@ function ENT:FireQuickFlare()
     end 
     
     if not fireAnim then return end 
+    local seq = self:LookupSequence(fireAnim)
+    if not seq or seq < 0 then return end 
 
-    local fireT = self:SequenceDuration(self:LookupSequence(fireAnim)) or 1 
+    local fireT = self:SequenceDuration(seq) or 1 
     self:PlayAnim(fireAnim, true, fireT, true)
     self:SetState(VJ_STATE_ONLY_ANIMATION_NOATTACK, fireT)
-    self:SetTurnTarget("Enemy")
 
     timer.Simple(mRand(0.855, 0.975), function()
         if not IsValid(self) or not IsValid(enemy) then
@@ -5973,14 +6032,17 @@ function ENT:FireQuickFlare()
 end
 ---------------------------------------------------------------------------------------------------------------------------------------------
 function ENT:OnPlayerSight(ent)
-    if self.SpotFr_PlyAnim then 
+    self:Handle_PlySpotAnim(ent)
+end 
+
+function ENT:Handle_PlySpotAnim(ent)
+        if self.SpotFr_PlyAnim then 
         if VJ_CVAR_IGNOREPLAYERS then return end
         if self.IsFollowing or self.FollowingPlayer then return end 
         if self.VJ_IsBeingControlled then return end 
 
         local friendlyConVar = GetConVar(tostring(self.FriendlyConvar)):GetInt()
         if not friendlyConVar or friendlyConVar ~= 1 then return end
-
         if self:GetNPCState() ~= NPC_STATE_IDLE then return end 
 
         local cT = CurTime()
@@ -5993,33 +6055,34 @@ function ENT:OnPlayerSight(ent)
         local tbl = self.SpotFr_PlyAnim_SeqTbl
         if not istable(tbl) or #tbl == 0 then return end
 
-        if ent:IsPlayer() and disp == D_LI and self:Visible(ent) then
-            if self:GetWeaponState() == VJ.WEP_STATE_RELOADING or
-                self.WeaponAttackState == VJ.WEP_ATTACK_STATE_FIRE_STAND or
-                self.Medic_Status or
-                IsValid(ene) or
-                busy or
-                not self:IsOnGround() then
+        if ent:IsPlayer() and disp == D_LI and self:Visible(ent) then 
+            if self:GetWeaponState() == VJ.WEP_STATE_RELOADING or self.WeaponAttackState == VJ.WEP_ATTACK_STATE_FIRE_STAND or self.Medic_Status or IsValid(ene) or busy or not self:IsOnGround() then
                 return 
             end
             
             local animChance = tonumber(self.SpotFr_PlyAnim_Chance) or 10 
             local seqSpotAnim = self.SpotFr_PlyAnim_SeqTbl[mRng(1, #self.SpotFr_PlyAnim_SeqTbl)]
             local playedAnim = false
-            local eneIdleCheck = not IsValid(ene) and self:GetNPCState() == NPC_STATE_IDLE and (not ent:IsNPC() or not IsValid(ent:GetEnemy()))
+            local eneIdleCheck = not IsValid(ene) and (not ent:IsNPC() or not IsValid(ent:GetEnemy()))
             local rngDel = mRand(0.15, 0.65)
 
+            if self:GetNPCState() == NPC_STATE_COMBAT then return end 
             if mRng(1, animChance) == 1  then
                 self:RemoveAllGestures()
                 timer.Simple(rngDel, function()
                     if IsValid(self) then
                         if busy then return end 
+
+                        local seq = self:GetSequence()
+                        local activity = self:GetSequenceActivity(seq)
+                        if self.Idle_CoverActs[activity] then return end
+
                         local aT = self:SequenceDuration(self:LookupSequence(seqSpotAnim)) or 1 
                         if seqSpotAnim then
                             self:StopMoving()
                             self:SetTarget(ent)
                             self:SCHEDULE_FACE("TASK_FACE_TARGET")
-                            self:PlayAnim("vjseq_" .. seqSpotAnim, true, aT, false) -- Dunno why, but anims are totall screwed, maybe I got conflicting addon :(
+                            self:PlayAnim("vjseq_" .. seqSpotAnim, true, aT, false) 
                             if self.RANDOMS_DEBUG then 
                                 print("On spot player, we are playing a sequence animation!")
                             end 
@@ -6040,7 +6103,7 @@ function ENT:OnPlayerSight(ent)
                                 self:PlayAnim(gesPlySpotAnim, false)
                                 playedAnim = true 
                                 if self.RANDOMS_DEBUG then 
-                                    print("On spot player, we are playing a sequence animation!")
+                                    print("Spotted player, we are playing a gesture animation!")
                                 end 
                             end
                         end
@@ -6114,7 +6177,7 @@ function ENT:Idle_FidgetAnim()
         if self.VJ_IsBeingControlled or IsValid(self:GetEnemy()) then return end
 
         local npcState = self:GetNPCState()
-        if npcState ~= NPC_STATE_IDLE or npcState == NPC_STATE_ALERT or npcState == NPC_STATE_COMBAT then return end 
+        if npcState ~= NPC_STATE_IDLE then return end
 
         if self:IsVJAnimationLockState() or self:IsBusy() or not self:IsOnGround() or self.CurrentSchedule or self.PlayingFidgetAnim then
             return
@@ -6160,8 +6223,9 @@ function ENT:Idle_FidgetAnim()
                     if seq and seq > 0 then 
                         self:PlayAnim("vjges_" .. animSelected, false)
                         local fidgetTime = self:SequenceDuration(seq)
-                        self.FidgetAnimNextT = CurTime() + mRand(5, 35) + fidgetTime
-
+                        local c = CurTime()
+                        self.FidgetAnimNextT = c + mRand(5, 35) + fidgetTime
+                        self.Dialogue_AnimNextT = c + mRand(5, 10)
                         timer.Simple(fidgetTime + 0.1, function()
                             if not IsValid(self) then return end
                             self.PlayingFidgetAnim = false
@@ -6187,10 +6251,7 @@ function ENT:Idle_TalkAnims(npc, state)
     local nSt = self:GetNPCState()
     if nSt ~= NPC_STATE_IDLE then return end 
     
-    if self:IsVJAnimationLockState()  or
-        self:IsBusy() or
-        not IsValid(self) or 
-        not IsValid(npc) then 
+    if self:IsVJAnimationLockState() or self:IsBusy() or not IsValid(self) or not IsValid(npc) then 
         return 
     end
 
@@ -6214,7 +6275,9 @@ function ENT:Idle_TalkAnims(npc, state)
                     self:PlayAnim("vjges_" .. dialogueAnim)
                 end
             end)
-            self.Dialogue_AnimNextT = curT + mRand(5, 10)
+            local dT = mRand(5, 10)
+            self.FidgetAnimNextT = curT + dT + 2
+            self.Dialogue_AnimNextT = curT + dT
         end 
     end 
 end 
@@ -6248,27 +6311,42 @@ function ENT:GestureAnimOnInvest()
 end 
 ---------------------------------------------------------------------------------------------------------------------------------------------
 function ENT:Idle_FindLoot()
-    if not self.AllowedToLoot then return end 
-
+    if not self.AllowedToLoot then return end
+    
     local cvar = GetConVar("vj_stalker_looting")
     if not cvar or cvar:GetInt() ~= 1 then return end
-
     if not IsValid(self) or self.VJ_IsBeingControlled then return end
-
-    if self:GetNPCState() ~= NPC_STATE_IDLE then return end 
-    if self.IsGuard or self.MovementType == VJ_MOVETYPE_STATIONARY then return end 
-
+    if self:GetNPCState() ~= NPC_STATE_IDLE then return end
+    if self.IsGuard or self.MovementType == VJ_MOVETYPE_STATIONARY then return end
     if not IsValid(self:GetActiveWeapon()) then return end
-
+    
     local curTime = CurTime()
-    if curTime < (self.NextFindLootT or 0) then return end
+    if self.NextFindLootT == nil then
+        self.NextFindLootT = curTime + mRand(5, 30) 
+        return
+    end
+    
+    if curTime < self.NextFindLootT then return end
+    
+    if not IsValid(self.LootTarget) then 
+        if mRng(1, self.FindLootChance or 3) ~= 1 then 
+            self.NextFindLootT = curTime + mRand(10, 25) 
+            return 
+        end
+    end
 
-    if self:IsBusy() or self:IsVJAnimationLockState()  or self:IsOnFire() or self.IsFollowing or self.FollowingPlayer or self:IsMoving() then
+    if self:IsOnFire() or self.IsFollowing or self.FollowingPlayer or self:IsVJAnimationLockState() then 
+        if IsValid(self.LootTarget) then self.LootTarget.VJ_Looter = nil end 
+        self.LootTarget = nil 
         return 
     end
 
     local enemy = self:GetEnemy()
-    if IsValid(enemy) and self:Visible(enemy) then return end
+    if IsValid(enemy) and self:Visible(enemy) then 
+        if IsValid(self.LootTarget) then self.LootTarget.VJ_Looter = nil end 
+        self.LootTarget = nil 
+        return 
+    end
 
     self.FailedLoot = self.FailedLoot or {}
     self.LootInventory = self.LootInventory or {}
@@ -6280,30 +6358,16 @@ function ENT:Idle_FindLoot()
         end
     end
 
-    local selfPos = self:GetPos()
-    local rngSnd = mRng(85, 105)
+    if IsValid(self.LootTarget) then
+        if self.LootTarget.VJ_Looter ~= self then
+            self.LootTarget = nil
+            return
+        end
 
-    for _, v in ipairs(ents.FindInSphere(selfPos, self.FindLootDistance)) do
-        if not IsValid(v) then continue end
-        if not self.LootableLookup[v:GetClass()] then continue end
-        if not self:Visible(v) then continue end
-        if self.FailedLoot[v] and curTime < self.FailedLoot[v] then continue end
+        local lootPos = self.LootTarget:GetPos() + self.LootTarget:OBBCenter()
+        local dist = self:GetPos():Distance(lootPos)
 
-        local lootPos = v:GetPos() + v:OBBCenter()
-        local myNear = self:NearestPoint(lootPos)
-        myNear.x = selfPos.x
-        myNear.y = selfPos.y
-        local lootNear = v:NearestPoint(myNear)
-        local lootDist = lootNear:Distance(myNear)
-
-        self:SetLastPosition(select(2, VJ.GetNearestPositions(self, v, true)))
-        self:StopMoving()
-        self:SCHEDULE_GOTO_POSITION(VJ.PICK({"TASK_RUN_PATH", "TASK_WALK_PATH"}))
-
-        if self:IsBusy() then return end 
-        if not IsValid(v) then return end
-        
-        if lootDist <= mRng(15, 45) then
+        if dist <= mRng(20, 50) then
             local pickUpAnim = VJ.PICK(self.PlyPickUpAnim)
             if pickUpAnim then
                 local animDur = self:SequenceDuration(pickUpAnim)
@@ -6312,15 +6376,61 @@ function ENT:Idle_FindLoot()
                 self:SetState(VJ_STATE_ONLY_ANIMATION_NOATTACK, animDur)
             end
 
-            VJ.EmitSound(self, "items/itempickup.wav", 70, rngSnd)
-            table.insert(self.LootInventory, {class = v:GetClass(), pos = v:GetPos(), time = curTime})
-            v:Remove()
-            self.NextFindLootT = curTime + mRand(2.5, 10)
+            VJ.EmitSound(self, "items/itempickup.wav", 70, mRng(85, 105))
+            table.insert(self.LootInventory, {class = self.LootTarget:GetClass(), pos = self.LootTarget:GetPos(), time = curTime})
+            
+            self.LootTarget:Remove()
+            self.LootTarget = nil
+            self.NextFindLootT = curTime + mRand(10, 20) 
             return true
         else
-            self.FailedLoot[v] = curTime + mRand(2.5, 10)
+            if not self:IsMoving() then
+                self:SetLastPosition(lootPos)
+                self:SCHEDULE_GOTO_POSITION(VJ.PICK({"TASK_RUN_PATH", "TASK_WALK_PATH"}))
+            end
+            
+            self.LootStuckTimer = self.LootStuckTimer or curTime + 15
+            if curTime > self.LootStuckTimer and not self:IsMoving() then
+                self.FailedLoot[self.LootTarget] = curTime + 20
+                if IsValid(self.LootTarget) then self.LootTarget.VJ_Looter = nil end -- Release dibs
+                self.LootTarget = nil
+                self.LootStuckTimer = nil
+            end
+            return
         end
     end
+
+
+    local selfPos = self:GetPos()
+    local nearestLoot = nil
+    local nearestDist = self.FindLootDistance or 1000
+
+    for _, v in ipairs(ents.FindInSphere(selfPos, nearestDist)) do
+        if not IsValid(v) then continue end
+        if not self.LootableLookup[v:GetClass()] then continue end
+        
+        -- DIBS CHECK
+        if IsValid(v.VJ_Looter) and v.VJ_Looter ~= self then continue end
+        
+        if not self:Visible(v) then continue end
+        if self.FailedLoot[v] and curTime < self.FailedLoot[v] then continue end
+
+        local dist = selfPos:Distance(v:GetPos())
+        if dist < nearestDist then
+            nearestDist = dist
+            nearestLoot = v
+        end
+    end
+
+    if IsValid(nearestLoot) then
+        self.LootTarget = nearestLoot
+        nearestLoot.VJ_Looter = self 
+        self.LootStuckTimer = curTime + mRand(10, 25)
+        self:SetLastPosition(nearestLoot:GetPos())
+        self:SCHEDULE_GOTO_POSITION(VJ.PICK({"TASK_RUN_PATH", "TASK_WALK_PATH"}))
+        return true
+    end
+
     return false
 end
 ---------------------------------------------------------------------------------------------------------------------------------------------
@@ -6522,7 +6632,6 @@ function ENT:CanPickUpWeapon()
     return true
 end
 ---------------------------------------------------------------------------------------------------------------------------------------------
--- DOOR STACKING? MAYBE HAVE IT SO THEY ONLY DO BREAK DOOR IF ALLY IS WITHIN X RANGE?
 -- Add tolerance or smthing for 45 degeess.
 
 ENT.PostBreakDoor_Reaction = true
@@ -6852,23 +6961,28 @@ function ENT:SetIncapAnims()
 end
 
 function ENT:CheckToBecomeIncapacitated()
+    if not self.CanBecomeIncapicitated then return end 
+
     local conv = GetConVar("vj_stalker_incapacitated"):GetInt()
     if not conv or conv ~= 1 then return end 
+
     if not IsValid(self) or self.VJ_IsBeingControlled then 
-        return false 
+        return  
     end 
+
     local busy =  self:IsVJAnimationLockState()  or self:IsBusy()
     if self.IncapCounter >= self.IncapAmount or self.NeverBecomeIncappedAgain then
-        print("Cannot be incapacitated anymore.")
-        return false
+        if self.RANDOMS_DEBUG then print("Cannot be incapacitated anymore.") end 
+        return 
     end
 
-    if busy or self.Flinching or self.Medic_Status or not self:IsOnGround() or not IsValid(self) or self:IsOnFire() or not self.CanBecomeIncapicitated or self.PlayingAttackAnimation or self:IsMoving() or self:GetWeaponState() == VJ.WEP_STATE_RELOADING then 
+    if busy or self.Flinching or self.Medic_Status or not self:IsOnGround() or self:IsOnFire() or self.PlayingAttackAnimation or self:IsMoving() or self:GetWeaponState() == VJ.WEP_STATE_RELOADING then 
         return  
     end 
 
     local lowHp = mRand(0.2,0.33)
     local hp = self:Health()
+
     if hp < (self:GetMaxHealth() * lowHp) and IsValid(self) and not busy then
         self:StopMoving()
         self:ClearSchedule()
@@ -6880,10 +6994,11 @@ end
 
 function ENT:PlayIncapAnimIntro()
     local busy =  self:IsVJAnimationLockState()  or self:IsBusy()
+
     if self.PlayingIncapAnim or self.NowIdleIncap then return end 
 
     if not self.IncapAnimsInitialized or not self.BecomeIncappedAnim then
-        print("Incap animations not yet initialized, deferring incapacitation...")
+        if self.RANDOMS_DEBUG then print("Incap animations not yet initialized, deferring incapacitation.") end 
         timer.Simple(0.1, function()
             if IsValid(self) then
                 self:PlayIncapAnimIntro()
@@ -6891,41 +7006,43 @@ function ENT:PlayIncapAnimIntro()
         end)
         return
     end
+
     self:ClearSchedule()
     self:StopAllSounds()
     self.IsCurrentlyIncapacitated = true
 
     self.IncapCounter = self.IncapCounter + 1 
-    print("Incapacitation count: " .. self.IncapCounter)
+    if self.RANDOMS_DEBUG then print("Incapacitation count: " .. self.IncapCounter) end 
 
     if self.IncapCounter >= self.IncapAmount then
         self.NeverBecomeIncappedAgain = true
-        print("Reached maximum incap limit. Cannot become incapacitated again.")
+        if self.RANDOMS_DEBUG then print("Reached maximum incap limit. Cannot become incapacitated again.") end 
     end
     
     local becomeIncapSeq = self:LookupSequence(self.BecomeIncappedAnim)
     if becomeIncapSeq == -1 then
-        print("Invalid BecomeIncappedAnim sequence: " .. self.BecomeIncappedAnim)
+        if self.RANDOMS_DEBUG then print("Invalid BecomeIncappedAnim sequence: " .. self.BecomeIncappedAnim) end 
         self.IsCurrentlyIncapacitated = false
         self.NowIdleIncap = false
         return
     end
 
-    if busy then return false end 
+    if busy then return end 
     local anim = self.BecomeIncappedAnim or ""
     local animT = VJ.AnimDuration(self, anim) or 2 
     local playedAnim = self:PlayAnim("vjseq_" .. anim, true, animT, false)
+
     if playedAnim then
         self:SetState(VJ_STATE_ONLY_ANIMATION_NOATTACK, animT + 0.01)
         self.PlayingIncapAnim = true 
-        print("Playing animation for " .. animT .. " seconds.")
+        if self.RANDOMS_DEBUG then print("Playing animation for " .. animT .. " seconds.") end 
         self:RemoveAllGestures()
         self:PlaySoundSystem("Speech", self.SoundTbl_Pain)
 
         timer.Simple(VJ.AnimDuration(self, self.BecomeIncappedAnim), function()
             if IsValid(self) then
                 self.PlayingIncapAnim = false 
-                print("Animation finished. Now entering incapacitated idle state.")
+                if self.RANDOMS_DEBUG then print("Animation finished. Now entering incapacitated idle state.") end 
                 self.NowIdleIncap = true
                 local incapIdleSeq = self:LookupSequence(self.IncapicitatedIdleAnim)
                 local incapIdleDur = self:SequenceDuration(incapIdleSeq)
@@ -6942,6 +7059,7 @@ end
 function ENT:LoopIncapIdleAnim(incapIdleDur)
     if not IsValid(self) or not self.NowIdleIncap or self.PlayingIncapAnim or not self.IsCurrentlyIncapacitated then return end
     local anim = self.IncapicitatedIdleAnim
+
     if anim then 
         self:SetIncapVars()
         self:PlayAnim("vjseq_" .. self.IncapicitatedIdleAnim, true,  VJ.AnimDuration(self, self.IncapicitatedIdleAnim), false)
@@ -6969,13 +7087,18 @@ function ENT:PlayRecoverFromIncapAnim()
 
     local recoverSeq = self:LookupSequence(self.RecoverFromIncapAnim)
     if recoverSeq == -1 then
-        print("Invalid RecoverFromIncapAnim sequence: " .. self.RecoverFromIncapAnim)
+        if self.RANDOMS_DEBUG then print("Invalid RecoverFromIncapAnim sequence: " .. self.RecoverFromIncapAnim) end 
         return
     end
+    
     local recoverAnim = self.RecoverFromIncapAnim
     local recoverDur = VJ.AnimDuration(self, recoverAnim) or 1 
     local playedAnim = self:PlayAnim("vjseq_" .. recoverAnim, true, recoverDur, false)
+
     if playedAnim then
+        if self.CurrentHasCryForAidSound then 
+            self.CurrentHasCryForAidSound:Stop() 
+        end
         self.IsCurrentlyIncapacitated = false
         self.PlayingRecoverAnim = true
         self:SetState(VJ_STATE_ONLY_ANIMATION_NOATTACK, recoverDur)
@@ -6987,11 +7110,11 @@ function ENT:PlayRecoverFromIncapAnim()
                 self:SetState()
                 self:ResetIncapVars()
                 self.PlayingRecoverAnim = false
-                print("Recover animation finished. SNPC is now back to active state.")
+                if self.RANDOMS_DEBUG then print("Recover animation finished. SNPC is now back to active state.") end 
             end
         end)
     else
-        print("Failed to play RecoverFromIncapAnim.")
+        if self.RANDOMS_DEBUG then print("Failed to play RecoverFromIncapAnim.") end 
     end
 end
 
@@ -7054,7 +7177,7 @@ function ENT:SetIncapVars()
     end
 end
 
-function ENT:ResetIncapVars()
+function ENT:ResetIncapVars() -- New stats applied when recover anim finishes specifically.
     if IsValid(self) and not self.IsCurrentlyIncapacitated then
         timer.Remove("IdleLoopTimer_" .. self:EntIndex())
         self.MovementType = VJ_MOVETYPE_GROUND
@@ -7071,6 +7194,7 @@ function ENT:ResetIncapVars()
         self.HullType = HULL_HUMAN
         local c = CurTime()
         self.Find_WepEntNextT = c + mRand(3,5)
+            
         if self.SNPCMedicTag then 
             self.IsMedic = true 
             self.Medic_NextHealT = c + mRand(self.Medic_NextHealTime.a, self.Medic_NextHealTime.b)
@@ -7390,16 +7514,15 @@ function ENT:PlayFlashlightReaction()
     end)
 end
 ---------------------------------------------------------------------------------------------------------------------------------------------
-ENT.IsAlone_VJEneConv = "vj_stalker_lm_tr_vj_creature"
-
-//this needs to be ignored if ene is beyond firing distance
 //Possibly add trigger if SNPC is at low health?
+ENT.IsAlone_VJEneConv = "vj_stalker_lm_tr_vj_creature"
 function ENT:IfSelfIsLoneMember()
     if not self.HasAloneAiBehaviour or self.VJ_IsBeingControlled then return end
     if not self.CanAlly then return end 
     local allyCheckDist = self.FindAllyDistance or 3000
     local allies = self:Allies_Check(allyCheckDist)
     local ene = self:GetEnemy()
+    if not IsValid(ene) then return end
 
     if self.IsAlone_VJEneConv then
         local convVar = GetConVar(tostring(self.IsAlone_VJEneConv))
@@ -7407,6 +7530,16 @@ function ENT:IfSelfIsLoneMember()
             local conv = convVar:GetInt()
             if IsValid(ene) and ene.IsVJBaseSNPC_Creature and conv ~= 1 then
                 return
+            end
+        end
+    end
+
+    //To filter out my SNPCs when they're incapacitated!
+    local validAllies = 0
+    if istable(allies) then
+        for _, ally in ipairs(allies) do
+            if IsValid(ally) and not ally.IsCurrentlyIncapacitated then
+                validAllies = validAllies + 1
             end
         end
     end
@@ -7455,12 +7588,16 @@ ENT.CurrentLeanAngle     = Angle(0,0,0)
 ENT.LeanCooldownUntil    = 0
 ENT.LeanOriginPos        = nil
 
-local ZERO_ANGLE = Angle(0,0,0)
+ENT.LeanMaxAdjustment    = 12      
+ENT.LeanBoostExtra       = 5       
+ENT.LeanCheckDist        = 50     
+ENT.Lean_MinDist         = 240     
+ENT.Lean_MaxDist         = 3500    
 
+local ZERO_ANGLE = Angle(0,0,0)
 local BONE_PELVIS = "ValveBiped.Bip01_Pelvis"
 local BONE_SPINE  = "ValveBiped.Bip01_Spine"
 local BONE_SPINE1 = "ValveBiped.Bip01_Spine1"
-
 
 function ENT:ForceBoneReset()
     local pelvis = self:LookupBone(BONE_PELVIS)
@@ -7468,14 +7605,12 @@ function ENT:ForceBoneReset()
     local spine1 = self:LookupBone(BONE_SPINE1)
 
     if pelvis then self:ManipulateBoneAngles(pelvis, ZERO_ANGLE) end
-    if spine  then self:ManipulateBoneAngles(spine,  ZERO_ANGLE) end
+    if spine  then self:ManipulateBoneAngles(spine, ZERO_ANGLE) end
     if spine1 then self:ManipulateBoneAngles(spine1, ZERO_ANGLE) end
 end
 
-
 function ENT:ResetLean()
     local cT = CurTime()
-
     self.CurrentlyLeaning   = false
     self.TargetLeanAngle    = ZERO_ANGLE
     self.CurrentLeanAngle   = ZERO_ANGLE
@@ -7486,11 +7621,10 @@ function ENT:ResetLean()
     self:ForceBoneReset()
     for i = 1, 3 do
         timer.Simple(i * 0.05, function()
-            if IsValid(self) then
-                self:ForceBoneReset()
-            end
+            if IsValid(self) then self:ForceBoneReset() end
         end)
     end
+    print("[Lean Reset] Lean reset called.")
 end
 
 function ENT:CheckLeanReset()
@@ -7499,95 +7633,91 @@ function ENT:CheckLeanReset()
     local enemy = self:GetEnemy()
     local pos   = self:GetPos()
 
-    if not IsValid(enemy)
-    or self:IsMoving()
-    or not self:IsOnGround()
-    or self:GetWeaponState() == VJ.WEP_STATE_RELOADING
-    or self:GetActivity() == ACT_RUN
-    or self:GetActivity() == ACT_WALK then
+    if not IsValid(enemy) then
         self:ResetLean()
         return
     end
-
+    if self:IsMoving() then
+        self:ResetLean()
+        return
+    end
+    if not self:IsOnGround() then
+        self:ResetLean()
+        return
+    end
+    if self:GetWeaponState() == VJ.WEP_STATE_RELOADING then
+        self:ResetLean()
+        return
+    end
+    local act = self:GetActivity()
+    if act == ACT_RUN or act == ACT_WALK then
+        self:ResetLean()
+        return
+    end
     if self.LeanOriginPos and pos:DistToSqr(self.LeanOriginPos) > (25 * 25) then
         self:ResetLean()
         return
     end
-
     if math.abs(enemy:GetPos().z - pos.z) > 120 then
-        self:ResetLean()
-        return
-    end
-
-    if pos:Distance(enemy:GetPos()) < 300 and self:Visible(enemy) then
         self:ResetLean()
         return
     end
 end
 
-
 function ENT:ContextToLean()
-    if not self.CanWeLean then return end
+    if not self.CanWeLean then
+        return
+    end
 
     local conv = GetConVar("vj_stalker_can_lean")
-    if not conv or conv:GetInt() ~= 1 then return end
+    if not conv or conv:GetInt() ~= 1 then
+        return
+    end
 
     local cT = CurTime()
-
     if self.CurrentlyLeaning and not IsValid(self:GetEnemy()) then
         self:ResetLean()
         return
     end
-
     if self:IsMoving() then
-        if self.CurrentlyLeaning then
-            self:ResetLean()
-        end
+        if self.CurrentlyLeaning then self:ResetLean() end
         return
     end
 
     self:CheckLeanReset()
-
-    if self.VJ_IsBeingControlled then return end
-    if self.LeanCooldownUntil > cT then return end
+    if self.VJ_IsBeingControlled then
+        return
+    end
+    if self.LeanCooldownUntil > cT then
+        return
+    end
 
     local wep = self:GetActiveWeapon()
-    if not IsValid(wep) then return end
+    if not IsValid(wep) then
+        return
+    end
 
-    if not self.CurrentlyLeaning
-    and cT > self.NextLeanTime
-    and cT > (self.TakingCoverT or 0) then
+    if wep.IsMeleeWeapon then 
+        return 
+    end 
+
+    if not self.CurrentlyLeaning and cT > self.NextLeanTime and cT > (self.TakingCoverT or 0) then
         self:CustomLean()
     end
 
-    self.CurrentLeanAngle = LerpAngle(
-        self.LeanTransitionSpeed,
-        self.CurrentLeanAngle,
-        self.TargetLeanAngle
-    )
-
-
+    self.CurrentLeanAngle = LerpAngle(self.LeanTransitionSpeed,self.CurrentLeanAngle,self.TargetLeanAngle)
     self.CurrentLeanAngle.p = math.Clamp(self.CurrentLeanAngle.p, -18, 18)
-    self.CurrentLeanAngle.y = math.Clamp(self.CurrentLeanAngle.y, -22, 22)
+    self.CurrentLeanAngle.y = math.Clamp(self.CurrentLeanAngle.y, -22 - self.LeanBoostExtra, 22 + self.LeanBoostExtra)
     self.CurrentLeanAngle.r = math.Clamp(self.CurrentLeanAngle.r, -12, 12)
 
     local pelvis = self:LookupBone(BONE_PELVIS)
     local spine  = self:LookupBone(BONE_SPINE)
     local spine1 = self:LookupBone(BONE_SPINE1)
-
     local a = self.CurrentLeanAngle
 
-    if pelvis then
-        self:ManipulateBoneAngles(pelvis, Angle(0, -a.y * 0.25, -a.r * 0.25))
-    end
-
-    if spine then
-        self:ManipulateBoneAngles(spine, Angle(a.p * 0.6, a.y * 0.6, a.r * 0.6))
-    end
-
-    if spine1 then
-        self:ManipulateBoneAngles(spine1, Angle(a.p * 0.4, a.y * 0.4, a.r * 0.4))
-    end
+    if pelvis then self:ManipulateBoneAngles(pelvis, Angle(0, -a.y * 0.25, -a.r * 0.25)) end
+    if spine then self:ManipulateBoneAngles(spine, Angle(a.p * 0.6, a.y * 0.6, a.r * 0.6)) end
+    if spine1 then self:ManipulateBoneAngles(spine1, Angle(a.p * 0.4, a.y * 0.4, a.r * 0.4)) end
 end
 
 function ENT:CustomLean()
@@ -7598,47 +7728,47 @@ function ENT:CustomLean()
 
     local pos = self:GetPos()
     local traceStart = pos + self:OBBCenter()
+    local distSqr = pos:DistToSqr(enemy:GetPos())
+    if distSqr > (self.Lean_MaxDist * self.Lean_MaxDist) or distSqr < (self.Lean_MinDist * self.Lean_MinDist) then
+        return
+    end
+    if math.abs(enemy:GetPos().z - pos.z) > 120 then
+        return
+    end
 
-    local dist = pos:DistToSqr(enemy:GetPos())
-    if dist > (1200 * 1200) or dist < (200 * 200) then return end
-
+    local forwardVec = self:GetForward()
     local tr = util.TraceLine({
         start  = traceStart,
-        endpos = enemy:GetPos() + enemy:OBBCenter(),
-        filter = { self }
+        endpos = traceStart + forwardVec * self.LeanCheckDist,
+        filter = {self},
+        mask = MASK_SOLID
     })
+    if not tr.Hit then
+        return
+    end
 
-    if tr.Entity == enemy or self:Visible(enemy) then return end
-
-    local right = math.Rand(18, 28)
-    local up    = 45
-
-    local trR = util.TraceLine({
-        start  = traceStart + self:GetRight() * right + self:GetUp() * up,
-        endpos = enemy:GetPos() + enemy:OBBCenter(),
-        filter = { self }
-    })
-
-    local trL = util.TraceLine({
-        start  = traceStart + self:GetRight() * -right + self:GetUp() * up,
-        endpos = enemy:GetPos() + enemy:OBBCenter(),
-        filter = { self }
-    })
-
+    local localDir = self:WorldToLocal(enemy:GetPos())
     local newAngle = ZERO_ANGLE
-    local newState = false
+    local leanSide = "none"
+    if localDir.y > 0 then
+        newAngle = Angle(12, 22 + self.LeanBoostExtra, 6) 
+        leanSide = "right"
+    else
+        newAngle = Angle(-12, -22 - self.LeanBoostExtra, -6)
+        leanSide = "left"
+    end
 
-    if trR.Entity == enemy then
-        newAngle = Angle(12, 30, 6)
-        newState = true
-    elseif trL.Entity == enemy then
-        newAngle = Angle(-12, -30, -6)
-        newState = true
+    local wep = self:GetActiveWeapon()
+    local enePos_Eye = enemy:EyePos()
+    if IsValid(wep) then
+        local weaponBlocked = self:DoCoverTrace(wep:GetBulletPos(), enePos_Eye, false)
+        if weaponBlocked then
+            return
+        end
     end
 
     local cT = CurTime()
-
-    if newState and (cT - self.LastStateChange > self.StateChangeDelay) then
+    if cT - self.LastStateChange > self.StateChangeDelay then
         self.CurrentlyLeaning = true
         self.TargetLeanAngle  = newAngle
         self.LeanOriginPos    = Vector(pos.x, pos.y, pos.z)
@@ -7647,9 +7777,118 @@ function ENT:CustomLean()
 
         self:SetTurnTarget("Enemy")
         self:StopMoving()
+        print("[Lean Success] SNPC is leaning", leanSide, "Target angle:", newAngle)
     end
 end
 ---------------------------------------------------------------------------------------------------------------------------------------------
+    // -- [Custom VJ Weapon manipulation] -- \\
+
+ENT.Replace_CurWepPcfx = true
+ENT.General_PcfxTbl = {"doi_muzzleflash_smoke_small_variant_2", "doi_muzzleflash_smoke_small_variant_3", "doi_muzzleflash_mg34_1p_splits","doi_muzzleflash_mg42_3p_splits","doi_muzzleflash_stg44_3p","doi_muzzleflash_k98_3p_flame","doi_muzzleflash_stg44_1p_core"}
+ENT.Pistol_PcfxTbl = {"doi_muzzleflash_tracer", "doi_weapon_muzzle_smoke", "doi_muzzleflash_mg42_3p_splits","doi_muzzleflash_stg44_3p","doi_muzzleflash_k98_3p_flame","doi_muzzleflash_stg44_1p_core"}
+ENT.Shotgun_PcfxTbl = {"doi_muzzleflash_smoke_small_variant_2", "doi_muzzleflash_smoke_small_variant_3", "doi_muzzleflash_tracer", "doi_muzzleflash_k98_3p_flame", "doi_weapon_muzzle_smoke", "doi_muzzleflash_mg42_1p_spark_trail", "doi_muzzleflash_mg42_1p_splits", "doi_muzzleflash_sparks_variant_6",  "doi_muzzleflash_ithica_1p_spark_trail", "doi_muzzleflash_ithica_1p_core", "doi_muzzleflash_ithica_1p_core_b", "doi_muzzleflash_ithica_1p_b", "doi_muzzleflash_ithica_1p_flame", "doi_muzzleflash_ithica_3p"}
+ENT.Suppressed_PcfxTbl = {"doi_muzzleflash_smoke_small_variant_2", "doi_muzzleflash_smoke_small_variant_3"} 
+function ENT:Override_DefWepPcfx()
+    if not file.Exists("autorun/rscpck_pcf_precache.lua", "LUA") then return end 
+    if not self.Replace_CurWepPcfx then return end 
+    if not self:Alive() then return end 
+
+    local wep = self:GetActiveWeapon()
+
+    local conv = GetConVar("vj_stalker_override_wep_pcfx")
+    if not conv or conv:GetInt() ~= 1 then
+        if IsValid(wep) and wep._OrigMuzzleParticles then
+            if self.RANDOMS_DEBUG then
+                print("(Weapon PCFX) Reverting to original particles")
+            end
+
+            wep.PrimaryEffects_MuzzleParticles = wep._OrigMuzzleParticles
+            wep.PrimaryEffects_MuzzleParticlesAsOne = wep._OrigMuzzleAsOne
+
+            if wep._OrigMuzzleFlash ~= nil then
+                wep.PrimaryEffects_MuzzleFlash = wep._OrigMuzzleFlash
+            end
+        end
+        return 
+    end
+
+    if not IsValid(wep) then return end 
+    if not wep.IsVJBaseWeapon then return end 
+    if wep.IsMeleeWeapon then return end 
+    if wep.Primary.DisableBulletCode then return end 
+    if not wep.PrimaryEffects_MuzzleAttachment then return end 
+
+    if not wep._OrigMuzzleParticles then
+        wep._OrigMuzzleParticles = table.Copy(wep.PrimaryEffects_MuzzleParticles or {})
+        wep._OrigMuzzleAsOne = wep.PrimaryEffects_MuzzleParticlesAsOne
+        wep._OrigMuzzleFlash = wep.PrimaryEffects_MuzzleFlash 
+
+        if self.RANDOMS_DEBUG then 
+            print("(Weapon PCFX) Cached original particles + muzzle flash")
+        end 
+    end
+
+    local hT = wep.HoldType or ""
+    local ammo = wep.Primary.Ammo or ""
+    local shell = wep.PrimaryEffects_ShellType or ""
+
+    local isShotGun = (hT == "shotgun" or ammo == "Buckshot" or shell == "ShotgunShellEject")
+    local isPistol = ((hT == "pistol" or hT == "revolver") and (ammo == "pistol" or ammo == "357"))
+    local isGeneral = ((hT == "smg" or hT == "ar2") or (ammo == "SMG1" or ammo == "AR2"))
+
+    local isSuppressed = wep.IsSuppressed_Weapon
+    local desiredTbl = wep._OrigMuzzleParticles
+
+    if isSuppressed then
+        desiredTbl = self.Suppressed_PcfxTbl
+        if wep.PrimaryEffects_MuzzleFlash ~= true then
+            wep.PrimaryEffects_MuzzleFlash = true
+            if self.RANDOMS_DEBUG then
+                print("(Weapon PCFX) Suppressed → forcing muzzle flash ON")
+            end
+        end
+
+    else
+        if wep._OrigMuzzleFlash ~= nil and wep.PrimaryEffects_MuzzleFlash ~= wep._OrigMuzzleFlash then
+            wep.PrimaryEffects_MuzzleFlash = wep._OrigMuzzleFlash
+            if self.RANDOMS_DEBUG then
+                print("(Weapon PCFX) Restoring original muzzle flash state")
+            end
+        end
+
+        if isShotGun then
+            desiredTbl = self.Shotgun_PcfxTbl
+        elseif isPistol then
+            desiredTbl = self.Pistol_PcfxTbl
+        elseif isGeneral then
+            desiredTbl = self.General_PcfxTbl
+        end
+    end
+
+    if not desiredTbl then return end
+
+    local curTbl = wep.PrimaryEffects_MuzzleParticles or {}
+
+    local isSame = (#curTbl == #desiredTbl)
+    if isSame then
+        for i = 1, #curTbl do
+            if curTbl[i] ~= desiredTbl[i] then
+                isSame = false
+                break
+            end
+        end
+    end
+
+    if not isSame then
+        if self.RANDOMS_DEBUG then 
+            print("(Weapon PCFX) Applying new particle table")
+        end 
+
+        wep.PrimaryEffects_MuzzleParticles = table.Copy(desiredTbl)
+        wep.PrimaryEffects_MuzzleParticlesAsOne = true
+    end
+end
+
 ENT.Manipulate_WeaponTracer = true 
 function ENT:Handle_WeaponTracerConv()
     if not self.Manipulate_WeaponTracer then return end 
@@ -7663,6 +7902,7 @@ function ENT:Handle_WeaponTracerConv()
     
     if not IsValid(wep) then return end 
     if not wep.IsVJBaseWeapon then return end 
+    if wep.IsMeleeWeapon then return end 
     if wep.Primary.DisableBulletCode then return end 
     if wep.Primary.Tracer == 0 then return end 
     local tracer = wep.Primary.TracerType
@@ -7703,11 +7943,7 @@ ENT.HasFireInBurstAbility = false
 ENT.Adapt_WepFireDist = true
 ENT.Adapt_WepDistSwitchMax = 5555
 ENT.Adapt_WepDistSwitchMin = 3000
-
 ENT.Adapt_WepDistNextT = 0 
-ENT.Adapt_Wep_IsAuto = false 
-ENT.Adapt_Wep_IsSemi = false 
-
 function ENT:Alter_WeaponFireStats()
     if not IsValid(self) then return end 
     if not self.Adapt_WepFireDist then return end
@@ -7724,10 +7960,32 @@ function ENT:Alter_WeaponFireStats()
     if not wep.IsVJBaseWeapon then return end 
     if wep.Internal_BlockFireTypeChange then return end 
     if wep.IsMarkedSnpcSniperWep then return end 
-    if not wep.Primary.Automatic then return end 
+    if wep.IsMarkedSnpcSniperWep then return end 
+    if wep._OrigAutomatic == nil then
+    if wep.IsMeleeWeapon then return end 
+    wep._OrigAutomatic = wep.Primary.Automatic
 
+    if self.RANDOMS_DEBUG then
+            print("(Adaptive Firing): Cached original automatic =", wep._OrigAutomatic)
+        end
+    end
+
+    if wep._OrigAutomatic == false then
+        if self.RANDOMS_DEBUG then
+            print("(Adaptive Firing): Skipping - weapon is inherently semi")
+        end
+        return
+    end
+
+    
     local hType = wep.HoldType
     if hType == "pistol" or hType == "revolver" or hType == "rpg" then return end
+
+    local ammo = wep.Primary.Ammo or ""
+    local shell = wep.PrimaryEffects_ShellType or ""
+
+    local isShotGun = (hType == "shotgun" or ammo == "Buckshot" or shell == "ShotgunShellEject")
+    if isShotGun then return end 
 
     local ene = self:GetEnemy()
     if not IsValid(ene) then return end 
@@ -7761,21 +8019,53 @@ function ENT:Alter_WeaponFireStats()
         timeUntil = mRand(0.1, 0.45)
         nextFire = mRand(0.1, 1)
         spread = mRand(0.05, 0.1)
-        print("(Adaptive Firing): We're now switching to SEMI")
+        print("(Adaptive Firing): Switching to semi | Base Delay:", timeUntil)
 
     elseif newMode == "auto" then 
         automatic = true
         timeUntil = mRand(0.065, 0.15)
-        nextFire = mRand(0.045, 0.15)
+        nextFire = mRand(0.09, 0.12)
         spread = mRand(0.065, 0.135)
-        print("(Adaptive Firing): We're now switching to AUTOMATIC")
+        print("(Adaptive Firing): Switching to auto | Base Delay:", timeUntil)
 
     else -- close
         automatic = true
         timeUntil = mRand(0.085, 0.15)
         nextFire = 0.1
         spread = mRand(0.05, 0.1)
-        print("(Adaptive Firing): We're now switching to our FALLBACK")
+        print("(Adaptive Firing): Switching to fallback | Base Delay:", timeUntil)
+    end
+
+    local cvExtDelay = GetConVar("vj_stalker_extended_delay")
+    local cvNoDelay  = GetConVar("vj_stalker_no_fire_delay")
+
+    local extDelay = cvExtDelay and cvExtDelay:GetInt() == 1
+    local noDelay  = cvNoDelay  and cvNoDelay:GetInt() == 1
+
+    if noDelay then
+        if self.RANDOMS_DEBUG then
+            print("(Adaptive Firing): NO DELAY ENABLED")
+        end
+        timeUntil = 0
+
+    elseif extDelay then
+        local bonus = 0
+
+        if newMode == "semi" then
+            bonus = mRand(1, 3.5)
+
+        elseif newMode == "auto" then
+            bonus = mRand(0.9, 2)
+
+        else -- close
+            bonus = mRand(0.5, 1.5)
+        end
+
+        timeUntil = timeUntil + bonus
+
+        if self.RANDOMS_DEBUG then
+            print("(Adaptive Firing): Ext Del is : Bonus:", bonus, ": Final:", timeUntil)
+        end
     end
 
     wep.Primary.Automatic = automatic
@@ -8061,6 +8351,8 @@ function ENT:OnThink()
 end
 
 function ENT:OnThinkActive()
+    self:Idle_CoverPeekUp()
+    self:Override_DefWepPcfx()
     self:Handle_WeaponTracerConv()
     self:Alter_WeaponFireStats()
     self:PlyFlash_IdleAlert()
@@ -8070,9 +8362,7 @@ function ENT:OnThinkActive()
     self:IdleIncap_LastChanceGren()
     self:SeekOutMedic()
     self:HitWallWhenShoved()
-    //self:CustomLean()
     self:ContextToLean()
-    self:CheckLeanReset()
     self:IfSelfIsLoneMember()
     self:DistressOnCloseProximity()
     self:Idle_FindLoot()
@@ -8135,7 +8425,6 @@ function ENT:HumanCanHealSelf()
     if enemyVisible and enemyDist <= (1520 * 1520) then return end
 
     if self:InEneLineOfSight(enemy, 0.7) then
-        if self.RANDOMS_DEBUG then print("Ene is looking at me! Cancelling s-heal.") end
         return false
     end
 
@@ -8592,6 +8881,7 @@ function ENT:Dodge_DangerousEnt()
             end)
 
         else
+            if self.IsGuard or self.MovementType == VJ_MOVETYPE_STATIONARY then return end 
             local sched = self:GetCurrentSchedule()
             if sched ~= SCHED_RUN_FROM_ENEMY and sched ~= SCHED_TAKE_COVER_FROM_ENEMY then
                 self:SetSchedule(SCHED_RUN_FROM_ENEMY)
@@ -8873,22 +9163,22 @@ ENT.FootSteps = {
     [MAT_ANTLION] = {"physics/flesh/flesh_impact_hard1.wav","physics/flesh/flesh_impact_hard2.wav","physics/flesh/flesh_impact_hard3.wav","physics/flesh/flesh_impact_hard4.wav","physics/flesh/flesh_impact_hard5.wav","physics/flesh/flesh_impact_hard6.wav"},
     [MAT_BLOODYFLESH] = {"physics/flesh/flesh_impact_hard1.wav","physics/flesh/flesh_impact_hard2.wav","physics/flesh/flesh_impact_hard3.wav","physics/flesh/flesh_impact_hard4.wav","physics/flesh/flesh_impact_hard5.wav","physics/flesh/flesh_impact_hard6.wav"},
     [MAT_CONCRETE] = {"npc/footsteps/hardboot_generic1.wav","npc/footsteps/hardboot_generic2.wav","npc/footsteps/hardboot_generic3.wav","npc/footsteps/hardboot_generic4.wav","npc/footsteps/hardboot_generic5.wav","npc/footsteps/hardboot_generic6.wav"},
-    [MAT_DIRT] = {"npc_foot_steps_sfx/soil_run_01.ogg","npc_foot_steps_sfx/soil_run_02.ogg","npc_foot_steps_sfx/soil_run_03.ogg","npc_foot_steps_sfx/soil_run_04.ogg","npc_foot_steps_sfx/soil_run_05.ogg","npc_foot_steps_sfx/soil_run_06.ogg","npc_foot_steps_sfx/soil_run_07.ogg","npc_foot_steps_sfx/soil_run_08.ogg"},
+    [MAT_DIRT] = {"general_sds/eft_footsteps/soil_run_01.ogg","general_sds/eft_footsteps/soil_run_02.ogg","general_sds/eft_footsteps/soil_run_03.ogg","general_sds/eft_footsteps/soil_run_04.ogg","general_sds/eft_footsteps/soil_run_05.ogg","general_sds/eft_footsteps/soil_run_06.ogg","general_sds/eft_footsteps/soil_run_07.ogg","general_sds/eft_footsteps/soil_run_08.ogg"},
     [MAT_FLESH] = {"physics/flesh/flesh_impact_hard1.wav","physics/flesh/flesh_impact_hard2.wav","physics/flesh/flesh_impact_hard3.wav","physics/flesh/flesh_impact_hard4.wav","physics/flesh/flesh_impact_hard5.wav","physics/flesh/flesh_impact_hard6.wav"},
-    [MAT_GRATE] = {"npc_foot_steps_sfx/walk_proflist_01.ogg","npc_foot_steps_sfx/walk_proflist_02.ogg","npc_foot_steps_sfx/walk_proflist_03.ogg","npc_foot_steps_sfx/walk_proflist_04.ogg","npc_foot_steps_sfx/walk_proflist_05.ogg","npc_foot_steps_sfx/walk_proflist_06.ogg","npc_foot_steps_sfx/walk_proflist_07.ogg","npc_foot_steps_sfx/walk_proflist_08.ogg","npc_foot_steps_sfx/walk_proflist_09.ogg","npc_foot_steps_sfx/walk_proflist_10.ogg"},
+    [MAT_GRATE] = {"general_sds/eft_footsteps/walk_proflist_01.ogg","general_sds/eft_footsteps/walk_proflist_02.ogg","general_sds/eft_footsteps/walk_proflist_03.ogg","general_sds/eft_footsteps/walk_proflist_04.ogg","general_sds/eft_footsteps/walk_proflist_05.ogg","general_sds/eft_footsteps/walk_proflist_06.ogg","general_sds/eft_footsteps/walk_proflist_07.ogg","general_sds/eft_footsteps/walk_proflist_08.ogg","general_sds/eft_footsteps/walk_proflist_09.ogg","general_sds/eft_footsteps/walk_proflist_10.ogg"},
     [MAT_ALIENFLESH] = {"physics/flesh/flesh_impact_hard1.wav","physics/flesh/flesh_impact_hard2.wav","physics/flesh/flesh_impact_hard3.wav","physics/flesh/flesh_impact_hard4.wav","physics/flesh/flesh_impact_hard5.wav","physics/flesh/flesh_impact_hard6.wav"},
     [74] = {"player/footsteps/sand1.wav","player/footsteps/sand2.wav","player/footsteps/sand3.wav","player/footsteps/sand4.wav"}, -- This is snow.
     [MAT_PLASTIC] = {"physics/plaster/drywall_footstep1.wav","physics/plaster/drywall_footstep2.wav","physics/plaster/drywall_footstep3.wav","physics/plaster/drywall_footstep4.wav"},
-    [MAT_METAL] = {"npc_foot_steps_sfx/sprint_metal1.ogg","npc_foot_steps_sfx/sprint_metal2.ogg","npc_foot_steps_sfx/sprint_metal3.ogg","npc_foot_steps_sfx/sprint_metal4.ogg","npc_foot_steps_sfx/sprint_metal5.ogg","npc_foot_steps_sfx/sprint_metal6.ogg"},
+    [MAT_METAL] = {"general_sds/eft_footsteps/sprint_metal1.ogg","general_sds/eft_footsteps/sprint_metal2.ogg","general_sds/eft_footsteps/sprint_metal3.ogg","general_sds/eft_footsteps/sprint_metal4.ogg","general_sds/eft_footsteps/sprint_metal5.ogg","general_sds/eft_footsteps/sprint_metal6.ogg"},
     [MAT_SAND] = {"player/footsteps/sand1.wav","player/footsteps/sand2.wav","player/footsteps/sand3.wav","player/footsteps/sand4.wav"},
-    [MAT_FOLIAGE] = {"npc_foot_steps_sfx/sprint2_grasslow_01.ogg","npc_foot_steps_sfx/sprint2_grasslow_02.ogg","npc_foot_steps_sfx/sprint2_grasslow_03.ogg","npc_foot_steps_sfx/sprint2_grasslow_04.ogg","npc_foot_steps_sfx/sprint2_grasslow_05.ogg","npc_foot_steps_sfx/sprint2_grasslow_06.ogg","npc_foot_steps_sfx/sprint2_grasslow_07.ogg","npc_foot_steps_sfx/sprint2_grasslow_08.ogg"},
+    [MAT_FOLIAGE] = {"general_sds/eft_footsteps/sprint2_grasslow_01.ogg","general_sds/eft_footsteps/sprint2_grasslow_02.ogg","general_sds/eft_footsteps/sprint2_grasslow_03.ogg","general_sds/eft_footsteps/sprint2_grasslow_04.ogg","general_sds/eft_footsteps/sprint2_grasslow_05.ogg","general_sds/eft_footsteps/sprint2_grasslow_06.ogg","general_sds/eft_footsteps/sprint2_grasslow_07.ogg","general_sds/eft_footsteps/sprint2_grasslow_08.ogg"},
     [MAT_COMPUTER] = {"physics/plaster/drywall_footstep1.wav","physics/plaster/drywall_footstep2.wav","physics/plaster/drywall_footstep3.wav","physics/plaster/drywall_footstep4.wav"},
-    [MAT_SLOSH] = {"npc_foot_steps_sfx/walk_puddle_01.ogg","npc_foot_steps_sfx/walk_puddle_02.ogg","npc_foot_steps_sfx/walk_puddle_03.ogg","npc_foot_steps_sfx/walk_puddle_04.ogg","npc_foot_steps_sfx/walk_puddle_05.ogg","npc_foot_steps_sfx/walk_puddle_06.ogg","npc_foot_steps_sfx/walk_puddle_07.ogg","npc_foot_steps_sfx/walk_puddle_08.ogg","npc_foot_steps_sfx/walk_puddle_09.ogg"},
-    [MAT_TILE] = {"npc_foot_steps_sfx/tile1.wav","npc_foot_steps_sfx/tile2.wav","npc_foot_steps_sfx/tile3.wav","npc_foot_steps_sfx/tile4.wav","npc_foot_steps_sfx/tile5.wav","npc_foot_steps_sfx/tile6.wav","npc_foot_steps_sfx/tile7.wav","npc_foot_steps_sfx/tile8.wav","npc_foot_steps_sfx/tile9.wav","npc_foot_steps_sfx/tile10.wav","npc_foot_steps_sfx/tile11.wav"},
-    [85] = {"npc_foot_steps_sfx/sprint2_grasslow_01.ogg","npc_foot_steps_sfx/sprint2_grasslow_02.ogg","npc_foot_steps_sfx/sprint2_grasslow_03.ogg","npc_foot_steps_sfx/sprint2_grasslow_04.ogg","npc_foot_steps_sfx/sprint2_grasslow_05.ogg","npc_foot_steps_sfx/sprint2_grasslow_06.ogg","npc_foot_steps_sfx/sprint2_grasslow_07.ogg","npc_foot_steps_sfx/sprint2_grasslow_08.ogg"}, -- Grass.
-    [MAT_VENT] = {"npc_foot_steps_sfx/walk_proflist_01.ogg","npc_foot_steps_sfx/walk_proflist_02.ogg","npc_foot_steps_sfx/walk_proflist_03.ogg","npc_foot_steps_sfx/walk_proflist_04.ogg","npc_foot_steps_sfx/walk_proflist_05.ogg","npc_foot_steps_sfx/walk_proflist_06.ogg","npc_foot_steps_sfx/walk_proflist_07.ogg","npc_foot_steps_sfx/walk_proflist_08.ogg","npc_foot_steps_sfx/walk_proflist_09.ogg","npc_foot_steps_sfx/walk_proflist_10.ogg"},
-    [MAT_WOOD] = {"npc_foot_steps_sfx/sprint_wood_01.ogg","npc_foot_steps_sfx/sprint_wood_02.ogg","npc_foot_steps_sfx/sprint_wood_03.ogg","npc_foot_steps_sfx/sprint_wood_04.ogg","npc_foot_steps_sfx/sprint_wood_05.ogg","npc_foot_steps_sfx/sprint_wood_06.ogg","npc_foot_steps_sfx/sprint_wood_07.ogg","npc_foot_steps_sfx/sprint_wood_08.ogg","npc_foot_steps_sfx/sprint_wood_09.ogg","npc_foot_steps_sfx/sprint_wood_10.ogg","npc_foot_steps_sfx/sprint_wood_11.ogg","npc_foot_steps_sfx/sprint_wood_12.ogg","npc_foot_steps_sfx/sprint_wood_13.ogg"},
-    [MAT_GLASS] = {"npc_foot_steps_sfx/sprint_glass_01.ogg","npc_foot_steps_sfx/sprint_glass_02.ogg","npc_foot_steps_sfx/sprint_glass_03.ogg","npc_foot_steps_sfx/sprint_glass_04.ogg","npc_foot_steps_sfx/sprint_glass_05.ogg","npc_foot_steps_sfx/sprint_glass_06.ogg","npc_foot_steps_sfx/sprint_glass_07.ogg","npc_foot_steps_sfx/sprint_glass_08.ogg","npc_foot_steps_sfx/sprint_glass_09.ogg","npc_foot_steps_sfx/sprint_glass_10.ogg"}
+    [MAT_SLOSH] = {"general_sds/eft_footsteps/walk_puddle_01.ogg","general_sds/eft_footsteps/walk_puddle_02.ogg","general_sds/eft_footsteps/walk_puddle_03.ogg","general_sds/eft_footsteps/walk_puddle_04.ogg","general_sds/eft_footsteps/walk_puddle_05.ogg","general_sds/eft_footsteps/walk_puddle_06.ogg","general_sds/eft_footsteps/walk_puddle_07.ogg","general_sds/eft_footsteps/walk_puddle_08.ogg","general_sds/eft_footsteps/walk_puddle_09.ogg"},
+    [MAT_TILE] = {"general_sds/eft_footsteps/tile1.wav","general_sds/eft_footsteps/tile2.wav","general_sds/eft_footsteps/tile3.wav","general_sds/eft_footsteps/tile4.wav","general_sds/eft_footsteps/tile5.wav","general_sds/eft_footsteps/tile6.wav","general_sds/eft_footsteps/tile7.wav","general_sds/eft_footsteps/tile8.wav","general_sds/eft_footsteps/tile9.wav","general_sds/eft_footsteps/tile10.wav","general_sds/eft_footsteps/tile11.wav"},
+    [85] = {"general_sds/eft_footsteps/sprint2_grasslow_01.ogg","general_sds/eft_footsteps/sprint2_grasslow_02.ogg","general_sds/eft_footsteps/sprint2_grasslow_03.ogg","general_sds/eft_footsteps/sprint2_grasslow_04.ogg","general_sds/eft_footsteps/sprint2_grasslow_05.ogg","general_sds/eft_footsteps/sprint2_grasslow_06.ogg","general_sds/eft_footsteps/sprint2_grasslow_07.ogg","general_sds/eft_footsteps/sprint2_grasslow_08.ogg"}, -- Grass.
+    [MAT_VENT] = {"general_sds/eft_footsteps/walk_proflist_01.ogg","general_sds/eft_footsteps/walk_proflist_02.ogg","general_sds/eft_footsteps/walk_proflist_03.ogg","general_sds/eft_footsteps/walk_proflist_04.ogg","general_sds/eft_footsteps/walk_proflist_05.ogg","general_sds/eft_footsteps/walk_proflist_06.ogg","general_sds/eft_footsteps/walk_proflist_07.ogg","general_sds/eft_footsteps/walk_proflist_08.ogg","general_sds/eft_footsteps/walk_proflist_09.ogg","general_sds/eft_footsteps/walk_proflist_10.ogg"},
+    [MAT_WOOD] = {"general_sds/eft_footsteps/sprint_wood_01.ogg","general_sds/eft_footsteps/sprint_wood_02.ogg","general_sds/eft_footsteps/sprint_wood_03.ogg","general_sds/eft_footsteps/sprint_wood_04.ogg","general_sds/eft_footsteps/sprint_wood_05.ogg","general_sds/eft_footsteps/sprint_wood_06.ogg","general_sds/eft_footsteps/sprint_wood_07.ogg","general_sds/eft_footsteps/sprint_wood_08.ogg","general_sds/eft_footsteps/sprint_wood_09.ogg","general_sds/eft_footsteps/sprint_wood_10.ogg","general_sds/eft_footsteps/sprint_wood_11.ogg","general_sds/eft_footsteps/sprint_wood_12.ogg","general_sds/eft_footsteps/sprint_wood_13.ogg"},
+    [MAT_GLASS] = {"general_sds/eft_footsteps/sprint_glass_01.ogg","general_sds/eft_footsteps/sprint_glass_02.ogg","general_sds/eft_footsteps/sprint_glass_03.ogg","general_sds/eft_footsteps/sprint_glass_04.ogg","general_sds/eft_footsteps/sprint_glass_05.ogg","general_sds/eft_footsteps/sprint_glass_06.ogg","general_sds/eft_footsteps/sprint_glass_07.ogg","general_sds/eft_footsteps/sprint_glass_08.ogg","general_sds/eft_footsteps/sprint_glass_09.ogg","general_sds/eft_footsteps/sprint_glass_10.ogg"}
 }
 ---------------------------------------------------------------------------------------------------------------------------------------------
 	-- ====== Sound File Paths ====== --
@@ -8930,15 +9220,15 @@ ENT.SoundTbl_Breath = {"st_faction_sounds/stalker_vo/general_base_dialogue/breat
 
 ENT.SoundTbl_Idle = {"st_faction_sounds/stalker_vo/general_base_dialogue/idle_1.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/idle_2.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/idle_3.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/idle_4.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/idle_5.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/idle_6.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/idle_7.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/idle_8.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/idle_9.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/idle_10.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/idle_11.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/idle_12.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/idle_13.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/idle_14.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/idle_15.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/idle_16.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/idle_17.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/idle_18.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/idle_19.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/idle_20.ogg","general_spetsnaz_snds/free1.wav","general_spetsnaz_snds/free2.wav","general_spetsnaz_snds/free3.wav","general_spetsnaz_snds/free4.wav","general_spetsnaz_snds/free5.wav","general_spetsnaz_snds/free6.wav","general_spetsnaz_snds/free7.wav","general_spetsnaz_snds/free8.wav","general_spetsnaz_snds/free9.wav","general_spetsnaz_snds/free10.wav","general_spetsnaz_snds/free11.wav","general_spetsnaz_snds/free12.wav","general_spetsnaz_snds/free13.wav","general_spetsnaz_snds/free14.wav","general_spetsnaz_snds/free15.wav","general_spetsnaz_snds/free16.wav","general_spetsnaz_snds/free17.wav","general_spetsnaz_snds/free18.wav","general_spetsnaz_snds/free19.wav","general_spetsnaz_snds/free20.wav","general_spetsnaz_snds/free21.wav","general_spetsnaz_snds/free22.wav","general_spetsnaz_snds/free23.wav","general_spetsnaz_snds/free24.wav","general_spetsnaz_snds/free25.wav","general_spetsnaz_snds/free26.wav","general_spetsnaz_snds/free27.wav","general_spetsnaz_snds/free28.wav","general_spetsnaz_snds/free29.wav","general_spetsnaz_snds/free30.wav","general_spetsnaz_snds/idledraft1.wav","general_spetsnaz_snds/idledraft2.wav","general_spetsnaz_snds/idledraft3.wav","general_spetsnaz_snds/idledraft4.wav","general_spetsnaz_snds/idledraft5.wav","general_spetsnaz_snds/idleburp.wav","general_spetsnaz_snds/idlewhistle.wav","st_faction_sounds/stalker_vo/mil_specific_dialogue/idle_1.ogg","st_faction_sounds/stalker_vo/mil_specific_dialogue/idle_2.ogg","st_faction_sounds/stalker_vo/mil_specific_dialogue/idle_3.ogg","st_faction_sounds/stalker_vo/mil_specific_dialogue/idle_4.ogg","st_faction_sounds/stalker_vo/mil_specific_dialogue/idle_5.ogg","st_faction_sounds/stalker_vo/mil_specific_dialogue/idle_6.ogg","st_faction_sounds/stalker_vo/mil_specific_dialogue/idle_7.ogg","st_faction_sounds/stalker_vo/mil_specific_dialogue/idle_8.ogg","st_faction_sounds/stalker_vo/mil_specific_dialogue/idle_9.ogg","st_faction_sounds/stalker_vo/mil_specific_dialogue/idle_10.ogg","st_faction_sounds/stalker_vo/mil_specific_dialogue/idle_11.ogg","st_faction_sounds/stalker_vo/mil_specific_dialogue/idle_12.ogg","st_faction_sounds/stalker_vo/mil_specific_dialogue/idle_13.ogg","st_faction_sounds/stalker_vo/mil_specific_dialogue/idle_14.ogg","st_faction_sounds/stalker_vo/mil_specific_dialogue/idle_15.ogg","st_faction_sounds/stalker_vo/mil_specific_dialogue/idle_16.ogg","st_faction_sounds/stalker_vo/mil_specific_dialogue/idle_17.ogg","st_faction_sounds/stalker_vo/mil_specific_dialogue/idle_18.ogg","st_faction_sounds/stalker_vo/mil_specific_dialogue/idle_19.ogg","st_faction_sounds/stalker_vo/mil_specific_dialogue/idle_20.ogg","st_faction_sounds/stalker_vo/mil_specific_dialogue/idle_21.ogg","st_faction_sounds/stalker_vo/mil_specific_dialogue/idle_22.ogg","st_faction_sounds/stalker_vo/mil_specific_dialogue/idle_23.ogg","st_faction_sounds/stalker_vo/mil_specific_dialogue/idle_24.ogg","st_faction_sounds/stalker_vo/mil_specific_dialogue/idle_25.ogg","st_faction_sounds/stalker_vo/mil_specific_dialogue/idle_26.ogg","st_faction_sounds/stalker_vo/mil_specific_dialogue/idle_27.ogg","st_faction_sounds/stalker_vo/mil_specific_dialogue/idle_28.ogg","st_faction_sounds/stalker_vo/mil_specific_dialogue/idle_29.ogg","st_faction_sounds/stalker_vo/mil_specific_dialogue/idle_30.ogg","general_spetsnaz_snds/chat1.mp3","general_spetsnaz_snds/chat2.mp3","general_spetsnaz_snds/chat3.mp3","general_spetsnaz_snds/chat4.mp3","general_spetsnaz_snds/chat5.mp3","general_spetsnaz_snds/chat6.mp3","general_spetsnaz_snds/chat7.mp3","general_spetsnaz_snds/chat8.mp3","general_spetsnaz_snds/chat9.mp3","general_spetsnaz_snds/chat10.mp3","general_spetsnaz_snds/chat11.mp3","general_spetsnaz_snds/chat12.mp3","general_spetsnaz_snds/chat13.mp3","general_spetsnaz_snds/chat14.mp3","general_spetsnaz_snds/chat15.mp3","general_spetsnaz_snds/chat16.mp3","general_spetsnaz_snds/chat17.mp3","general_spetsnaz_snds/chat18.mp3","general_spetsnaz_snds/chat19.mp3"}
 
-ENT.SoundTbl_Alert = {"st_faction_sounds/stalker_vo/general_base_dialogue/detour_1.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/detour_2.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/detour_3.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/detour_4.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/detour_5.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/detour_6.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/enemy_1.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/enemy_2.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/enemy_3.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/enemy_4.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/enemy_5.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/enemy_6.ogg","general_spetsnaz_snds/alert1.wav","general_spetsnaz_snds/alert2.wav","general_spetsnaz_snds/alert3.wav","general_spetsnaz_snds/alert4.wav","general_spetsnaz_snds/alert5.wav","general_spetsnaz_snds/alert6.wav","general_spetsnaz_snds/alert7.wav","general_spetsnaz_snds/alert8.wav","general_spetsnaz_snds/alert9.wav","general_spetsnaz_snds/alert1.wav","general_spetsnaz_snds/alert2.wav","general_spetsnaz_snds/alert3.wav","general_spetsnaz_snds/alert4.wav","general_spetsnaz_snds/alert5.wav","general_spetsnaz_snds/alert6.wav","general_spetsnaz_snds/alert7.wav","general_spetsnaz_snds/alert8.wav","general_spetsnaz_snds/alert9.wav","general_spetsnaz_snds/alert10.wav","general_spetsnaz_snds/alert11.wav","st_faction_sounds/stalker_vo/general_base_dialogue/panic_1.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/panic_2.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/panic_3.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/panic_4.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/panic_5.ogg","badcompany_squad/VO_RU_Grunt_ContactCall_01A_DimitryRozental.ogg","badcompany_squad/VO_RU_Grunt_ContactCall_02A_DimitryRozental.ogg","badcompany_squad/VO_RU_Grunt_ContactCall_03A_DimitryRozental.ogg","badcompany_squad/VO_RU_Grunt_ContactCall_04A_DimitryRozental.ogg","badcompany_squad/VO_RU_Grunt_ContactCall_05A_DimitryRozental.ogg","badcompany_squad/VO_RU_Grunt_ContactCall_06A_DimitryRozental.ogg","badcompany_squad/VO_RU_Grunt_ContactCall_07A_DimitryRozental.ogg"}
+ENT.SoundTbl_Alert = {"st_faction_sounds/stalker_vo/general_base_dialogue/detour_1.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/detour_2.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/detour_3.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/detour_4.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/detour_5.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/detour_6.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/enemy_1.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/enemy_2.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/enemy_3.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/enemy_4.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/enemy_5.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/enemy_6.ogg","general_spetsnaz_snds/alert1.wav","general_spetsnaz_snds/alert2.wav","general_spetsnaz_snds/alert3.wav","general_spetsnaz_snds/alert4.wav","general_spetsnaz_snds/alert5.wav","general_spetsnaz_snds/alert6.wav","general_spetsnaz_snds/alert7.wav","general_spetsnaz_snds/alert8.wav","general_spetsnaz_snds/alert9.wav","general_spetsnaz_snds/alert1.wav","general_spetsnaz_snds/alert2.wav","general_spetsnaz_snds/alert3.wav","general_spetsnaz_snds/alert4.wav","general_spetsnaz_snds/alert5.wav","general_spetsnaz_snds/alert6.wav","general_spetsnaz_snds/alert7.wav","general_spetsnaz_snds/alert8.wav","general_spetsnaz_snds/alert9.wav","general_spetsnaz_snds/alert10.wav","general_spetsnaz_snds/alert11.wav","st_faction_sounds/stalker_vo/general_base_dialogue/panic_1.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/panic_2.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/panic_3.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/panic_4.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/panic_5.ogg","general_spetsnaz_snds/VO_RU_Grunt_ContactCall_01A_DimitryRozental.ogg","general_spetsnaz_snds/VO_RU_Grunt_ContactCall_02A_DimitryRozental.ogg","general_spetsnaz_snds/VO_RU_Grunt_ContactCall_03A_DimitryRozental.ogg","general_spetsnaz_snds/VO_RU_Grunt_ContactCall_04A_DimitryRozental.ogg","general_spetsnaz_snds/VO_RU_Grunt_ContactCall_05A_DimitryRozental.ogg","general_spetsnaz_snds/VO_RU_Grunt_ContactCall_06A_DimitryRozental.ogg","general_spetsnaz_snds/VO_RU_Grunt_ContactCall_07A_DimitryRozental.ogg"}
 
 ENT.SoundTbl_CombatIdle = {"st_faction_sounds/stalker_vo/general_base_dialogue/attack_7.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/attack_8.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/attack_9.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/attack_10.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/attack_11.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/attack_12.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/attack_13.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/attack_14.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/cover_fire_1.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/cover_fire_2.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/cover_fire_3.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/cover_fire_4.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/cover_fire_5.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/cover_fire_6.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/cover_fire_7.ogg","general_spetsnaz_snds/attack1.wav","general_spetsnaz_snds/attack2.wav","general_spetsnaz_snds/attack3.wav","general_spetsnaz_snds/attack4.wav","general_spetsnaz_snds/attack5.wav","general_spetsnaz_snds/attack6.wav","general_spetsnaz_snds/attack7.wav","general_spetsnaz_snds/attack8.wav","general_spetsnaz_snds/attack9.wav","general_spetsnaz_snds/attack10.wav","general_spetsnaz_snds/attack11.wav","general_spetsnaz_snds/attack12.wav","general_spetsnaz_snds/attack13.wav","general_spetsnaz_snds/attack14.wav","general_spetsnaz_snds/attack15.wav","general_spetsnaz_snds/attack16.wav","general_spetsnaz_snds/attack1.wav","general_spetsnaz_snds/attack2.wav","general_spetsnaz_snds/attack3.wav","general_spetsnaz_snds/attack4.wav","general_spetsnaz_snds/attack5.wav","general_spetsnaz_snds/attack6.wav","general_spetsnaz_snds/attack7.wav","russian/attack1.wav","russian/attack2.wav","russian/attack3.wav","russian/attack4.wav","russian/attack5.wav","russian/attack6.wav","russian/attack7.wav","russian/attack8.wav","russian/attack9.wav","russian/attack10.wav","russian/attack11.wav","russian/attack12.wav","general_spetsnaz_snds/combat1.mp3","general_spetsnaz_snds/combat2.mp3","general_spetsnaz_snds/combat3.mp3","general_spetsnaz_snds/combat4.mp3","general_spetsnaz_snds/combat5.mp3","general_spetsnaz_snds/combat6.mp3","general_spetsnaz_snds/combat7.mp3","general_spetsnaz_snds/combat8.mp3","general_spetsnaz_snds/combat9.mp3","general_spetsnaz_snds/combat10.mp3","general_spetsnaz_snds/combat11.mp3","general_spetsnaz_snds/combat12.mp3","general_spetsnaz_snds/combat13.mp3","general_spetsnaz_snds/combat14.mp3","general_spetsnaz_snds/combat15.mp3","general_spetsnaz_snds/combat16.mp3","general_spetsnaz_snds/combat17.mp3","general_spetsnaz_snds/combat18.mp3","general_spetsnaz_snds/combat19.mp3","general_spetsnaz_snds/combat20.mp3"}
 
-ENT.SoundTbl_Suppressing = {"st_faction_sounds/stalker_vo/general_base_dialogue/cover_fire_8.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/cover_fire_9.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/cover_fire_10.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/cover_fire_11.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/cover_fire_12.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/cover_fire_13.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/cover_fire_14.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/cover_fire_1.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/cover_fire_2.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/cover_fire_3.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/cover_fire_4.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/cover_fire_5.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/cover_fire_6.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/cover_fire_7.ogg","badcompany_squad/pursuing1.wav","badcompany_squad/pursuing2.wav","badcompany_squad/pursuing3.wav","badcompany_squad/pursuing4.wav","badcompany_squad/pursuing5.wav","badcompany_squad/pursuing6.wav", "general_spetsnaz_snds/suppressing1.wav","general_spetsnaz_snds/suppressing2.wav","general_spetsnaz_snds/suppressing3.wav","general_spetsnaz_snds/suppressing4.wav","general_spetsnaz_snds/suppressing5.wav","general_spetsnaz_snds/suppressing6.wav","general_spetsnaz_snds/suppressing7.wav","general_spetsnaz_snds/suppressing8.wav","general_spetsnaz_snds/suppressing9.wav","general_spetsnaz_snds/suppressing10.wav","general_spetsnaz_snds/suppressing11.wav","general_spetsnaz_snds/suppressing12.wav","general_spetsnaz_snds/suppressing1.wav","general_spetsnaz_snds/suppressing2.wav","general_spetsnaz_snds/suppressing3.wav","general_spetsnaz_snds/suppressing4.wav","general_spetsnaz_snds/suppressing5.wav","general_spetsnaz_snds/suppressing6.wav","general_spetsnaz_snds/suppressing7.wav","general_spetsnaz_snds/suppressing8.wav","general_spetsnaz_snds/suppressing9.wav","general_spetsnaz_snds/suppressing10.wav","general_spetsnaz_snds/suppressing11.wav","general_spetsnaz_snds/suppressing12.wav","general_spetsnaz_snds/suppressing13.wav","general_spetsnaz_snds/suppressing14.wav","general_spetsnaz_snds/suppressing15.wav","general_spetsnaz_snds/suppressing16.wav","general_spetsnaz_snds/suppressing17.wav","general_spetsnaz_snds/suppressing18.wav","general_spetsnaz_snds/suppressing19.wav","general_spetsnaz_snds/suppressing20.wav"}
+ENT.SoundTbl_Suppressing = {"st_faction_sounds/stalker_vo/general_base_dialogue/cover_fire_8.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/cover_fire_9.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/cover_fire_10.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/cover_fire_11.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/cover_fire_12.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/cover_fire_13.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/cover_fire_14.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/cover_fire_1.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/cover_fire_2.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/cover_fire_3.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/cover_fire_4.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/cover_fire_5.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/cover_fire_6.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/cover_fire_7.ogg","general_spetsnaz_snds/pursuing1.wav","general_spetsnaz_snds/pursuing2.wav","general_spetsnaz_snds/pursuing3.wav","general_spetsnaz_snds/pursuing4.wav","general_spetsnaz_snds/pursuing5.wav","general_spetsnaz_snds/pursuing6.wav", "general_spetsnaz_snds/suppressing1.wav","general_spetsnaz_snds/suppressing2.wav","general_spetsnaz_snds/suppressing3.wav","general_spetsnaz_snds/suppressing4.wav","general_spetsnaz_snds/suppressing5.wav","general_spetsnaz_snds/suppressing6.wav","general_spetsnaz_snds/suppressing7.wav","general_spetsnaz_snds/suppressing8.wav","general_spetsnaz_snds/suppressing9.wav","general_spetsnaz_snds/suppressing10.wav","general_spetsnaz_snds/suppressing11.wav","general_spetsnaz_snds/suppressing12.wav","general_spetsnaz_snds/suppressing1.wav","general_spetsnaz_snds/suppressing2.wav","general_spetsnaz_snds/suppressing3.wav","general_spetsnaz_snds/suppressing4.wav","general_spetsnaz_snds/suppressing5.wav","general_spetsnaz_snds/suppressing6.wav","general_spetsnaz_snds/suppressing7.wav","general_spetsnaz_snds/suppressing8.wav","general_spetsnaz_snds/suppressing9.wav","general_spetsnaz_snds/suppressing10.wav","general_spetsnaz_snds/suppressing11.wav","general_spetsnaz_snds/suppressing12.wav","general_spetsnaz_snds/suppressing13.wav","general_spetsnaz_snds/suppressing14.wav","general_spetsnaz_snds/suppressing15.wav","general_spetsnaz_snds/suppressing16.wav","general_spetsnaz_snds/suppressing17.wav","general_spetsnaz_snds/suppressing18.wav","general_spetsnaz_snds/suppressing19.wav","general_spetsnaz_snds/suppressing20.wav"}
 
 ENT.SoundTbl_WeaponReload = {"general_spetsnaz_snds/reloading1.wav","general_spetsnaz_snds/reloading2.wav","general_spetsnaz_snds/reloading3.wav","general_spetsnaz_snds/reloading4.wav","general_spetsnaz_snds/reloading5.wav","general_spetsnaz_snds/reloading6.wav","general_spetsnaz_snds/reloading7.wav","general_spetsnaz_snds/reloading8.wav","general_spetsnaz_snds/reloading9.wav","general_spetsnaz_snds/reloading10.wav","general_spetsnaz_snds/reloading11.wav","general_spetsnaz_snds/reloading12.wav","general_spetsnaz_snds/reloading13.wav","general_spetsnaz_snds/reloading14.wav","general_spetsnaz_snds/reloading15.wav","general_spetsnaz_snds/reloading16.wav","general_spetsnaz_snds/reloading17.wav","general_spetsnaz_snds/reloading18.wav","general_spetsnaz_snds/reloading19.wav","general_spetsnaz_snds/reloading20.wav","general_spetsnaz_snds/reloading21.wav","general_spetsnaz_snds/reloading22.wav","general_spetsnaz_snds/reloading23.wav","general_spetsnaz_snds/reloading24.wav","general_spetsnaz_snds/reloading25.wav","general_spetsnaz_snds/reloading26.wav","general_spetsnaz_snds/reloading27.wav","general_spetsnaz_snds/reloading28wav","general_spetsnaz_snds/reloading29.wav","general_spetsnaz_snds/reloading1.wav","general_spetsnaz_snds/reloading2.wav","general_spetsnaz_snds/reloading3.wav","general_spetsnaz_snds/reloading4.wav","general_spetsnaz_snds/reloading5.wav","general_spetsnaz_snds/reloading6.wav","general_spetsnaz_snds/reloading7.wav","general_spetsnaz_snds/reloading8.wav"}
 
-ENT.SoundTbl_GrenadeAttack = {"general_spetsnaz_snds/fragout1.wav","general_spetsnaz_snds/fragout2.wav","general_spetsnaz_snds/fragout3.wav","general_spetsnaz_snds/fragout4.wav","general_spetsnaz_snds/fragout5.wav","general_spetsnaz_snds/fragout6.wav","general_spetsnaz_snds/fragout7.wav","general_spetsnaz_snds/fragout8.wav","general_spetsnaz_snds/fragout9.wav","general_spetsnaz_snds/fragout10.wav","general_spetsnaz_snds/fragout11.wav","general_spetsnaz_snds/fragout12.wav","general_spetsnaz_snds/fragout13.wav","general_spetsnaz_snds/fragout14.wav","general_spetsnaz_snds/fragout1.wav","general_spetsnaz_snds/fragout2.wav","general_spetsnaz_snds/fragout3.wav","general_spetsnaz_snds/fragout4.wav","general_spetsnaz_snds/fragout5.wav","general_spetsnaz_snds/fragout6.wav","general_spetsnaz_snds/fragout7.wav","general_spetsnaz_snds/fragout8.wav","general_spetsnaz_snds/fragout9.wav","general_spetsnaz_snds/fragout10.wav","general_spetsnaz_snds/fragout11.wav","general_spetsnaz_snds/fragout12.wav","general_spetsnaz_snds/fragout13.wav","general_spetsnaz_snds/fragout14.wav","general_spetsnaz_snds/fragout15.wav","general_spetsnaz_snds/fragout16.wav","st_faction_sounds/stalker_vo/general_base_dialogue/grenade_1.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/grenade_2.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/grenade_3.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/grenade_ready_1.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/grenade_ready_2.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/grenade_ready_3.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/grenade_ready_4.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/grenade_ready_5.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/grenade_ready_6.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/grenade_ready7_.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/ready_1.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/ready_2.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/ready_3.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/ready_4.ogg","badcompany_squad/VO_RU_SL_FragOut_01A_AleksandrJuriev.ogg","badcompany_squad/VO_RU_SL_FragOut_02A_AleksandrJuriev.ogg","badcompany_squad/VO_RU_SL_FragOut_03A_AleksandrJuriev.ogg","badcompany_squad/VO_RU_SL_FragOut_04A_AleksandrJuriev.ogg","badcompany_squad/VO_RU_SL_FragOut_05A_AleksandrJuriev.ogg","badcompany_squad/VO_RU_SL_FragOut_06A_AleksandrJuriev.ogg","badcompany_squad/VO_RU_SL_FragOut_07A_AleksandrJuriev.ogg"}
+ENT.SoundTbl_GrenadeAttack = {"general_spetsnaz_snds/fragout1.wav","general_spetsnaz_snds/fragout2.wav","general_spetsnaz_snds/fragout3.wav","general_spetsnaz_snds/fragout4.wav","general_spetsnaz_snds/fragout5.wav","general_spetsnaz_snds/fragout6.wav","general_spetsnaz_snds/fragout7.wav","general_spetsnaz_snds/fragout8.wav","general_spetsnaz_snds/fragout9.wav","general_spetsnaz_snds/fragout10.wav","general_spetsnaz_snds/fragout11.wav","general_spetsnaz_snds/fragout12.wav","general_spetsnaz_snds/fragout13.wav","general_spetsnaz_snds/fragout14.wav","general_spetsnaz_snds/fragout1.wav","general_spetsnaz_snds/fragout2.wav","general_spetsnaz_snds/fragout3.wav","general_spetsnaz_snds/fragout4.wav","general_spetsnaz_snds/fragout5.wav","general_spetsnaz_snds/fragout6.wav","general_spetsnaz_snds/fragout7.wav","general_spetsnaz_snds/fragout8.wav","general_spetsnaz_snds/fragout9.wav","general_spetsnaz_snds/fragout10.wav","general_spetsnaz_snds/fragout11.wav","general_spetsnaz_snds/fragout12.wav","general_spetsnaz_snds/fragout13.wav","general_spetsnaz_snds/fragout14.wav","general_spetsnaz_snds/fragout15.wav","general_spetsnaz_snds/fragout16.wav","st_faction_sounds/stalker_vo/general_base_dialogue/grenade_1.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/grenade_2.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/grenade_3.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/grenade_ready_1.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/grenade_ready_2.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/grenade_ready_3.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/grenade_ready_4.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/grenade_ready_5.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/grenade_ready_6.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/grenade_ready7_.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/ready_1.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/ready_2.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/ready_3.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/ready_4.ogg","general_spetsnaz_snds/VO_RU_SL_FragOut_01A_AleksandrJuriev.ogg","general_spetsnaz_snds/VO_RU_SL_FragOut_02A_AleksandrJuriev.ogg","general_spetsnaz_snds/VO_RU_SL_FragOut_03A_AleksandrJuriev.ogg","general_spetsnaz_snds/VO_RU_SL_FragOut_04A_AleksandrJuriev.ogg","general_spetsnaz_snds/VO_RU_SL_FragOut_05A_AleksandrJuriev.ogg","general_spetsnaz_snds/VO_RU_SL_FragOut_06A_AleksandrJuriev.ogg","general_spetsnaz_snds/VO_RU_SL_FragOut_07A_AleksandrJuriev.ogg"}
 
 ENT.SoundTbl_OnGrenadeSight = {"general_spetsnaz_snds/grenade1.wav","general_spetsnaz_snds/grenade2.wav","general_spetsnaz_snds/grenade3.wav","general_spetsnaz_snds/grenade4.wav","general_spetsnaz_snds/grenade5.wav","general_spetsnaz_snds/grenade6.wav","general_spetsnaz_snds/grenade7.wav","general_spetsnaz_snds/grenade8.wav","general_spetsnaz_snds/grenade9.wav","general_spetsnaz_snds/grenade10.wav","general_spetsnaz_snds/grenade11.wav","general_spetsnaz_snds/grenade12.wav","general_spetsnaz_snds/grenade13.wav","general_spetsnaz_snds/grenade14.wav","general_spetsnaz_snds/grenade15.wav","general_spetsnaz_snds/grenade16.wav","general_spetsnaz_snds/grenade17.wav","general_spetsnaz_snds/grenade18.wav","general_spetsnaz_snds/grenade19.wav","general_spetsnaz_snds/grenade20.wav","general_spetsnaz_snds/grenade21.wav","general_spetsnaz_snds/grenade22.wav","general_spetsnaz_snds/grenade23.wav","general_spetsnaz_snds/grenade24.wav","general_spetsnaz_snds/grenade25.wav","general_spetsnaz_snds/grenade26.wav","general_spetsnaz_snds/grenade27.wav","general_spetsnaz_snds/grenade28.wav","general_spetsnaz_snds/grenade29.wav","general_spetsnaz_snds/grenade30.wav","general_spetsnaz_snds/grenade31.wav","general_spetsnaz_snds/grenade32.wav","general_spetsnaz_snds/grenade33.wav","general_spetsnaz_snds/grenade34.wav"}
 
@@ -8952,11 +9242,11 @@ ENT.SoundTbl_LostEnemy = {"st_faction_sounds/stalker_vo/general_base_dialogue/en
 
 ENT.SoundTbl_IdleDialogue = {"general_spetsnaz_snds/dia_1.wav","general_spetsnaz_snds/dia_2.wav","general_spetsnaz_snds/idled.mp3","general_spetsnaz_snds/idled.mp3","general_spetsnaz_snds/idled2.mp3","general_spetsnaz_snds/idled3.mp3","general_spetsnaz_snds/idled4.mp3","general_spetsnaz_snds/idled5.mp3"}
 
-ENT.SoundTbl_IdleDialogueAnswer = {"general_spetsnaz_snds/VO_RU_SL_Negative_01A_AleksandrJuriev.ogg","general_spetsnaz_snds/VO_RU_SL_Negative_02A_AleksandrJuriev.ogg","general_spetsnaz_snds/VO_RU_SL_Negative_03A_AleksandrJuriev.ogg","general_spetsnaz_snds/VO_RU_SL_Negative_04A_AleksandrJuriev.ogg","general_spetsnaz_snds/VO_RU_SL_Negative_05A_AleksandrJuriev.ogg","general_spetsnaz_snds/VO_RU_SL_Negative_06A_AleksandrJuriev.ogg","general_spetsnaz_snds/VO_RU_SL_Negative_07A_AleksandrJuriev.ogg","general_spetsnaz_snds/VO_RU_SL_Negative_08A_AleksandrJuriev.ogg","general_spetsnaz_snds/VO_RU_Grunt_Negative_01A_DimitryRozental.ogg","general_spetsnaz_snds/VO_RU_Grunt_Negative_02A_DimitryRozental.ogg","general_spetsnaz_snds/VO_RU_Grunt_Negative_03A_DimitryRozental.ogg","general_spetsnaz_snds/VO_RU_Grunt_Negative_04A_DimitryRozental.ogg","general_spetsnaz_snds/VO_RU_Grunt_Negative_05A_DimitryRozental.ogg","general_spetsnaz_snds/VO_RU_Grunt_Negative_06A_DimitryRozental.ogg","general_spetsnaz_snds/dia_1_response.wav","general_spetsnaz_snds/dia_2_response.wav","badcompany_squad/VO_RU_Grunt_Affirmative_01A_DimitryRozental.ogg","badcompany_squad/VO_RU_Grunt_Affirmative_02A_DimitryRozental.ogg","badcompany_squad/VO_RU_Grunt_Affirmative_03A_DimitryRozental.ogg","badcompany_squad/VO_RU_Grunt_Affirmative_04A_DimitryRozental.ogg","badcompany_squad/VO_RU_Grunt_Affirmative_05A_DimitryRozental.ogg","badcompany_squad/VO_RU_Grunt_Affirmative_06A_DimitryRozental.ogg","badcompany_squad/VO_RU_Grunt_Affirmative_07A_DimitryRozental.ogg","badcompany_squad/VO_RU_Grunt_Affirmative_08A_DimitryRozental.ogg","badcompany_squad/VO_RU_SL_Affirmative_01A_AleksandrJuriev.ogg","badcompany_squad/VO_RU_SL_Affirmative_02A_AleksandrJuriev.ogg","badcompany_squad/VO_RU_SL_Affirmative_03A_AleksandrJuriev.ogg","badcompany_squad/VO_RU_SL_Affirmative_04A_AleksandrJuriev.ogg","badcompany_squad/VO_RU_SL_Affirmative_05A_AleksandrJuriev.ogg","badcompany_squad/VO_RU_SL_Affirmative_06A_AleksandrJuriev.ogg","badcompany_squad/VO_RU_SL_Affirmative_07A_AleksandrJuriev.ogg","badcompany_squad/VO_RU_SL_Affirmative_08A_AleksandrJuriev.ogg"}
+ENT.SoundTbl_IdleDialogueAnswer = {"general_spetsnaz_snds/VO_RU_SL_Negative_01A_AleksandrJuriev.ogg","general_spetsnaz_snds/VO_RU_SL_Negative_02A_AleksandrJuriev.ogg","general_spetsnaz_snds/VO_RU_SL_Negative_03A_AleksandrJuriev.ogg","general_spetsnaz_snds/VO_RU_SL_Negative_04A_AleksandrJuriev.ogg","general_spetsnaz_snds/VO_RU_SL_Negative_05A_AleksandrJuriev.ogg","general_spetsnaz_snds/VO_RU_SL_Negative_06A_AleksandrJuriev.ogg","general_spetsnaz_snds/VO_RU_SL_Negative_07A_AleksandrJuriev.ogg","general_spetsnaz_snds/VO_RU_SL_Negative_08A_AleksandrJuriev.ogg","general_spetsnaz_snds/VO_RU_Grunt_Negative_01A_DimitryRozental.ogg","general_spetsnaz_snds/VO_RU_Grunt_Negative_02A_DimitryRozental.ogg","general_spetsnaz_snds/VO_RU_Grunt_Negative_03A_DimitryRozental.ogg","general_spetsnaz_snds/VO_RU_Grunt_Negative_04A_DimitryRozental.ogg","general_spetsnaz_snds/VO_RU_Grunt_Negative_05A_DimitryRozental.ogg","general_spetsnaz_snds/VO_RU_Grunt_Negative_06A_DimitryRozental.ogg","general_spetsnaz_snds/dia_1_response.wav","general_spetsnaz_snds/dia_2_response.wav","general_spetsnaz_snds/VO_RU_Grunt_Affirmative_01A_DimitryRozental.ogg","general_spetsnaz_snds/VO_RU_Grunt_Affirmative_02A_DimitryRozental.ogg","general_spetsnaz_snds/VO_RU_Grunt_Affirmative_03A_DimitryRozental.ogg","general_spetsnaz_snds/VO_RU_Grunt_Affirmative_04A_DimitryRozental.ogg","general_spetsnaz_snds/VO_RU_Grunt_Affirmative_05A_DimitryRozental.ogg","general_spetsnaz_snds/VO_RU_Grunt_Affirmative_06A_DimitryRozental.ogg","general_spetsnaz_snds/VO_RU_Grunt_Affirmative_07A_DimitryRozental.ogg","general_spetsnaz_snds/VO_RU_Grunt_Affirmative_08A_DimitryRozental.ogg","general_spetsnaz_snds/VO_RU_SL_Affirmative_01A_AleksandrJuriev.ogg","general_spetsnaz_snds/VO_RU_SL_Affirmative_02A_AleksandrJuriev.ogg","general_spetsnaz_snds/VO_RU_SL_Affirmative_03A_AleksandrJuriev.ogg","general_spetsnaz_snds/VO_RU_SL_Affirmative_04A_AleksandrJuriev.ogg","general_spetsnaz_snds/VO_RU_SL_Affirmative_05A_AleksandrJuriev.ogg","general_spetsnaz_snds/VO_RU_SL_Affirmative_06A_AleksandrJuriev.ogg","general_spetsnaz_snds/VO_RU_SL_Affirmative_07A_AleksandrJuriev.ogg","general_spetsnaz_snds/VO_RU_SL_Affirmative_08A_AleksandrJuriev.ogg"}
 
 ENT.SoundTbl_CallForHelp = {"st_faction_sounds/stalker_vo/general_base_dialogue/cover_fire_8.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/cover_fire_9.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/cover_fire_10.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/cover_fire_11.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/cover_fire_12.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/cover_fire_13.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/cover_fire_14.ogg","general_spetsnaz_snds/VO_RU_Grunt_MedicCall_01A_DimitryRozental.ogg","general_spetsnaz_snds/VO_RU_Grunt_MedicCall_02A_DimitryRozental.ogg","general_spetsnaz_snds/VO_RU_Grunt_MedicCall_03A_DimitryRozental.ogg","general_spetsnaz_snds/VO_RU_Grunt_MedicCall_04A_DimitryRozental.ogg","general_spetsnaz_snds/VO_RU_Grunt_MedicCall_05A_DimitryRozental.ogg","general_spetsnaz_snds/VO_RU_Grunt_MedicCall_06A_DimitryRozental.ogg","general_spetsnaz_snds/VO_RU_Grunt_MedicCall_07A_DimitryRozental.ogg","general_spetsnaz_snds/VO_RU_Grunt_MedicCall_08A_DimitryRozental.ogg","general_spetsnaz_snds/VO_RU_Grunt_MedicCall_09A_DimitryRozental.ogg","general_spetsnaz_snds/VO_RU_Grunt_MedicCall_10A_DimitryRozental.ogg","general_spetsnaz_snds/VO_RU_Grunt_MedicCall_11A_DimitryRozental.ogg","general_spetsnaz_snds/VO_RU_Grunt_MedicCall_12A_DimitryRozental.ogg","general_spetsnaz_snds/VO_RU_Grunt_MedicCall_13A_DimitryRozental.ogg","general_spetsnaz_snds/VO_RU_Grunt_MedicCall_14A_DimitryRozental.ogg","general_spetsnaz_snds/VO_RU_Grunt_MedicCall_15A_DimitryRozental.ogg","general_spetsnaz_snds/VO_RU_Grunt_MedicCall_16A_DimitryRozental.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/backup_1.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/backup_2.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/backup_3.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/backup_4.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/backup_5.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/backup_6.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/backup_7.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/backup_8.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/backup_9.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/backup_10.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/backup_11.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/backup_12.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/backup_13.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/backup_14.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/backup_15.ogg"}
 
-ENT.SoundTbl_OnReceiveOrder = {"badcompany_squad/VO_RU_Grunt_Affirmative_01A_DimitryRozental.ogg","badcompany_squad/VO_RU_Grunt_Affirmative_02A_DimitryRozental.ogg","badcompany_squad/VO_RU_Grunt_Affirmative_03A_DimitryRozental.ogg","badcompany_squad/VO_RU_Grunt_Affirmative_04A_DimitryRozental.ogg","badcompany_squad/VO_RU_Grunt_Affirmative_05A_DimitryRozental.ogg","badcompany_squad/VO_RU_Grunt_Affirmative_06A_DimitryRozental.ogg","badcompany_squad/VO_RU_Grunt_Affirmative_07A_DimitryRozental.ogg","badcompany_squad/VO_RU_Grunt_Affirmative_08A_DimitryRozental.ogg","badcompany_squad/VO_RU_SL_Affirmative_01A_AleksandrJuriev.ogg","badcompany_squad/VO_RU_SL_Affirmative_02A_AleksandrJuriev.ogg","badcompany_squad/VO_RU_SL_Affirmative_03A_AleksandrJuriev.ogg","badcompany_squad/VO_RU_SL_Affirmative_04A_AleksandrJuriev.ogg","badcompany_squad/VO_RU_SL_Affirmative_05A_AleksandrJuriev.ogg","badcompany_squad/VO_RU_SL_Affirmative_06A_AleksandrJuriev.ogg","badcompany_squad/VO_RU_SL_Affirmative_07A_AleksandrJuriev.ogg","badcompany_squad/VO_RU_SL_Affirmative_08A_AleksandrJuriev.ogg"}
+ENT.SoundTbl_OnReceiveOrder = {"general_spetsnaz_snds/VO_RU_Grunt_Affirmative_01A_DimitryRozental.ogg","general_spetsnaz_snds/VO_RU_Grunt_Affirmative_02A_DimitryRozental.ogg","general_spetsnaz_snds/VO_RU_Grunt_Affirmative_03A_DimitryRozental.ogg","general_spetsnaz_snds/VO_RU_Grunt_Affirmative_04A_DimitryRozental.ogg","general_spetsnaz_snds/VO_RU_Grunt_Affirmative_05A_DimitryRozental.ogg","general_spetsnaz_snds/VO_RU_Grunt_Affirmative_06A_DimitryRozental.ogg","general_spetsnaz_snds/VO_RU_Grunt_Affirmative_07A_DimitryRozental.ogg","general_spetsnaz_snds/VO_RU_Grunt_Affirmative_08A_DimitryRozental.ogg","general_spetsnaz_snds/VO_RU_SL_Affirmative_01A_AleksandrJuriev.ogg","general_spetsnaz_snds/VO_RU_SL_Affirmative_02A_AleksandrJuriev.ogg","general_spetsnaz_snds/VO_RU_SL_Affirmative_03A_AleksandrJuriev.ogg","general_spetsnaz_snds/VO_RU_SL_Affirmative_04A_AleksandrJuriev.ogg","general_spetsnaz_snds/VO_RU_SL_Affirmative_05A_AleksandrJuriev.ogg","general_spetsnaz_snds/VO_RU_SL_Affirmative_06A_AleksandrJuriev.ogg","general_spetsnaz_snds/VO_RU_SL_Affirmative_07A_AleksandrJuriev.ogg","general_spetsnaz_snds/VO_RU_SL_Affirmative_08A_AleksandrJuriev.ogg"}
 
 ENT.SoundTbl_BecomeEnemyToPlayer = {"st_faction_sounds/stalker_vo/general_base_dialogue/friendly_fire_1.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/friendly_fire_2.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/friendly_fire_3.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/friendly_fire_4.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/friendly_fire_5.ogg","general_spetsnaz_snds/wetrustedyou01.wav","general_spetsnaz_snds/wetrustedyou02.wav","general_spetsnaz_snds/becomehos1.mp3","general_spetsnaz_snds/becomehos2.mp3","general_spetsnaz_snds/becomehos3.mp3","general_spetsnaz_snds/becomehos4.mp3"}
 
@@ -8988,7 +9278,7 @@ function ENT:Dynamic_FeetSteps()
 
     if self.HasClothingRustle then 
         if mRng(1, chance) == 1 and clothingRustle then 
-            VJ.EmitSound(self, clothingRustle, 75 * 2, rngP)
+            VJ.EmitSound(self, clothingRustle, 90, rngP)
         end
     end 
 
@@ -9549,8 +9839,11 @@ function ENT:Custom_GibEffects()
     if conv ~= 1 then return end
 
     local gibChance = tonumber(self.ChanceToGib) or 3  
-    local gibDthConv = GetConVar("vj_stalker_gib_death_sounds"):GetInt() 
-    if mRng(1, 3) == 1 then
+    if self.IsHeavilyArmored then 
+        gibChance = gibChance * 3
+    end 
+
+    if mRng(1, gibChance) == 1 then
 
         self.HasDeathSounds = false 
         self.HasDeathRagdoll = false
@@ -9560,6 +9853,7 @@ function ENT:Custom_GibEffects()
 
         self:Spawn_Gibs()
         
+        local gibDthConv = GetConVar("vj_stalker_gib_death_sounds"):GetInt() 
         if gibDthConv == 1 then 
             local tbl = self.SoundTbl_GibDeath
             if not tbl then return end 

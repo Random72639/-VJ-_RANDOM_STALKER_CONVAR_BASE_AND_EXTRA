@@ -1,0 +1,1 @@
+//Used for most generic rus and similar SNPCs that practically ahve the exact same ai.

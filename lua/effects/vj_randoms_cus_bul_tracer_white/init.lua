@@ -4,7 +4,7 @@ local heatwaveMat = Material("sprites/heatwave")
 function EFFECT:Init(data)
     self.StartPos = data:GetStart()
     self.EndPos = data:GetOrigin()
-    self.RandomScale = math.Rand(0.65, 1.15)
+    self.RandomScale = math.Rand(0.35, 1.5)
     self.colorBeam = Color(255, 255, 255)
     local ent = data:GetEntity()
     local att = data:GetAttachment()
@@ -35,8 +35,8 @@ function EFFECT:Think()
             dlight.b = self.colorBeam.b
             dlight.brightness = math.Rand(1, 5)
             dlight.Decay = math.Rand(55, 300)
-            dlight.Size = math.Rand(45, 120)
-            dlight.DieTime = CurTime() + math.Rand(1, 5.5)
+            dlight.Size = math.Rand(45, 100)
+            dlight.DieTime = CurTime() + math.Rand(1, 3.25)
         end
     end
 
@@ -52,10 +52,10 @@ function EFFECT:Think()
                 dlight.r = self.colorBeam.r
                 dlight.g = self.colorBeam.g
                 dlight.b = self.colorBeam.b
-                dlight.brightness = math.Rand(1, 3)
-                dlight.Decay = math.Rand(50, 200)
-                dlight.Size = math.Rand(25, 100)
-                dlight.DieTime = CurTime() + 0.015
+                dlight.brightness = math.Rand(1, 2)
+                dlight.Decay = math.Rand(10, 30)
+                dlight.Size = math.Rand(15, 30)
+                dlight.DieTime = CurTime() + 0.005
             end
         else
             return false 
@@ -72,14 +72,14 @@ function EFFECT:Render()
     local sinWave = math.sin(fDelta * math.pi)
     render.DrawBeam(
 		self.EndPos - self.Dir * (fDelta - sinWave * self.Length),
-		self.EndPos - self.Dir * (fDelta + sinWave * self.Length), math.Rand(0.95, 5) + sinWave * math.Rand(0.25, 1.1), math.Rand(0.25, 1.1), 0, self.colorBeam)
+		self.EndPos - self.Dir * (fDelta + sinWave * self.Length), math.Rand(0.95, 8) + sinWave * math.Rand(0.25, 2), math.Rand(0.25, 2), 0, self.colorBeam)
 
     local tipPos = self.EndPos - self.Dir * (fDelta - sinWave * self.Length)
     if GetConVar("vj_stalker_tracer_tip_light"):GetInt() == 1 then 	
         render.SetMaterial(self.GlowMat)
-        render.DrawSprite(tipPos, math.Rand(3.5, 6) * self.RandomScale, math.Rand(3.5, 6) * self.RandomScale ,self.colorBeam)
+        render.DrawSprite(tipPos, math.Rand(1.5, 7) * self.RandomScale, math.Rand(1.5, 7) * self.RandomScale ,self.colorBeam)
     end 
 
     render.SetMaterial(heatwaveMat)
-    render.DrawBeam(self.EndPos - self.Dir * (fDelta - sinWave * self.Length),self.EndPos - self.Dir * (fDelta + sinWave * self.Length),math.Rand(1, 2.5), 0, 1, Color(255, 255, 255, 150))
+    render.DrawBeam(self.EndPos - self.Dir * (fDelta - sinWave * self.Length),self.EndPos - self.Dir * (fDelta + sinWave * self.Length),math.Rand(0.5, 1.5), 0, 1, Color(255, 255, 255, math.random(100, 200)))
 end
