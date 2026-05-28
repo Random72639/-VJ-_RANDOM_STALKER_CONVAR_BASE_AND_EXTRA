@@ -5,18 +5,14 @@
 //TO DO
 
 //BIG FLAw, IF USING SHOTGUN OR SHORT RANGE WEAPON, AND IS ALONE, THE SNPC MAY STAND OUT IN THE OPEN AND STARE AT AN ENEMY
-//ADD COVER CHECKS FOR CERTIAN MECHANICS
 
 //BACKSTAB? MELEE ATTACKS DO MORE DMG IF ENE HAS BACK TURNED? 
 //MOVE WEAPON BURST FIRE LOGIC TO SNPC INSTEAD OF WEAPONS. (MUST IGNORE NON-AUTOMATICS)
 
 //MAKE MOST CUSTOM IDLE ANIMATIONS SUPPORT GESTURE LAYERING
-//IF AN ALLY DIES TOO CLOSE, AND AN ENE IS CLOSE, ADD DELAY BEFORE PUSHING/MIMIC FEAR OR HESITATION. THEY WANT TO LIVE AS WELL.
-
-//MAKE SNPCS MORE PRONE TO TAKING COVER WHEN ALLY DIES TOO CLOSE, OR UNKNOWN THREAT
 //ADD WAY TO FORCE IDLE GESTURE FIDGET ANIM TO STOP WHEN WE DETECT AN ENEMY.
-//SMALL HELP FUNCTION TO APPLY TIME TO NEXTCHASE VAR
-//IMPROVE PLACING FLARES FUNCTION
+
+//ADD CONVAR TP LOWER SIGHT DISTANCE
 
 local VectorRand    = VectorRand
 local Vector        = Vector
@@ -34,11 +30,28 @@ local ipairs        = ipairs
 local pairs         = pairs
 local GetConVar     = GetConVar
 local GetInt        = GetInt
+local GetBool       = GetBool
+local math_floor    = math.floor
+local math_ceil     = math.ceil
 local math_Clamp    = math.Clamp
 local math_abs      = math.abs
 local mRng          = math.random
 local mRand         = math.Rand
 
+local VJ_STATE_NONE						= VJ_STATE_NONE
+local VJ_STATE_FREEZE					= VJ_STATE_FREEZE
+local VJ_STATE_ONLY_ANIMATION			= VJ_STATE_ONLY_ANIMATION
+local VJ_STATE_ONLY_ANIMATION_CONSTANT	= VJ_STATE_ONLY_ANIMATION_CONSTANT
+local VJ_STATE_ONLY_ANIMATION_NOATTACK	= VJ_STATE_ONLY_ANIMATION_NOATTACK
+
+local VJ_BEHAVIOR_PASSIVE           = VJ_BEHAVIOR_PASSIVE
+local VJ_BEHAVIOR_PASSIVE_NATURE    = VJ_BEHAVIOR_PASSIVE_NATURE
+local VJ_MOVETYPE_GROUND            = VJ_MOVETYPE_GROUND
+local VJ_MOVETYPE_AERIAL            = VJ_MOVETYPE_AERIAL
+local VJ_MOVETYPE_AQUATIC           = VJ_MOVETYPE_AQUATIC
+local VJ_MOVETYPE_STATIONARY        = VJ_MOVETYPE_STATIONARY
+local VJ_MOVETYPE_PHYSICS           = VJ_MOVETYPE_PHYSICS
+-----------------------------------------------------------------------------------------------------------------------------------------------
 ENT.Is_RandomsNPC = true 
 
 ENT.StartHealth = 90
@@ -182,7 +195,7 @@ ENT.HasDeathAnimation = false -- Should it play death animations?
 ENT.AnimTbl_Death = false
 ENT.DeathAnimationTime = false -- How long should the death animation play? | false = Base auto calculates the duration
 ENT.DeathAnimationChance = mRng(2,5) -- Put 1 if you want it to play the animation all the time
-ENT.DeathAnimationDecreaseLengthAmount = mRand(0, 0.325) -- This will decrease the time until it turns into a corpse
+ENT.DeathAnimationDecreaseLengthAmount = mRand(0, 0.500) -- This will decrease the time until it turns into a corpse
 ---------------------------------------------------------------------------------------------------------------------------------------------
 ENT.GodMode = false -- Immune to everything
 ENT.Immune_Toxic = false -- Immune to Acid, Poison and Radiation
@@ -274,6 +287,108 @@ ENT.ItemDropsOnDeathChance = mRng(2,4) -- If set to 1, it will always drop it
 ENT.DropWeaponOnDeath = true -- Should it drop its weapon on death?
 ENT.DropWeaponOnDeathAttachment = "anim_attachment_RH" -- Which attachment should it use for the weapon's position
 ---------------------------------------------------------------------------------------------------------------------------------------------
+ENT.FootSteps = {
+    [MAT_ANTLION] = {"physics/flesh/flesh_impact_hard1.wav","physics/flesh/flesh_impact_hard2.wav","physics/flesh/flesh_impact_hard3.wav","physics/flesh/flesh_impact_hard4.wav","physics/flesh/flesh_impact_hard5.wav","physics/flesh/flesh_impact_hard6.wav"},
+    [MAT_BLOODYFLESH] = {"physics/flesh/flesh_impact_hard1.wav","physics/flesh/flesh_impact_hard2.wav","physics/flesh/flesh_impact_hard3.wav","physics/flesh/flesh_impact_hard4.wav","physics/flesh/flesh_impact_hard5.wav","physics/flesh/flesh_impact_hard6.wav"},
+    [MAT_CONCRETE] = {"npc/footsteps/hardboot_generic1.wav","npc/footsteps/hardboot_generic2.wav","npc/footsteps/hardboot_generic3.wav","npc/footsteps/hardboot_generic4.wav","npc/footsteps/hardboot_generic5.wav","npc/footsteps/hardboot_generic6.wav"},
+    [MAT_DIRT] = {"general_sds/eft_footsteps/soil_run_01.ogg","general_sds/eft_footsteps/soil_run_02.ogg","general_sds/eft_footsteps/soil_run_03.ogg","general_sds/eft_footsteps/soil_run_04.ogg","general_sds/eft_footsteps/soil_run_05.ogg","general_sds/eft_footsteps/soil_run_06.ogg","general_sds/eft_footsteps/soil_run_07.ogg","general_sds/eft_footsteps/soil_run_08.ogg"},
+    [MAT_FLESH] = {"physics/flesh/flesh_impact_hard1.wav","physics/flesh/flesh_impact_hard2.wav","physics/flesh/flesh_impact_hard3.wav","physics/flesh/flesh_impact_hard4.wav","physics/flesh/flesh_impact_hard5.wav","physics/flesh/flesh_impact_hard6.wav"},
+    [MAT_GRATE] = {"general_sds/eft_footsteps/walk_proflist_01.ogg","general_sds/eft_footsteps/walk_proflist_02.ogg","general_sds/eft_footsteps/walk_proflist_03.ogg","general_sds/eft_footsteps/walk_proflist_04.ogg","general_sds/eft_footsteps/walk_proflist_05.ogg","general_sds/eft_footsteps/walk_proflist_06.ogg","general_sds/eft_footsteps/walk_proflist_07.ogg","general_sds/eft_footsteps/walk_proflist_08.ogg","general_sds/eft_footsteps/walk_proflist_09.ogg","general_sds/eft_footsteps/walk_proflist_10.ogg"},
+    [MAT_ALIENFLESH] = {"physics/flesh/flesh_impact_hard1.wav","physics/flesh/flesh_impact_hard2.wav","physics/flesh/flesh_impact_hard3.wav","physics/flesh/flesh_impact_hard4.wav","physics/flesh/flesh_impact_hard5.wav","physics/flesh/flesh_impact_hard6.wav"},
+    [74] = {"player/footsteps/sand1.wav","player/footsteps/sand2.wav","player/footsteps/sand3.wav","player/footsteps/sand4.wav"}, -- This is snow.
+    [MAT_PLASTIC] = {"physics/plaster/drywall_footstep1.wav","physics/plaster/drywall_footstep2.wav","physics/plaster/drywall_footstep3.wav","physics/plaster/drywall_footstep4.wav"},
+    [MAT_METAL] = {"general_sds/eft_footsteps/sprint_metal1.ogg","general_sds/eft_footsteps/sprint_metal2.ogg","general_sds/eft_footsteps/sprint_metal3.ogg","general_sds/eft_footsteps/sprint_metal4.ogg","general_sds/eft_footsteps/sprint_metal5.ogg","general_sds/eft_footsteps/sprint_metal6.ogg"},
+    [MAT_SAND] = {"player/footsteps/sand1.wav","player/footsteps/sand2.wav","player/footsteps/sand3.wav","player/footsteps/sand4.wav"},
+    [MAT_FOLIAGE] = {"general_sds/eft_footsteps/sprint2_grasslow_01.ogg","general_sds/eft_footsteps/sprint2_grasslow_02.ogg","general_sds/eft_footsteps/sprint2_grasslow_03.ogg","general_sds/eft_footsteps/sprint2_grasslow_04.ogg","general_sds/eft_footsteps/sprint2_grasslow_05.ogg","general_sds/eft_footsteps/sprint2_grasslow_06.ogg","general_sds/eft_footsteps/sprint2_grasslow_07.ogg","general_sds/eft_footsteps/sprint2_grasslow_08.ogg"},
+    [MAT_COMPUTER] = {"physics/plaster/drywall_footstep1.wav","physics/plaster/drywall_footstep2.wav","physics/plaster/drywall_footstep3.wav","physics/plaster/drywall_footstep4.wav"},
+    [MAT_SLOSH] = {"general_sds/eft_footsteps/walk_puddle_01.ogg","general_sds/eft_footsteps/walk_puddle_02.ogg","general_sds/eft_footsteps/walk_puddle_03.ogg","general_sds/eft_footsteps/walk_puddle_04.ogg","general_sds/eft_footsteps/walk_puddle_05.ogg","general_sds/eft_footsteps/walk_puddle_06.ogg","general_sds/eft_footsteps/walk_puddle_07.ogg","general_sds/eft_footsteps/walk_puddle_08.ogg","general_sds/eft_footsteps/walk_puddle_09.ogg"},
+    [MAT_TILE] = {"general_sds/eft_footsteps/tile1.wav","general_sds/eft_footsteps/tile2.wav","general_sds/eft_footsteps/tile3.wav","general_sds/eft_footsteps/tile4.wav","general_sds/eft_footsteps/tile5.wav","general_sds/eft_footsteps/tile6.wav","general_sds/eft_footsteps/tile7.wav","general_sds/eft_footsteps/tile8.wav","general_sds/eft_footsteps/tile9.wav","general_sds/eft_footsteps/tile10.wav","general_sds/eft_footsteps/tile11.wav"},
+    [85] = {"general_sds/eft_footsteps/sprint2_grasslow_01.ogg","general_sds/eft_footsteps/sprint2_grasslow_02.ogg","general_sds/eft_footsteps/sprint2_grasslow_03.ogg","general_sds/eft_footsteps/sprint2_grasslow_04.ogg","general_sds/eft_footsteps/sprint2_grasslow_05.ogg","general_sds/eft_footsteps/sprint2_grasslow_06.ogg","general_sds/eft_footsteps/sprint2_grasslow_07.ogg","general_sds/eft_footsteps/sprint2_grasslow_08.ogg"}, -- Grass.
+    [MAT_VENT] = {"general_sds/eft_footsteps/walk_proflist_01.ogg","general_sds/eft_footsteps/walk_proflist_02.ogg","general_sds/eft_footsteps/walk_proflist_03.ogg","general_sds/eft_footsteps/walk_proflist_04.ogg","general_sds/eft_footsteps/walk_proflist_05.ogg","general_sds/eft_footsteps/walk_proflist_06.ogg","general_sds/eft_footsteps/walk_proflist_07.ogg","general_sds/eft_footsteps/walk_proflist_08.ogg","general_sds/eft_footsteps/walk_proflist_09.ogg","general_sds/eft_footsteps/walk_proflist_10.ogg"},
+    [MAT_WOOD] = {"general_sds/eft_footsteps/sprint_wood_01.ogg","general_sds/eft_footsteps/sprint_wood_02.ogg","general_sds/eft_footsteps/sprint_wood_03.ogg","general_sds/eft_footsteps/sprint_wood_04.ogg","general_sds/eft_footsteps/sprint_wood_05.ogg","general_sds/eft_footsteps/sprint_wood_06.ogg","general_sds/eft_footsteps/sprint_wood_07.ogg","general_sds/eft_footsteps/sprint_wood_08.ogg","general_sds/eft_footsteps/sprint_wood_09.ogg","general_sds/eft_footsteps/sprint_wood_10.ogg","general_sds/eft_footsteps/sprint_wood_11.ogg","general_sds/eft_footsteps/sprint_wood_12.ogg","general_sds/eft_footsteps/sprint_wood_13.ogg"},
+    [MAT_GLASS] = {"general_sds/eft_footsteps/sprint_glass_01.ogg","general_sds/eft_footsteps/sprint_glass_02.ogg","general_sds/eft_footsteps/sprint_glass_03.ogg","general_sds/eft_footsteps/sprint_glass_04.ogg","general_sds/eft_footsteps/sprint_glass_05.ogg","general_sds/eft_footsteps/sprint_glass_06.ogg","general_sds/eft_footsteps/sprint_glass_07.ogg","general_sds/eft_footsteps/sprint_glass_08.ogg","general_sds/eft_footsteps/sprint_glass_09.ogg","general_sds/eft_footsteps/sprint_glass_10.ogg"}
+}
+---------------------------------------------------------------------------------------------------------------------------------------------
+	-- ====== Sound File Paths ====== --
+-- Leave blank if you don't want any sounds to play
+ENT.OnFirePain = {"st_brutal_deaths/brutal_scream/rus_screams_fire/scream_157.wav","st_brutal_deaths/brutal_scream/rus_screams_fire/scream_158.wav","st_brutal_deaths/brutal_scream/rus_screams_fire/scream_159.wav","st_brutal_deaths/brutal_scream/rus_screams_fire/scream_160.wav","st_brutal_deaths/brutal_scream/rus_screams_fire/scream_161.wav","st_brutal_deaths/brutal_scream/rus_screams_fire/scream_162.wav","st_brutal_deaths/brutal_scream/rus_screams_fire/scream_163.wav","st_brutal_deaths/brutal_scream/rus_screams_fire/506.wav"}
+
+//General universal sounds
+ENT.GoreOrGibSounds                  = {"general_sds/gibs_gore/gutexplosion-1.wav", "general_sds/gibs_gore/gutexplosion-2.wav", "general_sds/gibs_gore/gutexplosion-3.wav", "general_sds/gibs_gore/fullbodygib-1.wav", "general_sds/gibs_gore/fullbodygib-2.wav", "general_sds/gibs_gore/fullbodygib-3.wav"} -- need to change path soon 
+ENT.SoundTbl_MeleeAttackExtra        = {"npc/zombie/claw_strike1.wav","npc/zombie/claw_strike2.wav","npc/zombie/claw_strike3.wav"}
+ENT.SoundTbl_MeleeAttackMiss         = {"npc/zombie/claw_miss1.wav","npc/zombie/claw_miss2.wav"}
+ENT.SoundTbl_MeleeAttack             = {"npc/zombie/claw_strike1.wav","npc/zombie/claw_strike2.wav","npc/zombie/claw_strike3.wav"}
+ENT.SoundTbl_SNPCRoll                = {"general_sds/evade_roll/roll_2.wav","general_sds/evade_roll/roll_1.mp3"}
+ENT.SoundTbl_GibDeath                = {"snpc/npc/hgrunt_young/hg_gibdeath01.wav","snpc/npc/hgrunt_young/hg_gibdeath02.wav","snpc/npc/hgrunt_young/hg_gibdeath03.wav","snpc/npc/hgrunt_young/hg_gibdeath04.wav","snpc/npc/hgrunt_young/hg_gibdeath05.wav","snpc/npc/hgrunt_young/hg_gibdeath06.wav","snpc/npc/hgrunt_young/hg_gibdeath07.wav","snpc/npc/hgrunt_young/hg_gibdeath08.wav","snpc/npc/hgrunt_young/hg_gibdeath09.wav","snpc/npc/hgrunt_young/hg_gibdeath10.wav","snpc/npc/hgrunt_young/hg_gibdeath11.wav","snpc/npc/hgrunt/hg_gibdeath01.wav","snpc/npc/hgrunt/hg_gibdeath02.wav","snpc/npc/hgrunt/hg_gibdeath03.wav","snpc/npc/hgrunt/hg_gibdeath04.wav","snpc/npc/hgrunt/hg_gibdeath05.wav","snpc/npc/hgrunt/hg_gibdeath06.wav","snpc/npc/hgrunt/hg_gibdeath07.wav","snpc/npc/hgrunt/hg_gibdeath08.wav","snpc/npc/hgrunt/hg_gibdeath09.wav","snpc/npc/hgrunt/hg_gibdeath10.wav","snpc/npc/hgrunt/hg_gibdeath11.wav"}
+ENT.SoundTbl_Impact                  = {"snpc/wrhf/impact/flesh_impact_bullet1.wav","snpc/wrhf/impact/flesh_impact_bullet2.wav","snpc/wrhf/impact/flesh_impact_bullet3.wav","snpc/wrhf/impact/flesh_impact_bullet4.wav","snpc/wrhf/impact/flesh_impact_bullet5.wav"}
+ENT.SoundTbl_ExtraArmorImpacts       = {"general_sds/hit_or_impact/helm_hs_impact/headshot_helmet_" .. mRng(1, 16) .. ".wav","general_sds/hit_or_impact/helm_hs_impact/headshot_helmet_style1_" .. mRng(1, 14) .. ".wav","general_sds/hit_or_impact/kevlar_armor/armor_hit.wav","general_sds/hit_or_impact/kevlar_armor/kevlar_hit1.wav","general_sds/hit_or_impact/kevlar_armor/kevlar_hit2.wav"}
+ENT.SoundTbl_OnHeadshot              = {"general_sds/hit_or_impact/headshot/ex_headshots/headshot_flesh_" .. mRng(1, 38) .. ".wav", "general_sds/hit_or_impact/headshot/headshot_1.wav","general_sds/hit_or_impact/headshot/headshot_2.wav","general_sds/hit_or_impact/headshot/headshot_3.wav","snpc/general_sds/hit_or_impact/headshot/headshot_4.wav","general_sds/hit_or_impact/headshot/headshot_5.wav","general_sds/hit_or_impact/headshot/headshot_6.wav","general_sds/hit_or_impact/headshot/headshot_7.wav","general_sds/hit_or_impact/headshot/headshot_8.wav","general_sds/hit_or_impact/headshot/headshot_9.wav","general_sds/hit_or_impact/headshot/headshot_10.wav","general_sds/hit_or_impact/headshot/headshot_11.wav","general_sds/hit_or_impact/headshot/headshot_12.wav","general_sds/hit_or_impact/headshot/headshot_13.wav","general_sds/hit_or_impact/headshot/headshot_14.wav","general_sds/hit_or_impact/headshot/headshot_15.wav"}
+ENT.DrawNewWeaponSound               = {"vj_base/weapons/draw_rifle.wav","vj_base/weapons/draw_pistol.wav"}
+ENT.WaterSplashSounds                = {"player/footsteps/wade1.wav", "player/footsteps/wade2.wav","player/footsteps/wade3.wav", "player/footsteps/wade4.wav", "player/footsteps/wade5.wav", "player/footsteps/wade6.wav","player/footsteps/wade7.wav", "player/footsteps/wade8.wav", "ambient/water/water_splash1.wav", "ambient/water/water_splash2.wav", "ambient/water/water_splash3.wav"}
+ENT.JumpGruntTbl                     = {"general_sds/jump_land_grunts/jump_01.wav","general_sds/jump_land_grunts/jump_02.wav","general_sds/jump_land_grunts/jump_03.wav","general_sds/jump_land_grunts/jump_04.wav","general_sds/jump_land_grunts/jump_05.wav","general_sds/jump_land_grunts/jump_06.wav"}
+ENT.JumpLandGruntTbl                 = {"general_sds/jump_land_grunts/land_01.wav","general_sds/jump_land_grunts/land_02.wav","general_sds/jump_land_grunts/land_03.wav","general_sds/jump_land_grunts/land_04.wav"}
+ENT.EquipmentClanging_Tbl            = {"general_sds/toolbelt_sounds/toolbelt_01.wav","general_sds/toolbelt_sounds/toolbelt_02.wav","general_sds/toolbelt_sounds/toolbelt_03.wav","general_sds/toolbelt_sounds/toolbelt_04.wav","general_sds/toolbelt_sounds/toolbelt_05.wav","general_sds/toolbelt_sounds/toolbelt_06.wav"}
+ENT.ClothingRustling_Tbl             = {"general_sds/eft_gear_rustling/tac_gear_" .. mRng(1, 40) .. ".ogg"}
+ENT.SoundTbl_BeforeMeleeAttack       = {"general_sds/melee/melee1.wav","general_sds/melee/melee2.wav","general_sds/melee/melee3.wav","general_sds/melee/melee4.wav","general_sds/melee/melee5.wav","general_sds/melee/melee6.wav","general_sds/melee/melee7wav","general_sds/melee/melee8.wav","general_sds/melee/melee9.wav","general_sds/melee/melee10.wav","general_sds/melee/melee11.wav","general_sds/melee/melee12.wav","general_sds/melee/melee13.wav","general_sds/melee/melee4.wav","general_sds/melee/melee15.wav","general_sds/melee/melee16.wav"}
+ENT.Rein_Armor_Richochet_Tbl         = {"general_sds/richochet/ric1.wav","general_sds/richochet/ric2.wav","general_sds/richochet/ric3.wav","general_sds/richochet/ric4.wav","general_sds/richochet/ric5.wav"}
+ENT.SoundTbl_BackgroundRadioDialogue = {"st_faction_sounds/mil_fac_radio_chat/mil_rnd_radio_1.ogg","st_faction_sounds/mil_fac_radio_chat/mil_rnd_radio_2.ogg","st_faction_sounds/mil_fac_radio_chat/mil_rnd_radio_3.ogg","st_faction_sounds/mil_fac_radio_chat/mil_rnd_radio_4.ogg","st_faction_sounds/mil_fac_radio_chat/mil_rnd_radio_5.ogg","st_faction_sounds/mil_fac_radio_chat/mil_rnd_radio_6.ogg","st_faction_sounds/mil_fac_radio_chat/mil_rnd_radio_7.ogg","st_faction_sounds/mil_fac_radio_chat/mil_rnd_radio_8.ogg","st_faction_sounds/mil_fac_radio_chat/radio1.wav","st_faction_sounds/mil_fac_radio_chat/radio2.wav","st_faction_sounds/mil_fac_radio_chat/radio3.wav","st_faction_sounds/mil_fac_radio_chat/radio4.wav","st_faction_sounds/mil_fac_radio_chat/radio5.wav","st_faction_sounds/mil_fac_radio_chat/radio6.wav","st_faction_sounds/mil_fac_radio_chat/radio7.wav","st_faction_sounds/mil_fac_radio_chat/radio8.wav","st_faction_sounds/mil_fac_radio_chat/radio9.wav"}
+ENT.Footstep_Sneaking                = {"npc/zombie/foot1.wav","npc/zombie/foot2.wav","npc/zombie/foot3.wav"}
+ENT.Flatline_DeathTbl                = {"general_sds/flatline/flatline1.wav", "general_sds/flatline/flatline2.wav", "general_sds/flatline/flatline3.wav", "general_sds/flatline/flatline4.wav", "general_sds/flatline/flatline5.wav", "general_sds/flatline/flatline6.wav", "general_sds/flatline/flatline7.wav", "general_sds/flatline/flatline8.wav"}
+ENT.HazardSuit_DeathDeflate          = {"general_sds/deflate_suit_sound/ceda_suit_deflate_01.wav","general_sds/deflate_suit_sound/ceda_suit_deflate_02.wav","general_sds/deflate_suit_sound/ceda_suit_deflate_03.wav"}
+ENT.RandomRadioSound                 = {"general_sds/radio_snds/radio_random1.wav", "general_sds/radio_snds/radio_random2.wav", "general_sds/radio_snds/radio_random3.wav", "general_sds/radio_snds/radio_random4.wav", "general_sds/radio_snds/radio_random5.wav", "general_sds/radio_snds/radio_random6.wav", "general_sds/radio_snds/radio_random7.wav", "general_sds/radio_snds/radio_random8.wav", "general_sds/radio_snds/radio_random9.wav", "general_sds/radio_snds/radio_random10.wav", "general_sds/radio_snds/radio_random11.wav", "general_sds/radio_snds/radio_random12.wav", "general_sds/radio_snds/radio_random13.wav", "general_sds/radio_snds/radio_random14.wav", "general_sds/radio_snds/radio_random15.wav"}
+ENT.EnergyZap_Tbl                    = {"ambient/energy/zap1.wav", "ambient/energy/zap2.wav", "ambient/energy/zap3.wav", "ambient/energy/zap4.wav", "ambient/energy/zap5.wav", "ambient/energy/zap6.wav", "ambient/energy/zap7.wav", "ambient/energy/zap8.wav", "ambient/energy/zap9.wav"}
+
+//Faction specific dialogue, will improve soon.
+ENT.SoundTbl_Investigate = {"st_faction_sounds/stalker_vo/general_base_dialogue/hear_1.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/hear_2.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/hear_3.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/hear_4.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/hear_5.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/hear_6.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/hear_7.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/hear_8.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/hear_9.ogg"}
+
+ENT.SoundTbl_DangerSight = {"general_sds/ext_reactions/hide_1.mp3", "general_sds/ext_reactions/hide_2.mp3", "general_sds/ext_reactions/hide_3.mp3", "general_sds/ext_reactions/hide_4.mp3", "general_sds/ext_reactions/hide_5.mp3", "general_sds/ext_reactions/hide_6.mp3", "general_sds/ext_reactions/hide_7.mp3", "general_sds/ext_reactions/hide_8.mp3"}
+
+ENT.SoundTbl_MedicReceiveHeal = {"general_sds/ext_reactions/thanks_1.mp3", "general_sds/ext_reactions/thanks_2.mp3", "general_sds/ext_reactions/thanks_3.mp3", "general_sds/ext_reactions/thanks_4.mp3", "general_sds/ext_reactions/thanks_5.mp3", "general_sds/ext_reactions/thanks_6.mp3", "st_faction_sounds/stalker_vo/general_base_dialogue/thanx_1.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/thanx_2.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/thanx_3.ogg","general_spetsnaz_snds/gotmedic1.mp3","general_spetsnaz_snds/gotmedic2.mp3","general_spetsnaz_snds/gotmedic3.mp3","general_spetsnaz_snds/gotmedic4.mp3","general_spetsnaz_snds/gotmedic5.mp3","general_spetsnaz_snds/gotmedic6.mp3","general_spetsnaz_snds/gotmedic7.mp3"}
+
+ENT.SoundTbl_MedicBeforeHeal = {"st_faction_sounds/stalker_vo/general_base_dialogue/medkit_1.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/medkit_2.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/medkit_3.ogg","general_spetsnaz_snds/health01.wav","general_spetsnaz_snds/health02.wav","general_spetsnaz_snds/health03.wav","general_spetsnaz_snds/health04.wav","general_spetsnaz_snds/health05.wav","general_spetsnaz_snds/heal1.mp3","general_spetsnaz_snds/heal2.mp3","general_spetsnaz_snds/heal3.mp3","general_spetsnaz_snds/heal4.mp3","general_spetsnaz_snds/heal5.mp3","general_spetsnaz_snds/heal6.mp3","general_spetsnaz_snds/heal7.mp3","general_spetsnaz_snds/heal8.mp3","general_spetsnaz_snds/heal9.mp3","general_spetsnaz_snds/heal10.mp3"}
+
+ENT.SoundTbl_Breath = {"st_faction_sounds/stalker_vo/general_base_dialogue/breath_1.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/breath_2.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/breath_3.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/breath_4.ogg"}
+
+ENT.SoundTbl_Idle = {"st_faction_sounds/stalker_vo/general_base_dialogue/idle_1.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/idle_2.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/idle_3.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/idle_4.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/idle_5.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/idle_6.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/idle_7.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/idle_8.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/idle_9.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/idle_10.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/idle_11.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/idle_12.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/idle_13.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/idle_14.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/idle_15.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/idle_16.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/idle_17.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/idle_18.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/idle_19.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/idle_20.ogg","general_spetsnaz_snds/free1.wav","general_spetsnaz_snds/free2.wav","general_spetsnaz_snds/free3.wav","general_spetsnaz_snds/free4.wav","general_spetsnaz_snds/free5.wav","general_spetsnaz_snds/free6.wav","general_spetsnaz_snds/free7.wav","general_spetsnaz_snds/free8.wav","general_spetsnaz_snds/free9.wav","general_spetsnaz_snds/free10.wav","general_spetsnaz_snds/free11.wav","general_spetsnaz_snds/free12.wav","general_spetsnaz_snds/free13.wav","general_spetsnaz_snds/free14.wav","general_spetsnaz_snds/free15.wav","general_spetsnaz_snds/free16.wav","general_spetsnaz_snds/free17.wav","general_spetsnaz_snds/free18.wav","general_spetsnaz_snds/free19.wav","general_spetsnaz_snds/free20.wav","general_spetsnaz_snds/free21.wav","general_spetsnaz_snds/free22.wav","general_spetsnaz_snds/free23.wav","general_spetsnaz_snds/free24.wav","general_spetsnaz_snds/free25.wav","general_spetsnaz_snds/free26.wav","general_spetsnaz_snds/free27.wav","general_spetsnaz_snds/free28.wav","general_spetsnaz_snds/free29.wav","general_spetsnaz_snds/free30.wav","general_spetsnaz_snds/idledraft1.wav","general_spetsnaz_snds/idledraft2.wav","general_spetsnaz_snds/idledraft3.wav","general_spetsnaz_snds/idledraft4.wav","general_spetsnaz_snds/idledraft5.wav","general_spetsnaz_snds/idleburp.wav","general_spetsnaz_snds/idlewhistle.wav","st_faction_sounds/stalker_vo/mil_specific_dialogue/idle_1.ogg","st_faction_sounds/stalker_vo/mil_specific_dialogue/idle_2.ogg","st_faction_sounds/stalker_vo/mil_specific_dialogue/idle_3.ogg","st_faction_sounds/stalker_vo/mil_specific_dialogue/idle_4.ogg","st_faction_sounds/stalker_vo/mil_specific_dialogue/idle_5.ogg","st_faction_sounds/stalker_vo/mil_specific_dialogue/idle_6.ogg","st_faction_sounds/stalker_vo/mil_specific_dialogue/idle_7.ogg","st_faction_sounds/stalker_vo/mil_specific_dialogue/idle_8.ogg","st_faction_sounds/stalker_vo/mil_specific_dialogue/idle_9.ogg","st_faction_sounds/stalker_vo/mil_specific_dialogue/idle_10.ogg","st_faction_sounds/stalker_vo/mil_specific_dialogue/idle_11.ogg","st_faction_sounds/stalker_vo/mil_specific_dialogue/idle_12.ogg","st_faction_sounds/stalker_vo/mil_specific_dialogue/idle_13.ogg","st_faction_sounds/stalker_vo/mil_specific_dialogue/idle_14.ogg","st_faction_sounds/stalker_vo/mil_specific_dialogue/idle_15.ogg","st_faction_sounds/stalker_vo/mil_specific_dialogue/idle_16.ogg","st_faction_sounds/stalker_vo/mil_specific_dialogue/idle_17.ogg","st_faction_sounds/stalker_vo/mil_specific_dialogue/idle_18.ogg","st_faction_sounds/stalker_vo/mil_specific_dialogue/idle_19.ogg","st_faction_sounds/stalker_vo/mil_specific_dialogue/idle_20.ogg","st_faction_sounds/stalker_vo/mil_specific_dialogue/idle_21.ogg","st_faction_sounds/stalker_vo/mil_specific_dialogue/idle_22.ogg","st_faction_sounds/stalker_vo/mil_specific_dialogue/idle_23.ogg","st_faction_sounds/stalker_vo/mil_specific_dialogue/idle_24.ogg","st_faction_sounds/stalker_vo/mil_specific_dialogue/idle_25.ogg","st_faction_sounds/stalker_vo/mil_specific_dialogue/idle_26.ogg","st_faction_sounds/stalker_vo/mil_specific_dialogue/idle_27.ogg","st_faction_sounds/stalker_vo/mil_specific_dialogue/idle_28.ogg","st_faction_sounds/stalker_vo/mil_specific_dialogue/idle_29.ogg","st_faction_sounds/stalker_vo/mil_specific_dialogue/idle_30.ogg","general_spetsnaz_snds/chat1.mp3","general_spetsnaz_snds/chat2.mp3","general_spetsnaz_snds/chat3.mp3","general_spetsnaz_snds/chat4.mp3","general_spetsnaz_snds/chat5.mp3","general_spetsnaz_snds/chat6.mp3","general_spetsnaz_snds/chat7.mp3","general_spetsnaz_snds/chat8.mp3","general_spetsnaz_snds/chat9.mp3","general_spetsnaz_snds/chat10.mp3","general_spetsnaz_snds/chat11.mp3","general_spetsnaz_snds/chat12.mp3","general_spetsnaz_snds/chat13.mp3","general_spetsnaz_snds/chat14.mp3","general_spetsnaz_snds/chat15.mp3","general_spetsnaz_snds/chat16.mp3","general_spetsnaz_snds/chat17.mp3","general_spetsnaz_snds/chat18.mp3","general_spetsnaz_snds/chat19.mp3"}
+
+ENT.SoundTbl_Alert = {"st_faction_sounds/stalker_vo/general_base_dialogue/detour_1.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/detour_2.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/detour_3.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/detour_4.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/detour_5.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/detour_6.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/enemy_1.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/enemy_2.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/enemy_3.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/enemy_4.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/enemy_5.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/enemy_6.ogg","general_spetsnaz_snds/alert1.wav","general_spetsnaz_snds/alert2.wav","general_spetsnaz_snds/alert3.wav","general_spetsnaz_snds/alert4.wav","general_spetsnaz_snds/alert5.wav","general_spetsnaz_snds/alert6.wav","general_spetsnaz_snds/alert7.wav","general_spetsnaz_snds/alert8.wav","general_spetsnaz_snds/alert9.wav","general_spetsnaz_snds/alert1.wav","general_spetsnaz_snds/alert2.wav","general_spetsnaz_snds/alert3.wav","general_spetsnaz_snds/alert4.wav","general_spetsnaz_snds/alert5.wav","general_spetsnaz_snds/alert6.wav","general_spetsnaz_snds/alert7.wav","general_spetsnaz_snds/alert8.wav","general_spetsnaz_snds/alert9.wav","general_spetsnaz_snds/alert10.wav","general_spetsnaz_snds/alert11.wav","st_faction_sounds/stalker_vo/general_base_dialogue/panic_1.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/panic_2.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/panic_3.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/panic_4.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/panic_5.ogg","general_spetsnaz_snds/VO_RU_Grunt_ContactCall_01A_DimitryRozental.ogg","general_spetsnaz_snds/VO_RU_Grunt_ContactCall_02A_DimitryRozental.ogg","general_spetsnaz_snds/VO_RU_Grunt_ContactCall_03A_DimitryRozental.ogg","general_spetsnaz_snds/VO_RU_Grunt_ContactCall_04A_DimitryRozental.ogg","general_spetsnaz_snds/VO_RU_Grunt_ContactCall_05A_DimitryRozental.ogg","general_spetsnaz_snds/VO_RU_Grunt_ContactCall_06A_DimitryRozental.ogg","general_spetsnaz_snds/VO_RU_Grunt_ContactCall_07A_DimitryRozental.ogg"}
+
+ENT.SoundTbl_CombatIdle = {"st_faction_sounds/stalker_vo/general_base_dialogue/attack_7.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/attack_8.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/attack_9.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/attack_10.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/attack_11.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/attack_12.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/attack_13.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/attack_14.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/cover_fire_1.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/cover_fire_2.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/cover_fire_3.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/cover_fire_4.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/cover_fire_5.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/cover_fire_6.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/cover_fire_7.ogg","general_spetsnaz_snds/attack1.wav","general_spetsnaz_snds/attack2.wav","general_spetsnaz_snds/attack3.wav","general_spetsnaz_snds/attack4.wav","general_spetsnaz_snds/attack5.wav","general_spetsnaz_snds/attack6.wav","general_spetsnaz_snds/attack7.wav","general_spetsnaz_snds/attack8.wav","general_spetsnaz_snds/attack9.wav","general_spetsnaz_snds/attack10.wav","general_spetsnaz_snds/attack11.wav","general_spetsnaz_snds/attack12.wav","general_spetsnaz_snds/attack13.wav","general_spetsnaz_snds/attack14.wav","general_spetsnaz_snds/attack15.wav","general_spetsnaz_snds/attack16.wav","general_spetsnaz_snds/attack1.wav","general_spetsnaz_snds/attack2.wav","general_spetsnaz_snds/attack3.wav","general_spetsnaz_snds/attack4.wav","general_spetsnaz_snds/attack5.wav","general_spetsnaz_snds/attack6.wav","general_spetsnaz_snds/attack7.wav","russian/attack1.wav","russian/attack2.wav","russian/attack3.wav","russian/attack4.wav","russian/attack5.wav","russian/attack6.wav","russian/attack7.wav","russian/attack8.wav","russian/attack9.wav","russian/attack10.wav","russian/attack11.wav","russian/attack12.wav","general_spetsnaz_snds/combat1.mp3","general_spetsnaz_snds/combat2.mp3","general_spetsnaz_snds/combat3.mp3","general_spetsnaz_snds/combat4.mp3","general_spetsnaz_snds/combat5.mp3","general_spetsnaz_snds/combat6.mp3","general_spetsnaz_snds/combat7.mp3","general_spetsnaz_snds/combat8.mp3","general_spetsnaz_snds/combat9.mp3","general_spetsnaz_snds/combat10.mp3","general_spetsnaz_snds/combat11.mp3","general_spetsnaz_snds/combat12.mp3","general_spetsnaz_snds/combat13.mp3","general_spetsnaz_snds/combat14.mp3","general_spetsnaz_snds/combat15.mp3","general_spetsnaz_snds/combat16.mp3","general_spetsnaz_snds/combat17.mp3","general_spetsnaz_snds/combat18.mp3","general_spetsnaz_snds/combat19.mp3","general_spetsnaz_snds/combat20.mp3"}
+
+ENT.SoundTbl_Suppressing = {"st_faction_sounds/stalker_vo/general_base_dialogue/cover_fire_8.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/cover_fire_9.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/cover_fire_10.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/cover_fire_11.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/cover_fire_12.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/cover_fire_13.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/cover_fire_14.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/cover_fire_1.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/cover_fire_2.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/cover_fire_3.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/cover_fire_4.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/cover_fire_5.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/cover_fire_6.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/cover_fire_7.ogg","general_spetsnaz_snds/pursuing1.wav","general_spetsnaz_snds/pursuing2.wav","general_spetsnaz_snds/pursuing3.wav","general_spetsnaz_snds/pursuing4.wav","general_spetsnaz_snds/pursuing5.wav","general_spetsnaz_snds/pursuing6.wav", "general_spetsnaz_snds/suppressing1.wav","general_spetsnaz_snds/suppressing2.wav","general_spetsnaz_snds/suppressing3.wav","general_spetsnaz_snds/suppressing4.wav","general_spetsnaz_snds/suppressing5.wav","general_spetsnaz_snds/suppressing6.wav","general_spetsnaz_snds/suppressing7.wav","general_spetsnaz_snds/suppressing8.wav","general_spetsnaz_snds/suppressing9.wav","general_spetsnaz_snds/suppressing10.wav","general_spetsnaz_snds/suppressing11.wav","general_spetsnaz_snds/suppressing12.wav","general_spetsnaz_snds/suppressing1.wav","general_spetsnaz_snds/suppressing2.wav","general_spetsnaz_snds/suppressing3.wav","general_spetsnaz_snds/suppressing4.wav","general_spetsnaz_snds/suppressing5.wav","general_spetsnaz_snds/suppressing6.wav","general_spetsnaz_snds/suppressing7.wav","general_spetsnaz_snds/suppressing8.wav","general_spetsnaz_snds/suppressing9.wav","general_spetsnaz_snds/suppressing10.wav","general_spetsnaz_snds/suppressing11.wav","general_spetsnaz_snds/suppressing12.wav","general_spetsnaz_snds/suppressing13.wav","general_spetsnaz_snds/suppressing14.wav","general_spetsnaz_snds/suppressing15.wav","general_spetsnaz_snds/suppressing16.wav","general_spetsnaz_snds/suppressing17.wav","general_spetsnaz_snds/suppressing18.wav","general_spetsnaz_snds/suppressing19.wav","general_spetsnaz_snds/suppressing20.wav"}
+
+ENT.SoundTbl_WeaponReload = {"general_spetsnaz_snds/reloading1.wav","general_spetsnaz_snds/reloading2.wav","general_spetsnaz_snds/reloading3.wav","general_spetsnaz_snds/reloading4.wav","general_spetsnaz_snds/reloading5.wav","general_spetsnaz_snds/reloading6.wav","general_spetsnaz_snds/reloading7.wav","general_spetsnaz_snds/reloading8.wav","general_spetsnaz_snds/reloading9.wav","general_spetsnaz_snds/reloading10.wav","general_spetsnaz_snds/reloading11.wav","general_spetsnaz_snds/reloading12.wav","general_spetsnaz_snds/reloading13.wav","general_spetsnaz_snds/reloading14.wav","general_spetsnaz_snds/reloading15.wav","general_spetsnaz_snds/reloading16.wav","general_spetsnaz_snds/reloading17.wav","general_spetsnaz_snds/reloading18.wav","general_spetsnaz_snds/reloading19.wav","general_spetsnaz_snds/reloading20.wav","general_spetsnaz_snds/reloading21.wav","general_spetsnaz_snds/reloading22.wav","general_spetsnaz_snds/reloading23.wav","general_spetsnaz_snds/reloading24.wav","general_spetsnaz_snds/reloading25.wav","general_spetsnaz_snds/reloading26.wav","general_spetsnaz_snds/reloading27.wav","general_spetsnaz_snds/reloading28wav","general_spetsnaz_snds/reloading29.wav","general_spetsnaz_snds/reloading1.wav","general_spetsnaz_snds/reloading2.wav","general_spetsnaz_snds/reloading3.wav","general_spetsnaz_snds/reloading4.wav","general_spetsnaz_snds/reloading5.wav","general_spetsnaz_snds/reloading6.wav","general_spetsnaz_snds/reloading7.wav","general_spetsnaz_snds/reloading8.wav"}
+
+ENT.SoundTbl_GrenadeAttack = {"general_spetsnaz_snds/fragout1.wav","general_spetsnaz_snds/fragout2.wav","general_spetsnaz_snds/fragout3.wav","general_spetsnaz_snds/fragout4.wav","general_spetsnaz_snds/fragout5.wav","general_spetsnaz_snds/fragout6.wav","general_spetsnaz_snds/fragout7.wav","general_spetsnaz_snds/fragout8.wav","general_spetsnaz_snds/fragout9.wav","general_spetsnaz_snds/fragout10.wav","general_spetsnaz_snds/fragout11.wav","general_spetsnaz_snds/fragout12.wav","general_spetsnaz_snds/fragout13.wav","general_spetsnaz_snds/fragout14.wav","general_spetsnaz_snds/fragout1.wav","general_spetsnaz_snds/fragout2.wav","general_spetsnaz_snds/fragout3.wav","general_spetsnaz_snds/fragout4.wav","general_spetsnaz_snds/fragout5.wav","general_spetsnaz_snds/fragout6.wav","general_spetsnaz_snds/fragout7.wav","general_spetsnaz_snds/fragout8.wav","general_spetsnaz_snds/fragout9.wav","general_spetsnaz_snds/fragout10.wav","general_spetsnaz_snds/fragout11.wav","general_spetsnaz_snds/fragout12.wav","general_spetsnaz_snds/fragout13.wav","general_spetsnaz_snds/fragout14.wav","general_spetsnaz_snds/fragout15.wav","general_spetsnaz_snds/fragout16.wav","st_faction_sounds/stalker_vo/general_base_dialogue/grenade_1.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/grenade_2.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/grenade_3.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/grenade_ready_1.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/grenade_ready_2.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/grenade_ready_3.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/grenade_ready_4.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/grenade_ready_5.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/grenade_ready_6.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/grenade_ready7_.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/ready_1.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/ready_2.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/ready_3.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/ready_4.ogg","general_spetsnaz_snds/VO_RU_SL_FragOut_01A_AleksandrJuriev.ogg","general_spetsnaz_snds/VO_RU_SL_FragOut_02A_AleksandrJuriev.ogg","general_spetsnaz_snds/VO_RU_SL_FragOut_03A_AleksandrJuriev.ogg","general_spetsnaz_snds/VO_RU_SL_FragOut_04A_AleksandrJuriev.ogg","general_spetsnaz_snds/VO_RU_SL_FragOut_05A_AleksandrJuriev.ogg","general_spetsnaz_snds/VO_RU_SL_FragOut_06A_AleksandrJuriev.ogg","general_spetsnaz_snds/VO_RU_SL_FragOut_07A_AleksandrJuriev.ogg"}
+
+ENT.SoundTbl_OnGrenadeSight = {"general_spetsnaz_snds/grenade1.wav","general_spetsnaz_snds/grenade2.wav","general_spetsnaz_snds/grenade3.wav","general_spetsnaz_snds/grenade4.wav","general_spetsnaz_snds/grenade5.wav","general_spetsnaz_snds/grenade6.wav","general_spetsnaz_snds/grenade7.wav","general_spetsnaz_snds/grenade8.wav","general_spetsnaz_snds/grenade9.wav","general_spetsnaz_snds/grenade10.wav","general_spetsnaz_snds/grenade11.wav","general_spetsnaz_snds/grenade12.wav","general_spetsnaz_snds/grenade13.wav","general_spetsnaz_snds/grenade14.wav","general_spetsnaz_snds/grenade15.wav","general_spetsnaz_snds/grenade16.wav","general_spetsnaz_snds/grenade17.wav","general_spetsnaz_snds/grenade18.wav","general_spetsnaz_snds/grenade19.wav","general_spetsnaz_snds/grenade20.wav","general_spetsnaz_snds/grenade21.wav","general_spetsnaz_snds/grenade22.wav","general_spetsnaz_snds/grenade23.wav","general_spetsnaz_snds/grenade24.wav","general_spetsnaz_snds/grenade25.wav","general_spetsnaz_snds/grenade26.wav","general_spetsnaz_snds/grenade27.wav","general_spetsnaz_snds/grenade28.wav","general_spetsnaz_snds/grenade29.wav","general_spetsnaz_snds/grenade30.wav","general_spetsnaz_snds/grenade31.wav","general_spetsnaz_snds/grenade32.wav","general_spetsnaz_snds/grenade33.wav","general_spetsnaz_snds/grenade34.wav"}
+
+ENT.SoundTbl_OnKilledEnemy = {"st_faction_sounds/stalker_vo/general_base_dialogue/enemy_down_1.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/enemy_down_2.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/enemy_down_3.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/enemy_down_4.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/enemy_down_5.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/enemy_down_6.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/enemy_down_7.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/enemy_down_8.ogg","general_spetsnaz_snds/kill1.wav","general_spetsnaz_snds/kill2.wav","general_spetsnaz_snds/kill3.wav","general_spetsnaz_snds/kill4.wav","general_spetsnaz_snds/kill5.wav","general_spetsnaz_snds/kill6.wav","general_spetsnaz_snds/kill7.wav","general_spetsnaz_snds/kill8.wav","general_spetsnaz_snds/kill9.wav","general_spetsnaz_snds/kill10.wav","general_spetsnaz_snds/kill1.wav","general_spetsnaz_snds/kill2.wav","general_spetsnaz_snds/kill3.wav","general_spetsnaz_snds/kill4.wav","general_spetsnaz_snds/kill5.wav","general_spetsnaz_snds/kill6.wav","general_spetsnaz_snds/kill7.wav","general_spetsnaz_snds/kill8.wav","general_spetsnaz_snds/kill9.wav","general_spetsnaz_snds/kill10.wav","st_faction_sounds/stalker_vo/general_base_dialogue/dead_enemy_1.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/dead_enemy_2.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/dead_enemy_3.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/dead_enemy_4.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/dead_enemy_5.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/dead_enemy_6.ogg"}
+
+ENT.SoundTbl_AllyDeath = {"general_spetsnaz_snds/casualty1.wav","general_spetsnaz_snds/casualty2.wav","general_spetsnaz_snds/casualty3.wav","general_spetsnaz_snds/casualty4.wav","general_spetsnaz_snds/casualty5.wav","general_spetsnaz_snds/casualty6.wav","general_spetsnaz_snds/casualty7.wav","general_spetsnaz_snds/casualty8.wav","general_spetsnaz_snds/casualty9.wav","general_spetsnaz_snds/casualty10.wav","general_spetsnaz_snds/casualty11.wav","general_spetsnaz_snds/casualty12.wav","general_spetsnaz_snds/casualty13.wav","general_spetsnaz_snds/casualty14.wav","general_spetsnaz_snds/casualty15.wav","general_spetsnaz_snds/casualty16.wav","general_spetsnaz_snds/casualty17.wav","general_spetsnaz_snds/casualty18.wav","general_spetsnaz_snds/casualty19.wav","general_spetsnaz_snds/casualty20.wav","general_spetsnaz_snds/casualty21.wav","general_spetsnaz_snds/casualty22.wav","general_spetsnaz_snds/casualty23.wav","general_spetsnaz_snds/casualty24.wav","general_spetsnaz_snds/casualty25.wav","general_spetsnaz_snds/casualty2.wav","general_spetsnaz_snds/casualty27.wav","general_spetsnaz_snds/casualty28.wav","general_spetsnaz_snds/casualty29.wav","general_spetsnaz_snds/casualty30.wav","general_spetsnaz_snds/casualty31.wav","general_spetsnaz_snds/casualty32.wav","general_spetsnaz_snds/casualty33.wav","general_spetsnaz_snds/casualty34.wav"}
+
+ENT.SoundTbl_CombatIdle = {"st_faction_sounds/stalker_vo/general_base_dialogue/cover_fire_8.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/cover_fire_9.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/cover_fire_10.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/cover_fire_11.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/cover_fire_12.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/cover_fire_13.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/cover_fire_14.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/fire_1.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/fire_2.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/fire_3.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/fire_4.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/fire_5.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/backup_1.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/backup_2.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/backup_3.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/backup_4.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/backup_5.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/attack_1.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/attack_2.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/attack_3.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/attack_4.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/attack_5.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/attack_6.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/attack_1stalker.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/attack_2stalker.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/attack_3stalker.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/attack_4stalker.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/attack_5stalker.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/attack_6stalker.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/attack_one_1.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/attack_one_2.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/attack_one_3.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/attack_one_4.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/attack_one_5.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/attack_one_1stalker.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/attack_one_2stalker.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/attack_one_3stalker.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/attack_one_4stalker.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/attack_one_5stalker.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/script_attack_1.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/script_attack_2.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/script_attack_3.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/script_attack_4.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/script_attack_5.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/script_attack_6.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/script_attack_7.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/script_attack_8.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/script_attack_9.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/script_attack_10.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/script_attack_11.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/script_attack_12.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/script_attack_13.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/script_attack_14.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/script_attack_15.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/script_attack_1stalker.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/script_attack_2stalker.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/script_attack_3stalker.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/script_attack_4stalker.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/script_attack_5stalker.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/script_attack_6stalker.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/script_attack_7stalker.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/script_attack_8stalker.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/script_attack_9stalker.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/script_attack_10stalker.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/script_attack_11stalker.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/script_attack_12stalker.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/script_attack_13stalker.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/script_attack_14stalker.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/script_attack_15stalker.ogg"}
+
+ENT.SoundTbl_LostEnemy = {"st_faction_sounds/stalker_vo/general_base_dialogue/enemy_lost_1.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/enemy_lost_2.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/enemy_lost_3.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/enemy_lost_4.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/enemy_lost_5.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/enemy_lost_6.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/enemy_lost_7.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/enemy_lost_8.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/enemy_lost_9.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/enemy_lost_10.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/enemy_lost_1stalker.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/enemy_lost_2stalker.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/enemy_lost_3stalker.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/enemy_lost_4stalker.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/enemy_lost_5stalker.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/enemy_lost_6stalker.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/enemy_lost_7stalker.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/enemy_lost_8stalker.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/enemy_lost_9stalker.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/enemy_lost_10stalker.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/search_1.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/search_3.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/search_4.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/search_5.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/search_6.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/search_7.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/search_1stalker.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/search_2stalker.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/search_3stalker.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/search_4stalker.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/search_5stalker.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/search_6stalker.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/search_7stalker.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/search_8stalker.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/search_9stalker.ogg"}
+
+ENT.SoundTbl_IdleDialogue = {"general_spetsnaz_snds/dia_1.wav","general_spetsnaz_snds/dia_2.wav","general_spetsnaz_snds/idled.mp3","general_spetsnaz_snds/idled.mp3","general_spetsnaz_snds/idled2.mp3","general_spetsnaz_snds/idled3.mp3","general_spetsnaz_snds/idled4.mp3","general_spetsnaz_snds/idled5.mp3"}
+
+ENT.SoundTbl_IdleDialogueAnswer = {"general_spetsnaz_snds/VO_RU_SL_Negative_01A_AleksandrJuriev.ogg","general_spetsnaz_snds/VO_RU_SL_Negative_02A_AleksandrJuriev.ogg","general_spetsnaz_snds/VO_RU_SL_Negative_03A_AleksandrJuriev.ogg","general_spetsnaz_snds/VO_RU_SL_Negative_04A_AleksandrJuriev.ogg","general_spetsnaz_snds/VO_RU_SL_Negative_05A_AleksandrJuriev.ogg","general_spetsnaz_snds/VO_RU_SL_Negative_06A_AleksandrJuriev.ogg","general_spetsnaz_snds/VO_RU_SL_Negative_07A_AleksandrJuriev.ogg","general_spetsnaz_snds/VO_RU_SL_Negative_08A_AleksandrJuriev.ogg","general_spetsnaz_snds/VO_RU_Grunt_Negative_01A_DimitryRozental.ogg","general_spetsnaz_snds/VO_RU_Grunt_Negative_02A_DimitryRozental.ogg","general_spetsnaz_snds/VO_RU_Grunt_Negative_03A_DimitryRozental.ogg","general_spetsnaz_snds/VO_RU_Grunt_Negative_04A_DimitryRozental.ogg","general_spetsnaz_snds/VO_RU_Grunt_Negative_05A_DimitryRozental.ogg","general_spetsnaz_snds/VO_RU_Grunt_Negative_06A_DimitryRozental.ogg","general_spetsnaz_snds/dia_1_response.wav","general_spetsnaz_snds/dia_2_response.wav","general_spetsnaz_snds/VO_RU_Grunt_Affirmative_01A_DimitryRozental.ogg","general_spetsnaz_snds/VO_RU_Grunt_Affirmative_02A_DimitryRozental.ogg","general_spetsnaz_snds/VO_RU_Grunt_Affirmative_03A_DimitryRozental.ogg","general_spetsnaz_snds/VO_RU_Grunt_Affirmative_04A_DimitryRozental.ogg","general_spetsnaz_snds/VO_RU_Grunt_Affirmative_05A_DimitryRozental.ogg","general_spetsnaz_snds/VO_RU_Grunt_Affirmative_06A_DimitryRozental.ogg","general_spetsnaz_snds/VO_RU_Grunt_Affirmative_07A_DimitryRozental.ogg","general_spetsnaz_snds/VO_RU_Grunt_Affirmative_08A_DimitryRozental.ogg","general_spetsnaz_snds/VO_RU_SL_Affirmative_01A_AleksandrJuriev.ogg","general_spetsnaz_snds/VO_RU_SL_Affirmative_02A_AleksandrJuriev.ogg","general_spetsnaz_snds/VO_RU_SL_Affirmative_03A_AleksandrJuriev.ogg","general_spetsnaz_snds/VO_RU_SL_Affirmative_04A_AleksandrJuriev.ogg","general_spetsnaz_snds/VO_RU_SL_Affirmative_05A_AleksandrJuriev.ogg","general_spetsnaz_snds/VO_RU_SL_Affirmative_06A_AleksandrJuriev.ogg","general_spetsnaz_snds/VO_RU_SL_Affirmative_07A_AleksandrJuriev.ogg","general_spetsnaz_snds/VO_RU_SL_Affirmative_08A_AleksandrJuriev.ogg"}
+
+ENT.SoundTbl_CallForHelp = {"st_faction_sounds/stalker_vo/general_base_dialogue/cover_fire_8.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/cover_fire_9.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/cover_fire_10.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/cover_fire_11.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/cover_fire_12.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/cover_fire_13.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/cover_fire_14.ogg","general_spetsnaz_snds/VO_RU_Grunt_MedicCall_01A_DimitryRozental.ogg","general_spetsnaz_snds/VO_RU_Grunt_MedicCall_02A_DimitryRozental.ogg","general_spetsnaz_snds/VO_RU_Grunt_MedicCall_03A_DimitryRozental.ogg","general_spetsnaz_snds/VO_RU_Grunt_MedicCall_04A_DimitryRozental.ogg","general_spetsnaz_snds/VO_RU_Grunt_MedicCall_05A_DimitryRozental.ogg","general_spetsnaz_snds/VO_RU_Grunt_MedicCall_06A_DimitryRozental.ogg","general_spetsnaz_snds/VO_RU_Grunt_MedicCall_07A_DimitryRozental.ogg","general_spetsnaz_snds/VO_RU_Grunt_MedicCall_08A_DimitryRozental.ogg","general_spetsnaz_snds/VO_RU_Grunt_MedicCall_09A_DimitryRozental.ogg","general_spetsnaz_snds/VO_RU_Grunt_MedicCall_10A_DimitryRozental.ogg","general_spetsnaz_snds/VO_RU_Grunt_MedicCall_11A_DimitryRozental.ogg","general_spetsnaz_snds/VO_RU_Grunt_MedicCall_12A_DimitryRozental.ogg","general_spetsnaz_snds/VO_RU_Grunt_MedicCall_13A_DimitryRozental.ogg","general_spetsnaz_snds/VO_RU_Grunt_MedicCall_14A_DimitryRozental.ogg","general_spetsnaz_snds/VO_RU_Grunt_MedicCall_15A_DimitryRozental.ogg","general_spetsnaz_snds/VO_RU_Grunt_MedicCall_16A_DimitryRozental.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/backup_1.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/backup_2.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/backup_3.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/backup_4.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/backup_5.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/backup_6.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/backup_7.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/backup_8.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/backup_9.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/backup_10.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/backup_11.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/backup_12.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/backup_13.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/backup_14.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/backup_15.ogg"}
+
+ENT.SoundTbl_OnReceiveOrder = {"general_spetsnaz_snds/VO_RU_Grunt_Affirmative_01A_DimitryRozental.ogg","general_spetsnaz_snds/VO_RU_Grunt_Affirmative_02A_DimitryRozental.ogg","general_spetsnaz_snds/VO_RU_Grunt_Affirmative_03A_DimitryRozental.ogg","general_spetsnaz_snds/VO_RU_Grunt_Affirmative_04A_DimitryRozental.ogg","general_spetsnaz_snds/VO_RU_Grunt_Affirmative_05A_DimitryRozental.ogg","general_spetsnaz_snds/VO_RU_Grunt_Affirmative_06A_DimitryRozental.ogg","general_spetsnaz_snds/VO_RU_Grunt_Affirmative_07A_DimitryRozental.ogg","general_spetsnaz_snds/VO_RU_Grunt_Affirmative_08A_DimitryRozental.ogg","general_spetsnaz_snds/VO_RU_SL_Affirmative_01A_AleksandrJuriev.ogg","general_spetsnaz_snds/VO_RU_SL_Affirmative_02A_AleksandrJuriev.ogg","general_spetsnaz_snds/VO_RU_SL_Affirmative_03A_AleksandrJuriev.ogg","general_spetsnaz_snds/VO_RU_SL_Affirmative_04A_AleksandrJuriev.ogg","general_spetsnaz_snds/VO_RU_SL_Affirmative_05A_AleksandrJuriev.ogg","general_spetsnaz_snds/VO_RU_SL_Affirmative_06A_AleksandrJuriev.ogg","general_spetsnaz_snds/VO_RU_SL_Affirmative_07A_AleksandrJuriev.ogg","general_spetsnaz_snds/VO_RU_SL_Affirmative_08A_AleksandrJuriev.ogg"}
+
+ENT.SoundTbl_BecomeEnemyToPlayer = {"st_faction_sounds/stalker_vo/general_base_dialogue/friendly_fire_1.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/friendly_fire_2.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/friendly_fire_3.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/friendly_fire_4.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/friendly_fire_5.ogg","general_spetsnaz_snds/wetrustedyou01.wav","general_spetsnaz_snds/wetrustedyou02.wav","general_spetsnaz_snds/becomehos1.mp3","general_spetsnaz_snds/becomehos2.mp3","general_spetsnaz_snds/becomehos3.mp3","general_spetsnaz_snds/becomehos4.mp3"}
+
+ENT.SoundTbl_DamageByPlayer = {"general_sds/ext_reactions/fr_fire_" .. mRng(1, 18) .. ".mp3","general_spetsnaz_snds/eft_bear_friendlyfire1.wav","general_spetsnaz_snds/eft_bear_friendlyfire2.wav","general_spetsnaz_snds/eft_bear_friendlyfire3.wav","general_spetsnaz_snds/eft_bear_friendlyfire4.wav","general_spetsnaz_snds/eft_bear_friendlyfire5.wav","general_spetsnaz_snds/eft_bear_friendlyfire6.wav","general_spetsnaz_snds/eft_bear_friendlyfire7.wav","general_spetsnaz_snds/eft_bear_friendlyfire8.wav","general_spetsnaz_snds/eft_bear_friendlyfire9.wav","general_spetsnaz_snds/eft_bear_friendlyfire10.wav","general_spetsnaz_snds/eft_bear_friendlyfire11.wav","general_spetsnaz_snds/eft_bear_friendlyfire12.wav","general_spetsnaz_snds/eft_bear_friendlyfire13.wav","general_spetsnaz_snds/eft_bear_friendlyfire14.wav","general_spetsnaz_snds/eft_bear_friendlyfire15.wav","general_spetsnaz_snds/eft_bear_friendlyfire16.wav","general_spetsnaz_snds/eft_bear_friendlyfire1.wav","general_spetsnaz_snds/playerdamage1.mp3","general_spetsnaz_snds/playerdamage2.mp3","general_spetsnaz_snds/playerdamage3.mp3","general_spetsnaz_snds/playerdamage4.mp3","general_spetsnaz_snds/playerdamage5.mp3","general_spetsnaz_snds/playerdamage6.mp3"}
+
+ENT.SoundTbl_FollowPlayer = {"general_spetsnaz_snds/leadtheway01.wav","general_spetsnaz_snds/leadtheway02.wav","general_spetsnaz_snds/okimready01.wav","general_spetsnaz_snds/okimready02.wav","general_spetsnaz_snds/okimready03.wav","general_spetsnaz_snds/follow1.mp3","general_spetsnaz_snds/follow2.mp3","general_spetsnaz_snds/follow3.mp3","general_spetsnaz_snds/follow4.mp3","general_spetsnaz_snds/follow5.mp3","general_spetsnaz_snds/follow6.mp3","general_spetsnaz_snds/follow7.mp3","general_spetsnaz_snds/follow8.mp3","general_spetsnaz_snds/follow9.mp3","general_spetsnaz_snds/follow10.mp3","general_spetsnaz_snds/follow11.mp3","general_spetsnaz_snds/follow12.mp3","general_spetsnaz_snds/follow13.mp3"}
+
+ENT.SoundTbl_UnFollowPlayer = {"general_spetsnaz_snds/illstayhere01.wav","general_spetsnaz_snds/holddownspot01.wav","general_spetsnaz_snds/holddownspot02.wav","general_spetsnaz_snds/nofollow1.mp3","general_spetsnaz_snds/nofollow2.mp3","general_spetsnaz_snds/nofollow3.mp3","general_spetsnaz_snds/nofollow4.mp3","general_spetsnaz_snds/nofollow5.mp3","general_spetsnaz_snds/nofollow6.mp3","general_spetsnaz_snds/nofollow7.mp3","general_spetsnaz_snds/nofollow8.mp3"}
+
+ENT.SoundTbl_YieldToPlayer = {"general_sds/ext_reactions/sorry_1.mp3","general_sds/ext_reactions/sorry_2.mp3","general_sds/ext_reactions/sorry_3.mp3","general_sds/ext_reactions/sorry_4.mp3","general_sds/ext_reactions/sorry_5.mp3","general_sds/ext_reactions/sorry_6.mp3","general_spetsnaz_snds/sorry01.wav","general_spetsnaz_snds/sorry02.wav","general_spetsnaz_snds/excuseme01.wav","general_spetsnaz_snds/excuseme02.wav","general_spetsnaz_snds/pardonme02.wav","general_spetsnaz_snds/pardonme01.wav","general_spetsnaz_snds/bump1.mp3","general_spetsnaz_snds/bump2.mp3","general_spetsnaz_snds/bump3.mp3","general_spetsnaz_snds/bump4.mp3","general_spetsnaz_snds/bump5.mp3","general_spetsnaz_snds/bump6.mp3"}
+---------------------------------------------------------------------------------------------------------------------------------------------
    -- [Custom Code] -- 
 
    -- [Custom Debug]
@@ -294,6 +409,8 @@ ENT.ReactToPlyIntChance = 3 -- 1 out of x chance to play the react anim
 
     -- [NPC Presets] -- 
 ENT.IsHeavilyArmored = false
+
+ENT.IsOfficer = false
 
 ENT.IsScientific = false 
 ENT.SevaSuitDeflateChance = mRng(1,3) -- Chance for deflate sound to play on death
@@ -337,6 +454,8 @@ ENT.TauntKill_SeqAnimTbl = {"cheer1", "cheer2", "wave_smg1"}
 ENT.TauntKill_GesAnimTbl = {"g_pumpleft_rpgdown", "g_pumpleft_rpgright"}
 ENT.TauntKill_Conv = "vj_stalker_taunt"
 ENT.TauntKill_NextT = 0
+ENT.TauntKill_MinDist = 1500
+ENT.TauntKill_MaxDist = 2500 
 
     -- [Landing mechanic] --
 ENT.Detect_LandAnim = true
@@ -355,9 +474,9 @@ ENT.HasRadioSpawnChance = 4
 ENT.BackGround_RadioLevel = 70
 ENT.BackGround_RadioPitch1 = 85
 ENT.BackGround_RadioPitch2 = 105
-ENT.NextRadioDialogueT = mRand(5,10)
-ENT.NextSoundTime_RadioDialogue1 = mRand(5,10)
-ENT.NextSoundTime_RadioDialogue2 = mRand(20,35)
+ENT.NextRadioDialogueT = 0
+ENT.NextSoundTime_RadioDialogue1 = 15
+ENT.NextSoundTime_RadioDialogue2 = 45
 ENT.RadioDialogieChance = mRng(1,4)
 
     -- [Manage weapon fire strafing] --
@@ -381,9 +500,9 @@ ENT.DetectDangerAnimChance = 3
     -- [Incapacitation cry for help sounds] -- 
 ENT.HasCryForAidSounds = true
 ENT.NextCryForAidSoundT = 0
-ENT.CryForAid_NextT1 = mRand(1, 5)
-ENT.CryForAid_NextT2 = mRand(6, 15)
-ENT.CryForAidSoundChance = 2
+ENT.CryForAid_NextT1 = 10
+ENT.CryForAid_NextT2 = 25
+ENT.CryForAidSoundChance = 3
 ENT.CryForAidSoundPitch1 = 85
 ENT.CryForAidSoundPitch2 = 125
 ENT.CryForAidSoundLevel = mRng(90, 125)
@@ -415,14 +534,15 @@ ENT.CurrentMedicTarget = nil
 
     -- [Limited gren count] --
 ENT.LimitedGrenades = true 
-ENT.LimitedGrenCount = mRng(3, 10) -- randomly picks from 1 to this value
+ENT.LimitedGrenCount_Min = 1
+ENT.LimitedGrenCount_Max = 10 
 ENT.HumanGrenadeCount = 0
 
     -- [Pickup anim tbl] -- 
 ENT.PlyPickUpAnim = {"pickup","civil_proc_pickup"}
 
     -- [React to fire] --
-ENT.CanPlayBurningAnimations = true
+ENT.ReactToFireDance = true
 ENT.CurrentlyBurning = false
 ENT.HasFireSpecPain = true 
 ENT.HasPlayedBurnDeathSound = false
@@ -488,12 +608,11 @@ ENT.IsCurrentlyAlone = false
 
     -- [Min dmg cap] -- 
 ENT.MinDmg_CapAbility = true
-ENT.MinDmg_Cap_Active = false
 ENT.MinDmg_Cap_Feedback_Sfx = true 
 ENT.MinDmg_Cap_Feedback_Sfx_Chance = 2
-ENT.MinDmg_Cap_Chance = 3 
+ENT.MinDmg_Cap_Chance = 6
 ENT.MinDmg_Cap_NextT = 0 
-ENT.MinDmg_Cap = mRand(3, 8) -- Dmg threshold
+ENT.MinDmg_Cap = mRng(5, 9) -- Dmg threshold
 
     -- [Armor] -- 
 ENT.ArmorSparking = true 
@@ -513,6 +632,7 @@ ENT.Arm_BulRichocheting_Chance = 10
 ENT.SNPCMedicTag = false
 ENT.DoesNotHaveCoverReload = false -- tracks variable "Weapon_FindCoverOnReload" status. 
 ENT.HasGrenadeAttackMechRng = true 
+ENT.Grenade_PermBlocked = false 
 
     -- [Unique brutal sounds] -- 
 ENT.HasBrutalDeathSounds = true 
@@ -547,7 +667,7 @@ ENT.CurrentWeapon = 0 -- 0 for primary, 1 for secondary --
 
     -- [Drop sec wep on death] -- 
 ENT.Weapon_DropSecondary = true 
-ENT.Weapon_DropSecondary_Chance = 2 
+ENT.Weapon_DropSecondary_Chance = 4
 
     -- [Unused wsm stuff] -- 
 ENT.CurrentDoesNotHaveOrLostPrimary = false -- For when the SNPC has primary weapon removed or dropped --
@@ -584,7 +704,7 @@ ENT.NextFlashlightCheckT = 0
 
     -- [Panic on close prox to ene] -- (Sort of second version of weapon back away)
 ENT.Panic_FleeEneProx = true
-ENT.Panic_FleeEneChance = 3 
+ENT.Panic_FleeEneChance = 4
 ENT.CloseProxPanicDist = 700
 ENT.Panic_DetectAllyRange = 1200
 ENT.Panic_AllySuppressCount = 5
@@ -700,7 +820,6 @@ ENT.Headshot_Death_Sfx = true
 ENT.HeadShot_Death_StopDthSnd = true 
 
 ENT.IsImmuneToHeadShots = false 
-ENT.Headshot_SearchBone = "ValveBiped.Bip01_Head1"
 ENT.HeadshotSoundSfxChance = mRng(2, 3)
 ENT.HeadshotInstaKillChance = 0
 ENT.Headshot_FxChance = mRng(2, 3)
@@ -719,8 +838,8 @@ ENT.Melee_CanHeadbutt = true
 ENT.Melee_CanKick = true 
 
     -- [On death radio sound] -- 
-ENT.Radio_RandomDeathSound = true 
-ENT.Radio_DeathSoundChance = 2 
+ENT.Random_RadioSoundPlay = true 
+ENT.Random_RadioSoundChance = 2 
 
     -- [Anim translation] --
 ENT.Custom_WeaponTranslation = true 
@@ -737,20 +856,21 @@ ENT.IncapGrenTimerID = nil
     -- [Roll/Writhing] -- 
 ENT.DC_Writhe = true 
 ENT.DC_Writh_Decay = true
-ENT.DC_Writhe_AFC = false -- Apply force center 
+ENT.DC_Writhe_AFC = true -- Apply force center 
 ENT.DC_Writhing = false
-ENT.DC_Writhe_UseAllBones = false 
+ENT.DC_Writhe_UseAllBones = true   
 ENT.DC_Writh_Decay_Thresh = 0.15 -- starts decaying when x % time left
-ENT.DC_Writhe_TraceDist = 250
+ENT.DC_Writhe_TraceDist = 5
 ENT.DC_Writhe_Chance = 10
-ENT.DC_Writhe_MinT = 3
-ENT.DC_Writhe_MaxT = 15
+ENT.DC_Writhe_MinT = 1
+ENT.DC_Writhe_MaxT = 20
 
+    -- [Shoved back] -- 
 ENT.Shoved_Back = true
-ENT.Shoved_Back_Now = false
+ENT.Shoved_Back_Now = false -- Tracks if we are currently being shoved back
 
-ENT.Shoved_Com_Active = true 
-ENT.Shoved_Explosive_Active = true
+ENT.Shoved_Com_Active = true -- Common damage types trigger shove filter
+ENT.Shoved_Explosive_Active = true -- Explosvie daamges trigger shove filter
 
 ENT.CollideWall = true
 ENT.CollideWall_Frc = 2500
@@ -788,19 +908,6 @@ ENT.ToxDmg_CoughTbl = {"general_sds/cough/cough".. mRng(1, 24) ..".wav"}
     -- [Armor imp effects] -- 
 ENT.Ele_SparkImpFx = false
 ENT.Ele_SparkImpFx_Chance = 15
-
-ENT.ImpMetal_SparkArmor = false 
-ENT.ImpMetal_SparkArmorChance = 3
-
-ENT.Valid_CoverClassesTbl = {
-    ["prop_physics"] = true,
-    ["func_brush"] = true,
-    ["prop_static"] = true,
-    ["prop_dynamic"] = true
-}
-
-ENT.OnAlert_Cover = true 
-ENT.AlertCover_DistCheck = 1500
 
 ENT.Has_DynamicFootsteps = true 
 /*function ENT:ContextToThrowFlareAtEnemy()
@@ -939,7 +1046,13 @@ function ENT:PreInit()
             if self.IsScientific then 
                 self:SetScientific()
             end
+
+            if self.IsOfficer then 
+                self:SetOfficerStats()
+            end 
+
             self:RANDOM_CON_DEBUG()
+            self:CacheHeadData()
             self:HandleSniperWepLogic() 
             self:InitializeAutoRevival()
             self:WeaponFlashlight()
@@ -947,22 +1060,27 @@ function ENT:PreInit()
             self:SaveCurrentWeapon()
             self:PickSecondaryWeapon()
             self:TrackHeldWeapon()
-            self:TrackMoveWhileShoot()
-            self:TrackStrafeFire()
             self:TrackWeaponBackAway()
-            self:SetIncapAnims()
+            self:TrackWeaponCapabilities()
+            if self.CanBecomeIncapicitated then 
+                self:SetIncapAnims()
+            end 
             self:ManageBrutalSounds()
             self:ManageCryForAidSounds()
             self:ManageStepSd()
             self:ManageRandomVars()
             self:MngeExVarTimes()
-            self:MngBurnToDeathVO()
+            if self.HasBurnToDeathSounds then 
+                self:MngBurnToDeathVO()
+            end 
         end
     end)
 end
 
+ENT.Universal_RandomsDebug_Conv = "vj_stalker_randoms_console_debug"
 function ENT:RANDOM_CON_DEBUG()
-    local conv = "vj_stalker_randoms_console_debug"
+    if not self.Universal_RandomsDebug_Conv then return false end 
+    local conv = self.Universal_RandomsDebug_Conv
     if not self.RANDOMS_DEBUG then 
         if GetConVar(conv):GetInt() == 1 then 
             self.RANDOMS_DEBUG = true 
@@ -971,18 +1089,19 @@ function ENT:RANDOM_CON_DEBUG()
 end
 
 function ENT:ValidBreakableMats(pos)
+
+    local vec = Vector(0, 0, 40)
     local tr_water = util.TraceLine({
         start = pos,
-        endpos = pos - Vector(0, 0, 40),
+        endpos = pos - vec,
         mask = MASK_WATER
     })
 
     if tr_water.Hit then return false end  -- Water 
 
-
     local tr = util.TraceLine({
         start = pos,
-        endpos = pos - Vector(0, 0, 40),
+        endpos = pos - vec,
         filter = self,
         mask = MASK_NPCWORLDSTATIC
     })
@@ -998,12 +1117,16 @@ function ENT:ValidBreakableMats(pos)
     return tr.Hit and tr.HitWorld and valMats[tr.MatType] or false
 end
 ---------------------------------------------------------------------------------------------------------------------------------------------
+ENT.Alternate_GrenAtt = "grenade_attachment" 
 function ENT:CertainAttCharacteristics() 
+    if not self.Alternate_GrenAtt then return false end 
+    local grenAtt = tostring(self.Alternate_GrenAtt) or ""
+
     self.CanFireFlareGunSeq = false
-    self.SNPCGrenadeHandAttachment = "grenade_attachment" 
-    self.GrenadeAttackAttachment = "grenade_attachment"
-    self.Medic_SpawnPropOnHealAttachment = "grenade_attachment"
-    self.DropWeaponOnDeathAttachment = "grenade_attachment"
+    self.SNPCGrenadeHandAttachment = grenAtt
+    self.GrenadeAttackAttachment = grenAtt
+    self.Medic_SpawnPropOnHealAttachment = grenAtt
+    self.DropWeaponOnDeathAttachment = grenAtt
 end
 ---------------------------------------------------------------------------------------------------------------------------------------------
 function ENT:ManageFriendlyVars()
@@ -1016,7 +1139,7 @@ function ENT:ManageFriendlyVars()
         self.YieldToAlliedPlayers  = true 
         self.BecomeEnemyToPlayer = mRng(3,5)
         self.FollowPlayer = true
-        self.FollowMinDistance = mRand(90,200)
+        self.FollowMinDistance = mRand(90, 200)
     end
 end 
 ---------------------------------------------------------------------------------------------------------------------------------------------
@@ -1027,16 +1150,32 @@ function ENT:HandleSniperWepLogic()
     end 
 end 
 ---------------------------------------------------------------------------------------------------------------------------------------------
+ENT.CanFormSquads = false 
+ENT.CanJoinSquads = false 
+ENT.HasSquadLeader = false
+ENT.SL_NoFollowFilter = 350 -- If leader is this close, no need to move again. 
+ENT.SL_MoveInDist = 750 -- If leader is over this range, then we move in to follow
+ENT.NextMoveTo_LeadT = 0 
+ENT.Max_SquadCap = 5
+ENT.Min_SquadCap = 2 
+ENT.SquaddieMembers = {}
+
+//Larger call for help distance?
+//Specifically fire flare or place one? As in, if we are a leader, our chances to do so are more common!
+function ENT:SetOfficerStats()
+    if not self.IsOfficer then return false end
+end 
+
 function ENT:SetScientific()
     if not self.IsScientific then return false end
     timer.Simple(0.1, function()
         if not IsValid(self) then return end
-        self.Immune_Toxic = true 
+        self.Immune_Toxic       = true 
         self.Immune_Electricity = true
-        self.Immune_Sonic = true  
+        self.Immune_Sonic       = true  
     end)
 end
----------------------------------------------------------------------------------------------------------------------------------------------
+
 function ENT:SetHeavyStats()
     if not self.IsHeavilyArmored then return end
 
@@ -1044,29 +1183,33 @@ function ENT:SetHeavyStats()
         if not IsValid(self) then return end
         
         self.HasAloneAiBehaviour = false 
-        self.Shoved_Com_Active = false 
-        self.CombatRoll = false 
-        self.Evade_IncDanger  = false
-        self.Panic_DmgEne = false 
-        self.Panic_FleeEneProx = false 
+        self.Shoved_Com_Active   = false 
+        self.CombatRoll          = false 
+        self.Evade_IncDanger     = false
+        self.Panic_DmgEne        = false 
+        self.Panic_FleeEneProx   = false 
         self.IsImmuneToHeadShots = true 
 
-        self.FlinchChance = self.FlinchChance * mRng(2,4)
-        self.ArmorSparking_Chance = self.ArmorSparking_Chance / mRng(2,4)
-        self.RetreatAfterMeleeAttackChance = self.RetreatAfterMeleeAttackChance * mRng(2,4)
+        self.FlinchChance                  = (self.FlinchChance or 3) * mRng(2,4)
+        self.ArmorSparking_Chance          = (self.ArmorSparking_Chance or 5) / mRng(2,4)
+        self.RetreatAfterMeleeAttackChance = (self.RetreatAfterMeleeAttackChance or 3) * mRng(2,4)
+
         local chance = self.HeavySlowMoveChance or 3 
+        local debugging = self.RANDOMS_DEBUG 
         if self.HeavyUnitHasSlowMoveChance then 
             if mRng(1, chance) == 1 then 
-                print("Heavy unit has slow movement.")
+                if debugging then print("Heavy unit has slow movement.") end 
                 self.Rng_FootStepSet = false 
                 self.HasSlowHeavyMovement = true 
                 self.HasSlowHeavyFootsteps = true 
             end
         end 
 
-        print("Retreat chance == " .. self.RetreatAfterMeleeAttackChance) 
-        print("Armor spark impact == " .. self.ArmorSparking_Chance)
-        print("Flinch chance == " .. self.FlinchChance)
+        if debugging then 
+            print("Retreat chance == " .. self.RetreatAfterMeleeAttackChance) 
+            print("Armor spark impact == " .. self.ArmorSparking_Chance)
+            print("Flinch chance == " .. self.FlinchChance)
+        end 
     end)
 end 
 ---------------------------------------------------------------------------------------------------------------------------------------------
@@ -1093,55 +1236,26 @@ function ENT:MngBurnToDeathVO()
 end
 
 ENT.Rng_FootStepSet = true
+ENT.FootstepSet_Heavy = {"general_sds/heavy_footsteps/step_1.mp3", "general_sds/heavy_footsteps/step_2.mp3", "general_sds/heavy_footsteps/step_3.mp3", "general_sds/heavy_footsteps/step_4.mp3", "general_sds/heavy_footsteps/step_5.mp3", "general_sds/heavy_footsteps/step_6.mp3"}
+
+ENT.FootstepSet_MetroPolice = {"npc/metropolice/gear1.wav","npc/metropolice/gear2.wav","npc/metropolice/gear3.wav", "npc/metropolice/gear4.wav","npc/metropolice/gear5.wav","npc/metropolice/gear6.wav"}
+ENT.FootstepSet_ExtraGear = {"general_sds/ex_footsteps/gear1.wav","general_sds/ex_footsteps/gear2.wav", "general_sds/ex_footsteps/gear3.wav","general_sds/ex_footsteps/gear4.wav", "general_sds/ex_footsteps/gear5.wav","general_sds/ex_footsteps/gear6.wav"}
+ENT.FootstepSet_Hardboot = {"npc/footsteps/hardboot_generic1.wav","npc/footsteps/hardboot_generic2.wav", "npc/footsteps/hardboot_generic3.wav","npc/footsteps/hardboot_generic4.wav", "npc/footsteps/hardboot_generic5.wav","npc/footsteps/hardboot_generic6.wav", "npc/footsteps/hardboot_generic8.wav"}
+ENT.FootstepSet_Extra = {"general_sds/ex_footsteps/footstep1.wav","general_sds/ex_footsteps/footstep2.wav", "general_sds/ex_footsteps/footstep3.wav","general_sds/ex_footsteps/footstep4.wav", "general_sds/ex_footsteps/footstep5.wav","general_sds/ex_footsteps/footstep6.wav", "general_sds/ex_footsteps/footstep7.wav","general_sds/ex_footsteps/footstep8.wav"} 
+ENT.FootstepSet_Generic = {"general_sds/ex_footsteps/hardboot_generic1.wav","general_sds/ex_footsteps/hardboot_generic2.wav", "general_sds/ex_footsteps/hardboot_generic3.wav","general_sds/ex_footsteps/hardboot_generic4.wav", "general_sds/ex_footsteps/hardboot_generic5.wav","general_sds/ex_footsteps/hardboot_generic6.wav", "general_sds/ex_footsteps/hardboot_generic7.wav","general_sds/ex_footsteps/hardboot_generic8.wav"}
+ENT.FootstepSet_GenVariety = {"general_sds/ex_footsteps/concrete1.wav","general_sds/ex_footsteps/concrete2.wav", "general_sds/ex_footsteps/concrete3.wav","general_sds/ex_footsteps/concrete4.wav", "general_sds/ex_footsteps/tile1.wav","general_sds/ex_footsteps/tile2.wav", "general_sds/ex_footsteps/tile3.wav","general_sds/ex_footsteps/tile4.wav"} 
 function ENT:ManageStepSd(force)
     if self._FootstepSetManaged and not force then return end
     self._FootstepSetManaged = true
     timer.Simple(0.1, function()
         if not IsValid(self) then return end
-        local heavySteps = {
-            "general_sds/heavy_footsteps/step_1.mp3",
-            "general_sds/heavy_footsteps/step_2.mp3",
-            "general_sds/heavy_footsteps/step_3.mp3",
-            "general_sds/heavy_footsteps/step_4.mp3",
-            "general_sds/heavy_footsteps/step_5.mp3",
-            "general_sds/heavy_footsteps/step_6.mp3"
-        }
 
-        local sets = {
-            {
-                "general_sds/ex_footsteps/gear1.wav","general_sds/ex_footsteps/gear2.wav",
-                "general_sds/ex_footsteps/gear3.wav","general_sds/ex_footsteps/gear4.wav",
-                "general_sds/ex_footsteps/gear5.wav","general_sds/ex_footsteps/gear6.wav"
-            },
-            {
-                "npc/metropolice/gear1.wav","npc/metropolice/gear2.wav","npc/metropolice/gear3.wav",
-                "npc/metropolice/gear4.wav","npc/metropolice/gear5.wav","npc/metropolice/gear6.wav"
-            },
-            {
-                "npc/footsteps/hardboot_generic1.wav","npc/footsteps/hardboot_generic2.wav",
-                "npc/footsteps/hardboot_generic3.wav","npc/footsteps/hardboot_generic4.wav",
-                "npc/footsteps/hardboot_generic5.wav","npc/footsteps/hardboot_generic6.wav",
-                "npc/footsteps/hardboot_generic8.wav"
-            },
-            {
-                "general_sds/ex_footsteps/footstep1.wav","general_sds/ex_footsteps/footstep2.wav",
-                "general_sds/ex_footsteps/footstep3.wav","general_sds/ex_footsteps/footstep4.wav",
-                "general_sds/ex_footsteps/footstep5.wav","general_sds/ex_footsteps/footstep6.wav",
-                "general_sds/ex_footsteps/footstep7.wav","general_sds/ex_footsteps/footstep8.wav"
-            },
-            {
-                "general_sds/ex_footsteps/hardboot_generic1.wav","general_sds/ex_footsteps/hardboot_generic2.wav",
-                "general_sds/ex_footsteps/hardboot_generic3.wav","general_sds/ex_footsteps/hardboot_generic4.wav",
-                "general_sds/ex_footsteps/hardboot_generic5.wav","general_sds/ex_footsteps/hardboot_generic6.wav",
-                "general_sds/ex_footsteps/hardboot_generic7.wav","general_sds/ex_footsteps/hardboot_generic8.wav"
-            },
-            {
-                "general_sds/ex_footsteps/concrete1.wav","general_sds/ex_footsteps/concrete2.wav",
-                "general_sds/ex_footsteps/concrete3.wav","general_sds/ex_footsteps/concrete4.wav",
-                "general_sds/ex_footsteps/tile1.wav","general_sds/ex_footsteps/tile2.wav",
-                "general_sds/ex_footsteps/tile3.wav","general_sds/ex_footsteps/tile4.wav"
-            }
-        }
+        /*local function ValidateSndTbl(tbl)
+            local sndTbl = tbl
+        end*/
+
+        local heavySteps = self.FootstepSet_Heavy
+        local sets = {self.FootstepSet_MetroPolice, self.FootstepSet_ExtraGear, self.FootstepSet_Hardboot, self.FootstepSet_Extra, self.FootstepSet_Generic, self.FootstepSet_GenVariety}
 
         local stepSet = self.SoundTbl_FootStep 
         if self.IsHeavilyArmored and self.HasSlowHeavyMovement then
@@ -1170,19 +1284,23 @@ local function CopyTable(tbl)
     return t
 end
 
-ENT.BrutalDeathSound_Convar = "vj_stalker_brutal_death_vo"
-ENT.BrutalPainSound_Convar = "vj_stalker_brutal_pain_vo"
+ENT.StalkerMain_BrutalDeath_Conv = "vj_stalker_brutal_death_vo"
+ENT.StalkerMain_BrutalPain_Conv = "vj_stalker_brutal_pain_vo"
+ENT.StalkerMain_RonDeath_Conv = "vj_stalker_ron_death_sounds"
 function ENT:ManageBrutalSounds()
+    if not self.HasBrutalDeathSounds then return end 
     if not IsValid(self) then return end
     self.DefaultDeathSounds = self.DefaultDeathSounds or CopyTable(self.SoundTbl_Death or {})
     self.DefaultPainSounds  = self.DefaultPainSounds  or CopyTable(self.SoundTbl_Pain or {})
-    local deathConv = tostring(self.BrutalDeathSound_Convar) 
-    local painConv = tostring(self.BrutalPainSound_Convar)
+
+    local deathConv = tostring(self.StalkerMain_BrutalDeath_Conv) 
+    local painConv = tostring(self.StalkerMain_BrutalPain_Conv)
+    local ronConv = tostring(self.StalkerMain_RonDeath_Conv)
     local brutalDeathEnabled = GetConVar(deathConv):GetInt() == 1
     local brutalPainEnabled  = GetConVar(painConv):GetInt() == 1
-    local ronDeathEnabled    = GetConVar("vj_stalker_ron_death_sounds"):GetInt() == 1
+    local ronDeathEnabled    = GetConVar(ronConv):GetInt() == 1
 
-    if brutalDeathEnabled and self.HasBrutalDeathSounds then
+    if brutalDeathEnabled then
         local t = {}
         for i = 1, 100 do
             t[#t+1] = "st_brutal_deaths/Die_" .. i .. ".wav"
@@ -1250,13 +1368,14 @@ function ENT:ManageBrutalSounds()
 end
 
 function ENT:ManageCryForAidSounds()
+    if not self.HasBrutalCFASounds then return false end  
     if not IsValid(self) then return false end
     
     if not self.DefaultCryForAidSounds then
         self.DefaultCryForAidSounds = CopyTable(self.SoundTbl_CryForAid or {})
     end
 
-    if GetConVar("vj_stalker_brutal_cry_vo"):GetInt() == 1 and self.HasBrutalCFASounds then
+    if GetConVar("vj_stalker_brutal_cry_vo"):GetInt() == 1 then
         self.SoundTbl_CryForAid = {}
         for i = 1, 15 do
             table.insert(self.SoundTbl_CryForAid, "st_brutal_deaths/brutal_rus_cryforaid/help_" .. i .. ".ogg")
@@ -1276,47 +1395,43 @@ function ENT:TrackWeaponBackAway()
     self.CanBackAwayWithWeapon = IsValid(self) and self.HasWeaponBackAway
 end
 
+ENT.BackAway_VisReqNextT = 0
 function ENT:ManageWeaponBackAway()
+    if not self.CanUseWeaponBackAway then return end
+
+    if not GetConVar("vj_stalker_backaway_enevis"):GetBool() then return end
+
+    local cT = CurTime()
+    if cT < self.BackAway_VisReqNextT then return end
+    self.BackAway_VisReqNextT = cT + 0.2
+
     local enemy = self:GetEnemy()
-    if IsValid(enemy) and self:Visible(enemy) then
-        if self.CanBackAwayWithWeapon then
-            self.HasWeaponBackAway = true
-        else
-            self.HasWeaponBackAway = false
-        end
+    if not IsValid(enemy) then
+        self.HasWeaponBackAway = false
+        return
+    end
+
+    if self:Visible(enemy) then
+        self.HasWeaponBackAway = true
     else
         self.HasWeaponBackAway = false
     end
 end
 ---------------------------------------------------------------------------------------------------------------------------------------------
--- Helper functions to track "Weapon_CanMoveFire" and "Weapon_Strafe" -- 
-function ENT:TrackStrafeFire()
+-- Helper function to track weapon capabilities (Strafe and Move-Fire)
+function ENT:TrackWeaponCapabilities()
     timer.Simple(1, function()
-        if IsValid(self) then 
-            if self.Weapon_Strafe then
-                self.HasStrafeFire = true 
-                print("Has strafe fire behaviour!")
-            else
-                self.HasStrafeFire = false 
-                print("Does not have strafe fire behaviour!")
-            end 
-        end 
-    end)
-end 
-
-function ENT:TrackMoveWhileShoot()
-    timer.Simple(1, function()
-        if IsValid(self) then 
-            if self.Weapon_CanMoveFire then 
-                self.HasMoveAndShoot = true
-                if self.RANDOMS_DEBUG then 
-                    print("Has shoot while moving behaviour.")
-                else
-                    self.HasMoveAndShoot = false
-                    print("Does not have shoot while moving behaviour.")
-                end
-            end 
-        end 
+        if not IsValid(self) then return end
+        self.HasStrafeFire = self.Weapon_Strafe or false
+        self.HasMoveAndShoot = self.Weapon_CanMoveFire or false
+        if self.RANDOMS_DEBUG then
+            if self.HasStrafeFire then
+                print(self:GetName() .. ": Has strafe fire behaviour!")
+            end
+            if self.HasMoveAndShoot then
+                print(self:GetName() .. ": Has shoot while moving behaviour.")
+            end
+        end
     end)
 end
 ---------------------------------------------------------------------------------------------------------------------------------------------
@@ -1348,7 +1463,8 @@ end
 
 //Move and shoot
 function ENT:ManageMoveAndShoot()
-    if not self.FireModeChangeOnDist or self.VJ_IsBeingControlled then return false end
+    if not self.FireModeChangeOnDist then return end 
+    if self.VJ_IsBeingControlled then return end
     local curT = CurTime()
     local ene = self:GetEnemy()
     if not IsValid(ene) then return end
@@ -1377,6 +1493,7 @@ function ENT:ManageRandomVars()
     timer.Simple(0.1, function()
         if IsValid(self) then 
 
+            local preDebug           = self.RANDOMS_DEBUG
             local curT               = CurTime()
             local defaultFov         = self.SightAngle
             local cvar_viewangle     = GetConVar("vj_stalker_snpc_view_angle"):GetInt()
@@ -1387,7 +1504,6 @@ function ENT:ManageRandomVars()
             local cvar_limitednades  = GetConVar("vj_stalker_limited_grenades"):GetInt()
             local cvar_healself      = GetConVar("vj_stalker_heal_self"):GetInt()
 
-            local tblAlResp = {"OnlyMove", "OnlySearch", true}
             local infT  = curT + 9999999999999
             local defT  = curT + mRand(10, 20)
             local defTurn = self.TurningSpeed or 10
@@ -1407,7 +1523,7 @@ function ENT:ManageRandomVars()
             self.CombatFlareDeployT = curT + mRand(5, 25)
             self.Corpse_DissolveDelayT = curT + mRand(2.5, 7.75)
             self.Dodge_NextT = curT + mRand(1, 5)
-
+            self.Suppression_Time = mRand(2.5, 10)
             self.BloodDecalDistance = mRand(100, 320)
             self.IdleDialogueDistance = mRand(350, 650)
 
@@ -1417,7 +1533,7 @@ function ENT:ManageRandomVars()
                 else
                     self.SightAngle = cvar_viewangle
                 end
-                print(self.SightAngle)
+                if preDebug then print("[Sight Angle]: My current sight angle value is " .. self.SightAngle) end 
             else
                 self.SightAngle = defaultFov
             end
@@ -1443,33 +1559,42 @@ function ENT:ManageRandomVars()
             end
 
             local tbl = {true, false}
+            local pckTbl = tbl[mRng(1, #tbl)]
             if self.RngPickMoveAndShoot then 
-                self.Weapon_CanMoveFire = table.Random(tbl) 
+                self.Weapon_CanMoveFire = pckTbl
                 if self.Weapon_CanMoveFire then
-                    self.Weapon_Strafe = table.Random(tbl)  
+                    self.Weapon_Strafe = pckTbl
                 else 
                     self.Weapon_Strafe = false 
                 end 
             end 
 
-            if not self.Weapon_FindCoverOnReload and not self.DoesNotHaveCoverReload then 
-                self.DoesNotHaveCoverReload = true 
-                if self.RANDOMS_DEBUG then 
-                    print("Doesn't have find cover reload.")
-                else 
-                    print("Has find cover reload.")
-                end 
-            end 
+            if not self.Weapon_FindCoverOnReload and not self.DoesNotHaveCoverReload then
+                self.DoesNotHaveCoverReload = true
 
-            if self.HasGrenadeAttackMechRng then 
+                if preDebug then
+                    print("Doesn't have find cover reload.")
+                end
+            else
+                if preDebug then
+                    print("Has find cover reload.")
+                end
+            end
+
+            if self.HasGrenadeAttackMechRng and not self.Grenade_PermBlocked then 
                 self.HasGrenadeAttack = mRng(1, 3) ~= 1
             end 
 
-            if self.HasGrenadeAttack then 
+            if self.HasGrenadeAttack and not self.Grenade_PermBlocked then 
                 if cvar_limitednades == 1 and self.LimitedGrenades then
-                    local grenCount = mRng(1, self.LimitedGrenCount)
+
+                    local min = self.LimitedGrenCount_Min or 1 
+                    local max = self.LimitedGrenCount_Max or 10
+                    local grenCount = mRng(min, max) or 3 
+
                     self.HasLimitedGrenadeCount = true 
                     self.HumanGrenadeCount = grenCount or 2 
+                   if preDebug then print("[Limited Grenades]: My total grenade count is " .. grenCount) end 
                 end 
             end 
 
@@ -1480,9 +1605,10 @@ function ENT:ManageRandomVars()
             end 
 
             if cvar_radio == 1 then 
-                local chanceForRadio = self.HasRadioSpawnChance
+                local chanceForRadio = self.HasRadioSpawnChance or 5 
                 if self.HasAccessToRadio and mRng(1, chanceForRadio) == 1 then
                     self.HasRadioChatDialogue = true 
+                    self.NextRadioDialogueT = curT + mRand(5, 15)
                 end 
             end
 
@@ -1495,7 +1621,7 @@ function ENT:ManageRandomVars()
             end
 
             if cvar_neverforget == 1 then
-                if self.RANDOMS_DEBUG then 
+                if preDebug then 
                     print(infT .. " and " .. defT)
                 end 
                 self.EnemyTimeout = infT
@@ -1503,7 +1629,9 @@ function ENT:ManageRandomVars()
                 self.EnemyTimeout = defT
             end 
 
-            self.DamageAllyResponse = mRng(#tblAlResp)
+            local tblAlResp = {"OnlyMove", "OnlySearch", true}
+            self.DamageAllyResponse = tblAlResp[mRng(1, #tblAlResp)]
+
             if mRng(1, 2) == 1 then self.HasFireInBurstAbility = true end 
             if mRng(1, 2) == 1 then self.CanDropWeaponWhenOnFire = true end
             if mRng(1, 4) == 1 then self.CombatDamageResponse = false end
@@ -1568,8 +1696,8 @@ function ENT:MngeExVarTimes()
     end
 
     local waitForEnemyTimers = {
-        {1, 5}, {4, 10}, {5, 15},
-        {10, 15}, {1, 10}, {5, 20}
+        {1, 5}, {4, 9}, {1, 15}, {2, 5},
+        {10, 15}, {3, 7}, {1, 10}, {5, 20}
     }
 
     if self.Rng_WaitForEneTime and self.Weapon_OcclusionDelay then
@@ -1596,138 +1724,198 @@ function ENT:MngeExVarTimes()
     end)
 end
 ---------------------------------------------------------------------------------------------------------------------------------------------
-//Fix parenting for amb glow 
+ENT.StalkerMain_FlashLight_Conv = "vj_stalker_wep_flashlight" 
+
+local function SafeCreate(class)
+    local ent = ents.Create(class)
+    if not IsValid(ent) then return nil end
+    return ent
+end
+
 function ENT:WeaponFlashlight()
-    if GetConVar("vj_stalker_wep_flashlight"):GetInt() ~= 1 then return false end 
-    local weaponLightChance = self.WeaponFlashLightChance
+    if self.HumanWepHasWepFlashLight then return end
+    if IsValid(self.WeaponFlashlightSpotLight) then return end
+
+    if not self.AllowedToHaveWepFlashLight then return end
+    local cv_flashlight = GetConVar(self.StalkerMain_FlashLight_Conv)
+    if not cv_flashlight or not cv_flashlight:GetBool() then return end
+
+    self.WepFlashEntTbl = self.WepFlashEntTbl or {}
+
+    local wep = self:GetActiveWeapon()
+
+    if not IsValid(wep) then
+        timer.Simple(0, function()
+            if IsValid(self) then
+                self:WeaponFlashlight()
+            end
+        end)
+        return
+    end
+
+    local weaponLightChance = self.WeaponFlashLightChance or 10
+    if mRng(1, weaponLightChance) ~= 1 then return end
     
-    timer.Simple(0.1, function()
-        if not IsValid(self) then return end
+    local holdType = wep.HoldType
+    if holdType == "pistol" or holdType == "revolver" or holdType == "rpg" then return end
 
-        local wep = self:GetActiveWeapon()
-        if not IsValid(wep) then return end
-        if not self.AllowedToHaveWepFlashLight then return end
-        if mRng(1, weaponLightChance) ~= 1 then return end
+    self._CachedMuzzleAtt = self._CachedMuzzleAtt or {}
+    local wepClass = wep:GetClass()
 
-        local holdType = wep.HoldType
-        if holdType == "pistol" or holdType == "revolver" or holdType == "rpg" then
-            return
-        end
+    local muzzleAttachmentIndex, muzzleAttachmentName
+    local cached = self._CachedMuzzleAtt[wepClass]
 
-        local muzzleAttachmentIndex = nil
-        local muzzleAttachment = nil
-        local muzzleAttachmentName = nil
-
+    if cached then
+        muzzleAttachmentIndex = cached[1]
+        muzzleAttachmentName = cached[2]
+    else
         for _, attName in ipairs(self.WeaponMuzzleAttachments) do
-            local attachmentIndex = wep:LookupAttachment(attName)
-            if attachmentIndex and attachmentIndex > 0 then
-                muzzleAttachment = wep:GetAttachment(attachmentIndex)
-                muzzleAttachmentIndex = attachmentIndex
+            local id = wep:LookupAttachment(attName)
+            if id and id > 0 then
+                muzzleAttachmentIndex = id
                 muzzleAttachmentName = attName
+                self._CachedMuzzleAtt[wepClass] = {id, attName}
                 break
             end
         end
+    end
 
-        if not muzzleAttachment and self.RANDOMS_DEBUG then
-            print("No valid muzzle att's was found for the weapon: " .. tostring(wep:GetClass()))
-            return false
+    if not muzzleAttachmentIndex then
+        if self.RANDOMS_DEBUG then
+            print("No valid muzzle att for: " .. tostring(wep:GetClass()))
         end
+        return
+    end
 
-        wep.WeaponFlashlightFlag = true 
-        self.HumanWepHasWepFlashLight = true
+    local attData = wep:GetAttachment(muzzleAttachmentIndex)
+    if not attData then return end
 
-        local rngFlashTextureColor = nil
-        local rngFlashSpriteColor = nil
-        local rngAmbientSurColor = nil
+    local attForward = attData.Ang:Forward()
+    local wepForward = wep:GetForward()
+    local dot = attForward:Dot(wepForward)
 
-        local rngNearz = mRand(10, 15)
-        local rngFarz = mRand(600, 850)
-        local rngFOV = mRand(40, 60)
+    /*if self.RANDOMS_DEBUG then
+        print("---- FLASHLIGHT VALIDATION ----")
+        print("Weapon:", wep:GetClass())
+        print("Dot:", dot)
+        print("-------------------------------")
+    end*/
 
-        self.WeaponFlashlightSpotLight = ents.Create("env_projectedtexture")
-        self.WeaponFlashlightSpotLight:SetParent(wep) 
-        self.WeaponFlashlightSpotLight:SetPos(muzzleAttachment.Pos)
-        self.WeaponFlashlightSpotLight:SetAngles(muzzleAttachment.Ang)
-        self.WeaponFlashlightSpotLight:SetKeyValue("enableshadows", "1")
-        self.WeaponFlashlightSpotLight:SetKeyValue("shadowquality", "1")
-        self.WeaponFlashlightSpotLight:SetKeyValue("SetNearZ", rngNearz)
-        self.WeaponFlashlightSpotLight:SetKeyValue("SetFarZ", rngFarz)
-        self.WeaponFlashlightSpotLight:SetKeyValue("SetFOV", rngFOV)
-        self.WeaponFlashlightSpotLight:Input("SpotlightTexture", NULL, NULL, "effects/flashlight001")
-        self.WeaponFlashlightSpotLight:SetOwner(self)
-        self.WeaponFlashlightSpotLight:Spawn()
-
-        if muzzleAttachmentName then
-            self.WeaponFlashlightSpotLight:Fire("SetParentAttachment", muzzleAttachmentName)
+    if dot < 0.30 then
+        if self.RANDOMS_DEBUG then
+            print("Rejected flashlight: bad attachment alignment")
         end
-        table.insert(self.WepFlashEntTbl, self.WeaponFlashlightSpotLight)
-        self:DeleteOnRemove(self.WeaponFlashlightSpotLight)
+        self.NextFlashlightRetryT = CurTime() + math.Rand(10, 30)
+        return
+    end
 
-        local spotLightChance = self.FlashlightSpotlightChance 
-        if self.HasWepFlashlightSpotlight and mRng(1, spotLightChance) == 1 then 
-            local spotLength = mRng(500, 950)
-            local spotWidth = mRng(15,35)
+    self._FlashlightWeapon = wep
+    wep.WeaponFlashlightFlag = true 
+    self.HumanWepHasWepFlashLight = true
 
-            self.Spotlight = ents.Create("beam_spotlight")
-            self.Spotlight:SetPos(muzzleAttachment.Pos)
-            self.Spotlight:SetAngles(muzzleAttachment.Ang)
-            self.Spotlight:SetKeyValue("spotlightlength", spotLength)
-            self.Spotlight:SetKeyValue("spotlightwidth", spotWidth)
-            self.Spotlight:SetKeyValue("spawnflags","2")
-            self.Spotlight:Fire("Color","255 255 255")
-            self.Spotlight:SetParent(wep, muzzleAttachmentIndex)
-            self.Spotlight:Spawn()
-            self.Spotlight:Activate()
-            self.Spotlight:Fire("lighton")
-            self.Spotlight:AddEffects(EF_PARENT_ANIMATES)
-            self:DeleteOnRemove(self.Spotlight)
+    local rngNearz = mRand(10, 15)
+    local rngFarz = mRand(600, 1000)
+    local rngFOV = mRand(40, 60)
 
-            if muzzleAttachmentName then
-                self.Spotlight:Fire("SetParentAttachment", muzzleAttachmentName)
+    -- PROJECTED LIGHT
+    self.WeaponFlashlightSpotLight = SafeCreate("env_projectedtexture")
+    if not self.WeaponFlashlightSpotLight then return end
+
+    local light = self.WeaponFlashlightSpotLight
+    light:SetParent(wep)
+    light:SetPos(attData.Pos)
+    light:SetAngles(attData.Ang)
+    light:SetKeyValue("enableshadows", "1")
+    light:SetKeyValue("shadowquality", "1")
+    light:SetKeyValue("SetNearZ", rngNearz)
+    light:SetKeyValue("SetFarZ", rngFarz)
+    light:SetKeyValue("SetFOV", rngFOV)
+    light:Input("SpotlightTexture", NULL, NULL, "effects/flashlight001")
+    light:SetOwner(self)
+    light:Spawn()
+
+    if muzzleAttachmentName then
+        light:Fire("SetParentAttachment", muzzleAttachmentName)
+    end
+
+    table.insert(self.WepFlashEntTbl, light)
+    self:DeleteOnRemove(light)
+
+    -- BEAM SPOTLIGHT
+    if self.HasWepFlashlightSpotlight then 
+        local chance = self.FlashlightSpotlightChance or 2 
+        if mRng(1, chance) == 1 then 
+            local spot = SafeCreate("beam_spotlight")
+            if spot then
+                spot:SetPos(attData.Pos)
+                spot:SetAngles(attData.Ang)
+                spot:SetKeyValue("spotlightlength", mRng(500, 950))
+                spot:SetKeyValue("spotlightwidth", mRng(15, 35))
+                spot:SetKeyValue("spawnflags","2")
+                spot:Fire("Color","255 255 255")
+                spot:SetParent(wep, muzzleAttachmentIndex)
+                spot:Spawn()
+                spot:Activate()
+                spot:Fire("lighton")
+                spot:AddEffects(EF_PARENT_ANIMATES)
+
+                if muzzleAttachmentName then
+                    spot:Fire("SetParentAttachment", muzzleAttachmentName)
+                end
+
+                table.insert(self.WepFlashEntTbl, spot)
+                self:DeleteOnRemove(spot)
             end
-            table.insert(self.WepFlashEntTbl, self.Spotlight)
-            self:DeleteOnRemove(self.Spotlight)
         end 
+    end 
 
-        -- Light glow orb
-        local orbRngChance = self.FlashLightGlowOrbChance
-        if self.HasWeaponFlashGlowOrb and mRng(1, orbRngChance) == 1 then 
-            self.WeaponGlowOrb = ents.Create("env_sprite")
-            local rngOrbScale = mRand(0.1, 0.35)
-            self.WeaponGlowOrb:SetKeyValue("model", "sprites/light_glow03.vmt")
-            self.WeaponGlowOrb:SetPos(muzzleAttachment.Pos)
-            self.WeaponGlowOrb:SetKeyValue("scale", tostring(rngOrbScale))
-            self.WeaponGlowOrb:SetKeyValue("rendercolor", "255 255 255 255")
-            self.WeaponGlowOrb:SetParent(wep, muzzleAttachmentIndex)
-            self.WeaponGlowOrb:SetKeyValue("rendermode", "9")
-            self.WeaponGlowOrb:SetKeyValue("spawnflags", "0")
-            self.WeaponGlowOrb:SetAngles(muzzleAttachment.Ang)
-            self.WeaponGlowOrb:Spawn()
-            self.WeaponGlowOrb:Activate()
+    --GLOW ORB
+    if self.HasWeaponFlashGlowOrb then 
+        local chance = self.FlashLightGlowOrbChance or 2 
+        if mRng(1, chance) == 1 then 
+            local orb = SafeCreate("env_sprite")
+            if orb then
+                orb:SetKeyValue("model", "sprites/light_glow03.vmt")
+                orb:SetPos(attData.Pos)
+                orb:SetKeyValue("scale", mRand(0.1, 0.35))
+                orb:SetKeyValue("rendercolor", "255 255 255 255")
+                orb:SetParent(wep, muzzleAttachmentIndex)
+                orb:SetKeyValue("rendermode", "9")
+                orb:SetKeyValue("spawnflags", "0")
+                orb:SetAngles(attData.Ang)
+                orb:Spawn()
+                orb:Activate()
 
-            if muzzleAttachmentName then
-                self.WeaponGlowOrb:Fire("SetParentAttachment", muzzleAttachmentName)
+                if muzzleAttachmentName then
+                    orb:Fire("SetParentAttachment", muzzleAttachmentName)
+                end
+
+                table.insert(self.WepFlashEntTbl, orb)
+                self:DeleteOnRemove(orb)
             end
-            table.insert(self.WepFlashEntTbl, self.WeaponGlowOrb)
-            self:DeleteOnRemove(self.WeaponGlowOrb)
         end 
+    end 
 
-        -- Ambient Surrounding Glow
-        local ambLightRngChance = self.FlashLightAmbGlowChance
-        if IsValid(self.WeaponFlashlightSpotLight) and self.HasWeaponFlashAmbGlow and mRng(1, ambLightRngChance) == 1 then 
-            self.FlashlightGlow = ents.Create("light_dynamic")
-            self.FlashlightGlow:SetParent(self.WeaponFlashlightSpotLight)
-            self.FlashlightGlow:SetPos(self.WeaponFlashlightSpotLight:GetPos())
-            self.FlashlightGlow:SetAngles(self:GetAngles())
-            self.FlashlightGlow:SetKeyValue("brightness", tostring(mRand(1, 8)))
-            self.FlashlightGlow:SetKeyValue("distance", tostring(mRand(25, 50)))
-            self.FlashlightGlow:SetKeyValue("rendercolor", "255 255 255")
-            self.FlashlightGlow:Spawn()
-            self.FlashlightGlow:Activate()
-            table.insert(self.WepFlashEntTbl, self.FlashlightGlow)
-            self:DeleteOnRemove(self.FlashlightGlow)
+    -- AMBIENT LIGHT
+    if self.HasWeaponFlashAmbGlow and IsValid(light) then 
+        local chance = self.FlashLightAmbGlowChance or 2 
+        if mRng(1, chance) == 1 then 
+            local amb = SafeCreate("light_dynamic")
+            if amb then
+                amb:SetParent(light)
+                amb:SetPos(light:GetPos())
+                amb:SetAngles(self:GetAngles())
+                amb:SetKeyValue("brightness", mRand(1, 8))
+                amb:SetKeyValue("distance", mRand(25, 50))
+                amb:SetKeyValue("rendercolor", "255 255 255")
+                amb:Spawn()
+                amb:Activate()
+
+                table.insert(self.WepFlashEntTbl, amb)
+                self:DeleteOnRemove(amb)
+            end
         end 
-    end)
+    end 
 end
 ---------------------------------------------------------------------------------------------------------------------------------------------
 function ENT:IsVJAnimationLockState()
@@ -1750,16 +1938,18 @@ function ENT:OnCallForHelp(ally, isFirst)
 end
 
 function ENT:Ally_CallForHelpReaction(ally)
+    if not IsValid(ally) then return end 
     if not ally.Ally_RespondCallForHelp then return end 
-    if not IsValid(ally) or ally.VJ_IsBeingControlled then return end 
     if not ally.IsVJBaseSNPC or not ally.IsVJBaseSNPC_Human then return end 
+    if ally.VJ_IsBeingControlled then return end 
+    if not ally:Alive() then return end 
     if (ally:GetClass() == self:GetClass() or ally.VJ_NPC_Class == self.VJ_NPC_Class) and not ally:IsBusy("Activities") and mRng(1, ally.Ally_ResponseCallForHelpAnimChance or 1) == 1 then
     
-        local cfhTbl = istable(ally.Ally_CfhResponseAnim) and #ally.Ally_CfhResponseAnim > 0 and table.Random(ally.Ally_CfhResponseAnim)
-        local baseCallHelpTbl = istable(ally.AnimTbl_CallForHelp) and #ally.AnimTbl_CallForHelp > 0 and table.Random(ally.AnimTbl_CallForHelp)
+        local cfhTbl = ally:GetRandomValidValue(ally.Ally_CfhResponseAnim)
+        local baseCallHelpTbl = self:GetRandomValidValue(self.AnimTbl_CallForHelp) 
         local responseAnim = nil
         local isGes = false
-
+        
         if cfhTbl then -- local to my SNPC, assumes input is gesture
             isGes = true 
             responseAnim = cfhTbl
@@ -1817,91 +2007,102 @@ function ENT:OnAlert(ent)
     end
 end
 ---------------------------------------------------------------------------------------------------------------------------------------------
+    // -- [Helper Functions!] -- \\ 
+function ENT:IsAbleToMoveNow()
+    local moveType = self.MovementType
+
+    if moveType == VJ_MOVETYPE_AERIAL
+    or moveType == VJ_MOVETYPE_AQUATIC
+    or moveType == VJ_MOVETYPE_STATIONARY
+    or self.IsGuard then
+        return false
+    end
+
+    return self:GetNavType() == NAV_GROUND
+end
+
+function ENT:GetRandomValidValue(var)
+    if not var then return false end
+    if not IsValid(self) then return false end 
+
+    if istable(var) then
+        local count = #var
+        if count > 0 then
+            return var[mRng(1, count)]
+        end
+
+    elseif isstring(var) and var ~= "" then
+        return var
+    end
+
+    return false
+end
+---------------------------------------------------------------------------------------------------------------------------------------------
+//I gotta just merge these two functions below since they are practically the same bloody thing. 
 ENT.ReactiveCover_ArmedEne = true 
 ENT.ReactiveCoverChance = 3 
 ENT.ReactiveCoverNextT = 10   
 ENT.NextReactiveCoverT = 0        
 
 function ENT:ReactiveCoverBehavior()
-    if not self.ReactiveCover_ArmedEne or self.VJ_IsBeingControlled then return end
-    local busy = self:IsVJAnimationLockState() or self:IsBusy()
-    if self.PerformingAlertBehavior or self.IsGuard or self.CurrentlyHealSelf or busy or not self:IsOnGround() then return end
+    if not self.ReactiveCover_ArmedEne then return end 
+    if self.PerformingAlertBehavior then return end 
+    if self.VJ_IsBeingControlled then return end
+
+    if not self:IsAbleToMoveNow() then return end
+    local busy = self:IsVJAnimationLockState() or self:IsBusy() or self.Flinching 
+    if self.CurrentlyHealSelf or busy or not self:IsOnGround() then return end
+    
     local cT = CurTime()
-    if cT < self.TakingCoverT then return end 
-    if cT < self.NextReactiveCoverT then return end
+    if cT < self.TakingCoverT or cT < self.NextReactiveCoverT then return end
 
     local enemy = self:GetEnemy()
     if not IsValid(enemy) then return end
-    local exDelay = mRand(5, 20) or 20
+
     local wep = enemy:GetActiveWeapon()
+    if not IsValid(wep) then return end
+    
     local chance = self.ReactiveCoverChance or 3 
-
-    if not IsValid(wep) then return end 
     if mRng(1, chance) ~= 1 then return end
-
-    if self:IsCurrentSchedule(30) or self:IsCurrentSchedule(27) then return end
-
+    local exDelay = mRand(5, 20) or 20
     self.NextReactiveCoverT = cT + self.ReactiveCoverNextT + exDelay
-    self:StopMoving()
-    self:ClearSchedule()
+    self:Handle_ScheduledForceMove(false, "Both", "Both", "Run", "Rng")
 
-    local choice = mRng(1, 2)
-    local coverDelay = 0
-    local coverPos = nil
-    local dist = tonumber(self.AlertCover_DistCheck) or 1250
-
-    if choice == 1 and IsValid(enemy) and mRng(1, 2) == 1 then
-        local move = "TASK_RUN_PATH"
-        self:SCHEDULE_COVER_ENEMY(move, function(x)
-            x.DisableChasingEnemy = true
-            if mRng(1, 2) == 1 then 
-                x.CanShootWhenMoving = true
-                x.TurnData = {Type = VJ.FACE_ENEMY}
-            else
-                x.CanShootWhenMoving = false  
-                x.TurnData = {Type = VJ.FACE_ENEMY, Target = nil}
-            end 
-        end)
-        coverDelay = mRand(1.5, 3.5)
-        self.NextChaseTime = CurTime() + mRand(2, 5)
-    else
-        if mRng(1, 2) == 1 then
-            self:SCHEDULE_COVER_ORIGIN(move, function(x)
-                x.DisableChasingEnemy = true
-                if mRng(1, 2) == 1 then 
-                    x.CanShootWhenMoving = true
-                    x.TurnData = {Type = VJ.FACE_ENEMY}
-                else
-                    x.CanShootWhenMoving = false  
-                    x.TurnData = {Type = VJ.FACE_ENEMY, Target = nil}
-                end 
-            end)
-        end
-        coverDelay = mRand(1, 5)
-        self.NextChaseTime = CurTime() + mRand(2, 5)
-    end
     if self.RANDOMS_DEBUG then
         print("Taken cover cuz ene is armed!!!!")
     end 
-    self.TakingCoverT = CurTime() + coverDelay
 end
----------------------------------------------------------------------------------------------------------------------------------------------
-function ENT:TakeCover(enemy)
-    if not self.OnAlert_Cover or self.VJ_IsBeingControlled then return false end 
-    if not IsValid(enemy) or not self.PerformingAlertBehavior or self.IsGuard then return false end
-    local curTime = CurTime()
-    local selfPos = self:GetPos()
-    local isBusy = self:IsBusy()
-    local coverPos
-    local flagResetT = mRng(1, 5)
-    local dist = tonumber(self.AlertCover_DistCheck) or 1500
 
+ENT.OnAlert_Cover = true 
+ENT.AlertCover_DistCheck = 1500
+
+ENT.Valid_CoverClassesTbl = {
+    ["prop_physics"] = true,
+    ["func_brush"] = true,
+    ["prop_static"] = true,
+    ["prop_dynamic"] = true
+}
+
+
+function ENT:TakeCover(enemy)
+    if not self.OnAlert_Cover then return end 
+    if self.VJ_IsBeingControlled then return end 
+
+    if not self:IsAbleToMoveNow() then return end
+    if not IsValid(enemy) or not self.PerformingAlertBehavior then return end
+
+    local curTime = CurTime()
     if curTime < self.TakingCoverT then return end 
+
     local myPosCent = self:GetPos() + self:OBBCenter()
     local eyePos = self:EyePos()
     local inCover = self:DoCoverTrace(myPosCent, eyePos, false, {SetLastHiddenTime = true})
     if inCover then return end 
-    if self:IsCurrentSchedule(30) or self:IsCurrentSchedule(27) then return end
+
+    local dist = tonumber(self.AlertCover_DistCheck) or 1500
+    local selfPos = self:GetPos()
+    local isBusy = self:IsBusy()
+    local coverPos;
 
     for _, prop in ipairs(ents.FindInSphere(selfPos, dist)) do
         if self.Valid_CoverClassesTbl[prop:GetClass()] and not isBusy then
@@ -1910,70 +2111,12 @@ function ENT:TakeCover(enemy)
         end
     end
 
-    self:StopMoving()
-    self:ClearSchedule()
-
-    local choice = mRng(1, 3)
-    local coverDelay = 0
-    local fcEne = VJ.FACE_ENEMY
-    timer.Simple(0.1, function()
+    local delT = mRand(0.1, 0.5)
+    timer.Simple(delT, function()
         if not IsValid(self) then return end
-        if choice == 1 and IsValid(enemy) then
-            self:SCHEDULE_COVER_ENEMY("TASK_RUN_PATH", function(x)
-            if mRng(1, 2) == 1 then 
-                x.CanShootWhenMoving = true
-                x.TurnData = {Type = fcEne}
-            else
-                x.CanShootWhenMoving = false  
-                x.TurnData = {Type = fcEne, Target = nil}
-            end 
-        end)
-            coverDelay = mRand(1.5, 3.5)
-        elseif choice == 2 or (choice == 3 and mRng(1, 2) == 1) then
-            self:SCHEDULE_COVER_ORIGIN("TASK_RUN_PATH", function(x)
-                x.DisableChasingEnemy = true
-            if mRng(1, 2) == 1 then 
-                x.CanShootWhenMoving = true
-                x.TurnData = {Type = fcEne}
-            else
-                x.CanShootWhenMoving = false  
-                x.TurnData = {Type = fcEne, Target = nil}
-            end 
-        end)
-            coverDelay = mRand(1, 5)
-        elseif choice == 3 and coverPos then
-            self:SetLastPosition(coverPos)
-            self:SCHEDULE_GOTO_POSITION("TASK_RUN_PATH", function(x)
-            x.DisableChasingEnemy = true
-            if mRng(1, 2) == 1 then 
-                x.CanShootWhenMoving = true
-                x.TurnData = {Type = fcEne}
-            else
-                x.CanShootWhenMoving = false  
-                x.TurnData = {Type = fcEne, Target = nil}
-            end 
-        end)
-            coverDelay = mRand(1, 5)
-        elseif choice == 3 and not coverPos then
-            self:SCHEDULE_COVER_ORIGIN("TASK_RUN_PATH", function(x)
-            x.DisableChasingEnemy = true
-            if mRng(1, 2) == 1 then 
-                x.CanShootWhenMoving = true
-                x.TurnData = {Type = VfcEne}
-            else
-                x.CanShootWhenMoving = false  
-                x.TurnData = {Type = fcEne, Target = nil}
-            end 
-        end)
-            coverDelay = mRand(1, 5)
-        else
-            self.PerformingAlertBehavior = false
-            return
-        end
-
-        self.TakingCoverT = curTime + coverDelay
-        self.NextChaseTime = curTime + mRand(2, 5)
+        self:Handle_ScheduledForceMove(false, "Both", "Both", "Run", "Rng")
         if self.PerformingAlertBehavior then
+            local flagResetT = mRng(1, 3)
             timer.Simple(flagResetT, function()
                 if IsValid(self) then
                     self.PerformingAlertBehavior = false
@@ -1983,29 +2126,30 @@ function ENT:TakeCover(enemy)
     end)
 end
 
+ENT.AlertGesSignal = true 
+ENT.GestureSignal_AnimTbl = {"gesture_signal_takecover","gesture_signal_right","gesture_signal_left","gesture_signal_halt","gesture_signal_advance","gesture_signal_forward","gesture_signal_group"}
+ENT.PlayGesAlert_MaxDist = 2000 
 function ENT:PerformAlertSignal(enemy)
+    if not self.AlertGesSignal then return end 
     if not self.PerformingAlertBehavior then return end 
+    if self:IsBusy() or self.Flinching or self:IsVJAnimationLockState() then return end 
     if not IsValid(enemy) then return end
-    if not self:IsBusy() and enemy:Visible(self) then
+    if enemy:Visible(self) then
         
         local distanceToEnemy = self:GetPos():Distance(enemy:GetPos())
+        local dist = self.PlayGesAlert_MaxDist or 1500
 
-        if distanceToEnemy > mRand(1200, 1525) then 
-            local signalAnims = table.Random({"gesture_signal_takecover","gesture_signal_right","gesture_signal_left","gesture_signal_halt","gesture_signal_advance","gesture_signal_forward","gesture_signal_group"})
-            self:PlayAnim("vjges_" .. signalAnims)
+        if distanceToEnemy > dist then 
+            local signalAnims = self:GetRandomValidValue(self.GestureSignal_AnimTbl)
+            if not signalAnims then return end 
+            
+            self:PlayAnim("vjges_" .. signalAnims) 
             self.AlertSignalChance = true
-            local c = CurTime()
-            self.TakingCoverT = c + mRand(1, 4)
-            self.NextChaseTime = c + mRand(1, 5)
-            if mRng(1, 3) == 1 and not self.IsGuard and not self.MovementType == VJ_MOVETYPE_STATIONARY then 
-                self:StopMoving()
-                self:SCHEDULE_COVER_ORIGIN("TASK_RUN_PATH", function(x) 
-                    x.DisableChasingEnemy = false
-                    x:EngTask("TASK_FACE_ENEMY", 0) 
-                    x.CanShootWhenMoving = true 
-                    x.TurnData = {Type = VJ.FACE_ENEMY} 
-                end)
-            end
+
+            if mRng(1, 3) == 1 and self:IsAbleToMoveNow() then
+                self:Handle_ScheduledForceMove(false, "Both", "Both", "Run", "Rng")
+            end 
+
             timer.Simple(mRand(2, 4), function()
                 if IsValid(self) then
                     self.AlertSignalChance = false
@@ -2021,31 +2165,32 @@ function ENT:PerformAlertSignal(enemy)
 end
 
 ENT.FireFlareGun_Anim = "shootflare"
+ENT.HolsterWeapon_Anim = false
+ENT.FireFlareGun_MaxHeight = 6250
 function ENT:FireFlareGun(enemy)
     if not self.CanFireFlareGunSeq then return end 
     if not self.PerformingAlertBehavior then return end 
-
     if not IsValid(enemy) then return end
 
     local conv = GetConVar("vj_stalker_fire_flares"):GetInt()
     if conv ~= 1 then return end 
 
+    local state = self:GetNPCState()
+    if state ~= NPC_STATE_ALERT or state ~= NPC_STATE_COMBAT then return end 
+
     local mDist = self.FireFlareSeq_MaxDist or 5000
-    local busy = self:IsVJAnimationLockState() or self:IsBusy()
-    
-    if self:GetPos():Distance(enemy:GetPos()) < mDist or not self.Alerted or busy then 
+    local busy = self:IsVJAnimationLockState() or self:IsBusy() or self.Flinching
+    if self:GetPos():Distance(enemy:GetPos()) < mDist or busy then 
         self.PerformingAlertBehavior = false
         return false
     end
 
-    local fireFlareChance = self.FireFlareSeq_Chance or 6 
-    local initDelayT = mRand(0.4, 0.55)
-    local rngSnd = mRng(80, 110)
-    local drawWepSnd = VJ.PICK(self.DrawNewWeaponSound)
-
+    local pos = self:GetPos()
+    local zH = self.FireFlareGun_MaxHeight or 6000
+    local vec = Vector(0, 0, zH)
     local traceResult = util.TraceLine({
-        start = self:GetPos(),
-        endpos = self:GetPos() + Vector(0, 0, mRand(5725, 6500)), 
+        start = pos,
+        endpos = pos + vec, 
         filter = self
     })
 
@@ -2054,37 +2199,30 @@ function ENT:FireFlareGun(enemy)
         return
     end
 
-    local attachmentName = nil
-    for _, attName in ipairs(self.FlareGunAttachment) do
-        local attachmentIndex = self:LookupAttachment(attName)
-        if attachmentIndex and attachmentIndex > 0 then
-            attachmentName = attName
-            break 
+    local attachmentName;
+    local gunAtt = self.FlareGunAttachment
+    if gunAtt then 
+        for _, attName in ipairs(gunAtt) do
+            local attachmentIndex = self:LookupAttachment(attName)
+            if attachmentIndex and attachmentIndex > 0 then
+                attachmentName = attName
+                break 
+            end
         end
-    end
+    end 
 
     if not attachmentName then
         self.PerformingAlertBehavior = false
-        return
+        return false
     end
 
     local activeWeapon = self:GetActiveWeapon()
-    local rngVol = mRng(60, 75)
 
+    local fireFlareChance = self.FireFlareSeq_Chance or 6 
     if IsValid(activeWeapon) and mRng(1, fireFlareChance) == 1 then
         if self.NextFireFlareT <= CurTime() then 
 
-            local shootFlare = self.FireFlareGun_Anim 
-            local anim;
-
-            if shootFlare and shootFlare ~= false then 
-                if istable(self.FireFlareGun_Anim) then 
-                    anim = table.Random(self.FireFlareGun_Anim)
-                elseif isstring(self.FireFlareGun_Anim) then 
-                    anim = self.FireFlareGun_Anim 
-                end
-            end 
-
+            local anim = self:GetRandomValidValue(self.FireFlareGun_Anim)
             if not anim then return end 
 
             local seq = self:LookupSequence(anim)
@@ -2094,6 +2232,7 @@ function ENT:FireFlareGun(enemy)
 
             activeWeapon:SetNoDraw(true)
 
+            local drawWepSnd = self:GetRandomValidValue(self.DrawNewWeaponSound)
             if drawWepSnd then 
                 VJ.EmitSound(self, drawWepSnd, rngVol, rngSnd)
             end 
@@ -2103,6 +2242,7 @@ function ENT:FireFlareGun(enemy)
 
             local RHand = self:GetAttachment(self:LookupAttachment(attachmentName))
             self.PropFlareGun = ents.Create("prop_vj_animatable")
+            if not IsValid(self.PropFlareGun) then return end 
             self.PropFlareGun:SetModel("models/vj_base/weapons/w_flaregun.mdl")
             self.PropFlareGun:SetPos(RHand.Pos)
             self.PropFlareGun:SetAngles(RHand.Ang)
@@ -2110,6 +2250,10 @@ function ENT:FireFlareGun(enemy)
             self.PropFlareGun:Fire("SetParentAttachment", attachmentName)
             self.PropFlareGun:Spawn()
             self.PropFlareGun:SetCollisionGroup(COLLISION_GROUP_IN_VEHICLE)
+
+            local rngSnd = mRng(80, 110)
+            local rngVol = mRng(60, 75)
+            local initDelayT = mRand(0.4, 0.55)
 
             timer.Simple(initDelayT, function()
                 if IsValid(self) then
@@ -2127,13 +2271,24 @@ function ENT:FireFlareGun(enemy)
                 end
             end)
 
-            timer.Simple(sFAnimT + 0.08, function()
+            timer.Simple(aT + 0.08, function()
                 SafeRemoveEntity(self.PropFlareGun)
                 if IsValid(self) then
-                    local smgAnim = smgdraw
-                    local smgAT = VJ.AnimDuration(self, smgAnim) or 2 
-                    self:PlayAnim("vjseq_" .. smgAnim, true, smgAT, false)
-                    VJ.EmitSound(self, self.DrawNewWeaponSound, rngVol, rngSnd)
+
+                    local drawAnim = self:GetRandomValidValue(self.HolsterWeapon_Anim)
+                    if not drawAnim then return end 
+
+                    local seq = self:LookupSequence(drawAnim) 
+                    if not seq or seq < 0 then return end 
+                    local time = self:SequenceDuration(seq) or 1 
+
+                    self:PlayAnim("vjseq_" .. drawAnim, true, time, false)
+
+                    local snd = self:GetRandomValidValue(self.DrawNewWeaponSound)
+                    if snd then 
+                        VJ.EmitSound(self, snd, rngVol, rngSnd)
+                    end 
+
                     activeWeapon:SetNoDraw(false)
                     self.PerformingAlertBehavior = false
                 end
@@ -2152,7 +2307,7 @@ function ENT:FireFlareGun(enemy)
 end
 ---------------------------------------------------------------------------------------------------------------------------------------------
 function ENT:SaveCurrentWeapon()
-    if not IsValid(self) and not IsValid(self:GetActiveWeapon()) then return end
+    if not IsValid(self:GetActiveWeapon()) then return end
     timer.Simple(0.1, function()
     if IsValid(self) then
         local wep = self:GetActiveWeapon()
@@ -2165,29 +2320,38 @@ function ENT:SaveCurrentWeapon()
         end
     end)
 
-    if not IsValid(self) or not IsValid(self:GetActiveWeapon()) then return end
+    if not IsValid(self:GetActiveWeapon()) then return end
     timer.Simple(1, function() 
-       if IsValid(self) then 
-        if IsValid(wep) then
-        end
-        local wep = self:GetActiveWeapon()
-            print("Current weapon saved in ENT.HumanPrimaryWeapon table:", self.HumanPrimaryWeapon)
-        else
-            print("Failed to save the current weapon in ENT.HumanPrimaryWeapon table.")
+        if IsValid(self) then 
+            if IsValid(wep) then
+            
+            local wep = self:GetActiveWeapon()
+                print("Current weapon saved in ENT.HumanPrimaryWeapon table:", self.HumanPrimaryWeapon)
+            else
+                print("Failed to save the current weapon in ENT.HumanPrimaryWeapon table.")
+            end
         end
     end)
 end
 
 function ENT:PickSecondaryWeapon()
-    if not IsValid(self) then return end 
     if not self.CanPickSecondaryWeapon then return end
-    local chosenWeapon = VJ.PICK(self.SecondaryWeaponInvTbl)
+    if not IsValid(self) then return end 
+    
+    local debugC = self.RANDOMS_DEBUG 
+    local chosenWeapon = self:GetRandomValidValue(self.SecondaryWeaponInvTbl)
+    if not chosenWeapon then return end 
+
     if chosenWeapon then
         self.HumanSecondaryWeapon = chosenWeapon
-        print("Secondary wep picked:", chosenWeapon)
+        if debugC then  
+            print(self:GetName() .. " picked secondary: " .. chosenWeapon)
+        end
     else
-        print("No secondary wep chosen!")
-    end
+        if debugC then
+            print("Warning: " .. self:GetName() .. " failed to pick a secondary weapon!")
+        end
+    end 
 end
 ---------------------------------------------------------------------------------------------------------------------------------------------
 ENT.Sts_SeqWepAnim = {"drawpistol"}
@@ -2201,13 +2365,14 @@ ENT.Wep_InvSwithcSound = true
 
 function ENT:WeaponSwitchMechanic()
     if not self.CanHumanSwitchWeapons then return end 
+    if not IsValid(self) then return end 
 
     local wepSwitchConv = GetConVar("vj_stalker_weapon_switching"):GetInt() 
-    if wepSwitchConv ~= 1 then return end 
+    if not wepSwitchConv or wepSwitchConv ~= 1 then return end 
 
     local debugging = self.RANDOMS_DEBUG
 
-    if self.VJ_IsBeingControlled or not IsValid(self) then
+    if self.VJ_IsBeingControlled then
         return 
     end
 
@@ -2231,30 +2396,35 @@ function ENT:WeaponSwitchMechanic()
 
     if IsValid(ene) then 
         local badEne = (ene.VJ_ID_Boss or ene.IsVJBaseSNPC_Tank)
-        if self:IsBusy() then return end 
+        local busy = self:IsVJAnimationLockState() or self:IsBusy()
+        if busy then return end 
         if self:GetWeaponState() == VJ.WEP_STATE_RELOADING then return end 
-        if self:IsVJAnimationLockState() then return end 
         if not badEne and self:GetPos():DistToSqr(ene:GetPos()) < maxDistSqr and ct > self.WeaponSwitchT and IsValid(curWep) and not curWep.IsMeleeWeapon and not self:IsMoving() then
 
             VJ.EmitSound(self, self.DrawNewWeaponSound, 85, 100)
             if self.CurrentWeapon == 0 and curWep:Clip1() > 1 then
                 self:RemoveAllGestures()
                 local anim = VJ.PICK({"vjseq_" .. VJ.PICK(self.Sts_SeqWepAnim),"vjges_" .. VJ.PICK(self.Sts_GesWepAnim)})
+
                 if anim then 
                     self:PlayAnim(anim, true, VJ.AnimDuration(self, anim), false)
                 end 
+
                 self:DoChangeWeapon(self.SecondaryWeaponEntity, true)
                 self.CurrentWeapon = 1
                 self.WeaponSwitchT = ct + mRand(15, 20)
                 if debugging then
                     print("I've switched to my secondary")
                 end 
+
             elseif self.CurrentWeapon == 1 then
                 self:RemoveAllGestures()
                 local anim = VJ.PICK({"vjseq_" .. VJ.PICK(self.Stp_SeqWepAnim),"vjges_" .. VJ.PICK(self.Stp_GesWepAnim)})
+
                 if anim then 
                     self:PlayAnim(anim, true, VJ.AnimDuration(self, anim), false)
                 end 
+
                 self:DoChangeWeapon(self.WeaponInventory.Primary, true)
                 self.CurrentWeapon = 0
                 self.WeaponSwitchT = ct + mRand(5, 45)
@@ -2265,9 +2435,9 @@ function ENT:WeaponSwitchMechanic()
                 self.WeaponSwitchT = ct + mRand(5, 25)
             end
 
+            //If idle, reset our weapon to primary.
             local npcStat = self:GetNPCState()
         elseif not IsValid(ene) and self.CurrentWeapon == 1 and ct > self.NextIdleWeaponSwitchT and npcStat == NPC_STATE_IDLE and npcStat ~= NPC_STATE_ALERT and npcStat ~= NPC_STATE_COMBAT then
-
             if IsValid(self.WeaponInventory.Primary) and isstring(self.HumanPrimaryWeapon) and self.HumanPrimaryWeapon ~= "" and weapons.GetStored(self.HumanPrimaryWeapon) then 
                 self:RemoveAllGestures()
 
@@ -2302,12 +2472,13 @@ end
 function ENT:InventorySwithc_SoundHandle()
     if not self.Wep_InvSwithcSound then return end 
     local delay = mRand(0.05, 0.25)
-    local switchSnd = mRng(1, #self.DrawNewWeaponSound)
+
+    local snd = self:GetRandomValidValue(self.DrawNewWeaponSound)
+    if not snd then return end 
+
     timer.Simple(delay, function()
         if IsValid(self) then
-            if switchSnd then
-                VJ.EmitSound(self, switchSnd, 70, mRng(85, 115))
-            end 
+            VJ.EmitSound(self, snd, 70, mRng(85, 115)) 
         end
     end) 
 end 
@@ -2444,22 +2615,39 @@ function ENT:TrackLosingWeapon()
     self._LastWeaponValid = hasWep
 end
 ---------------------------------------------------------------------------------------------------------------------------------------------
+function ENT:CanThrowGrenadeFromAttachment(attName)
+    if not attName then return false end
+
+    local attID = self:LookupAttachment(attName)
+    if not attID or attID <= 0 then return true end 
+
+    local attData = self:GetAttachment(attID)
+    if not attData then return true end
+
+    local startPos = attData.Pos
+    local shootDir = self:GetForward()
+
+    local tr = util.TraceLine({
+        start = startPos,
+        endpos = startPos + shootDir * 100,
+        filter = self
+    })
+
+    if tr.Hit then
+        if self.RANDOMS_DEBUG then
+            print("Grenade Trace BLOCKED at:", attName)
+        end
+        return false
+    end
+
+    return true
+end
+
 ENT.GrenThrow_L = {"grenthrow", "throwitem", "grenthrow_hecu"}
 ENT.GrenThrow_Gesture = {"grenthrow_gesture"}
 ENT.GrenThrow_R = {"righthand_grendrop_cmb_b", "righthand_grenthrow_cmb_b"}
 ENT.GrenThrow_Close = {"grendrop", "grenplace"}
 ENT.GrenThro_EneTooClose = 1000
-
-function ENT:VJ_Schedule_TaskStuff(task)
-    task.DisableChasingEnemy = true
-    if mRng(1, 2) == 1 then
-        task.CanShootWhenMoving = true
-        task.TurnData = {Type = VJ.FACE_ENEMY}
-    else
-        task.CanShootWhenMoving = false
-        task.TurnData = {Type = VJ.FACE_ENEMY, Target = nil}
-    end
-end 
 
 function ENT:OnGrenadeAttack(status, overrideEnt, landDir)
     local forceGesGrenMoveChance = self.FrcMoveGesGrenThrwChance or 3 
@@ -2468,68 +2656,101 @@ function ENT:OnGrenadeAttack(status, overrideEnt, landDir)
 
     if status == "Init" then
         self:RemoveAllGestures()
+
         local ene = self:GetEnemy()
         local distToEnemy = (IsValid(ene) and self:GetPos():DistToSqr(ene:GetPos())) or (self.GrenThro_EneTooClose or 1250)
         local debugging = self.RANDOMS_DEBUG
+
         if not self.VJ_IsBeingControlled and self.HasAltGrenThrowAnims then
+
+            -- CLOSE RANGE THROW
             if distToEnemy <= self.NPC_GrenadeCloseProxDist and mRng(1, 3) ~= 1 then
-                if debugging then 
-                    print("Close-range gren throw")
-                end 
-                local throwAnim = table.Random(self.GrenThrow_Close)
-                if throwAnim then 
-                    self.AnimTbl_GrenadeAttack = "vjseq_" .. throwAnim
-                    self.GrenadeAttackAttachment = "anim_attachment_LH"
-                    self.CurrentGrenadeThrow_IsCloseRange = true
-                    return
-                end 
+                if debugging then print("Close-range gren throw") end 
+
+                if self:CanThrowGrenadeFromAttachment("anim_attachment_LH") then
+                    local throwAnim = self:GetRandomValidValue(self.GrenThrow_Close)
+                    if throwAnim then 
+                        self.AnimTbl_GrenadeAttack = "vjseq_" .. throwAnim
+                        self.GrenadeAttackAttachment = "anim_attachment_LH"
+                        self.CurrentGrenadeThrow_IsCloseRange = true
+                        return
+                    end 
+                end
             end
 
-            local throwType  = mRng(1, 3)
+            local validThrows = {}
 
+            -- LEFT
+            if self:CanThrowGrenadeFromAttachment("anim_attachment_LH") then
+                table.insert(validThrows, 1)
+            else
+                if debugging then print("LEFT blocked") end
+            end
+
+            if self:IsAbleToMoveNow() then
+                if self:CanThrowGrenadeFromAttachment("anim_attachment_LH") then
+                    table.insert(validThrows, 2)
+                else
+                    if debugging then print("GESTURE blocked") end
+                end
+            end
+
+            if self.HasRightHandedGrenThrowAnim then
+                if self:CanThrowGrenadeFromAttachment("anim_attachment_RH") then
+                    table.insert(validThrows, 3)
+                else
+                    if debugging then print("RIGHT blocked") end
+                end
+            end
+
+            if #validThrows <= 0 then
+                if debugging then print("No valid grenade throw paths") end
+                return true
+            end
+
+            local throwType = table.Random(validThrows)
+
+            -- LEFT HAND THROW
             if throwType == 1 then
-                if debugging then 
-                    print("L-Handed grenade throw")
-                end 
-                local throwAnim = table.Random(self.GrenThrow_L)
-                if throwAnim then 
+                if debugging then print("L-Handed grenade throw") end 
+
+                local throwAnim = self:GetRandomValidValue(self.GrenThrow_L)
+                if throwAnim then  
                     self.AnimTbl_GrenadeAttack = "vjseq_" .. throwAnim
                     self.GrenadeAttackAttachment = "anim_attachment_LH"
                 end 
 
-            elseif throwType == 2 and not self.IsGuard and self.MovementType ~= VJ_MOVETYPE_STATIONARY then
-                if debugging then 
-                    print("Ges-gren throw")
-                end 
-                local throwAnim = table.Random(self.GrenThrow_Gesture)
+            -- GESTURE THROW
+            elseif throwType == 2 then
+                if debugging then print("Ges-gren throw") end 
+
+                local throwAnim = self:GetRandomValidValue(self.GrenThrow_Gesture)
                 if throwAnim then 
                     self.CurrentGrenadeThrow_IsGesture = true 
                     self.AnimTbl_GrenadeAttack = "vjges_" .. throwAnim
                     self.GrenadeAttackAttachment = "anim_attachment_LH"
-                    //timer.Simple(mRand(0.1, 0.25) function()
-                        //if IsValid(self) then
-                        local moveTy = "TASK_RUN_PATH"
+
+                    timer.Simple(mRand(0.1, 0.25), function()
+                        if not IsValid(self) then return end
                         if self.ForceMoveOnGesGrenThrow and mRng(1, forceGesGrenMoveChance) == 1 then
-                            self:StopMoving()
-                            if mRng(1,2) == 1 then
-                                self:SCHEDULE_COVER_ORIGIN(moveTy, function(x)
-                                    self:VJ_Schedule_TaskStuff(x)
-                                end)
-                            else
-                                self:SCHEDULE_COVER_ENEMY(moveTy, function(x)
-                                    self:VJ_Schedule_TaskStuff(x)
-                                end)
-                            end
-                        //end
-                    //end)
-                    end
+                            if self:IsMoving() then self:StopMoving() end 
+
+                            self:Handle_ScheduledForceMove(false, "Both", "Both", "Run", "Rng")
+                        end
+                    end)
                 end 
 
-            elseif throwType == 3 and self.HasRightHandedGrenThrowAnim then
-                if debugging then 
-                    print("R-Handed greb throw")
-                end 
-                local throwAnim = table.Random(self.GrenThrow_R)
+            local myPosCent = self:GetPos() + self:OBBCenter()
+            local eyePos = self:EyePos()
+            local inCover = self:DoCoverTrace(myPosCent, eyePos, false, {SetLastHiddenTime = true})
+            if inCover then 
+                if debugging then print("GRENADE THROW RIGHT, WE ARE SKIPPING AS WE ARE IN COVER RIGHT NOW") end 
+                return 
+            end -- Since it is an underhand throw, the grenade usually bounces off the walls
+            elseif throwType == 3 then
+                if debugging then print("R-Handed grenade throw") end 
+
+                local throwAnim = self:GetRandomValidValue(self.GrenThrow_R)
                 if throwAnim then 
                     self.AnimTbl_GrenadeAttack = "vjseq_" .. throwAnim
                     self.GrenadeAttackAttachment = "anim_attachment_RH"
@@ -2564,20 +2785,11 @@ function ENT:OnGrenadeAttackExecute(status, grenade, overrideEnt, landDir, landi
                 end
             end
 
-            local moveTy = "TASK_RUN_PATH"
-            if not self.CurrentGrenadeThrow_IsGesture and mRng(1, self.FindCoverChanceAfter_Grenade) == 1 and not self.IsGuard then 
-                self:StopMoving()
-                if mRng(1, 2) == 1 then
-                    self:SCHEDULE_COVER_ORIGIN(moveTy, function(x)
-                        self:VJ_Schedule_TaskStuff(x)
-                    end)
-                else
-                    self:SCHEDULE_COVER_ENEMY(moveTy, function(x)
-                        self:VJ_Schedule_TaskStuff(x)
-                    end)
-                end 
+            if not self.CurrentGrenadeThrow_IsGesture and mRng(1, self.FindCoverChanceAfter_Grenade) == 1 and self:IsAbleToMoveNow() then 
+                self:Handle_ScheduledForceMove(false, "Both", "Both", "Run", "Rng")
             end 
         end
+        
         local up      = self:GetUp()
         local right   = self:GetRight()
         local forward = self:GetForward()
@@ -2589,15 +2801,17 @@ function ENT:OnGrenadeAttackExecute(status, grenade, overrideEnt, landDir, landi
             end
             
             local posTrVal = Vector(0, 0, mRng(500, 1000))
+            local enePos = enemy:GetPos()
             local trEnemyTarget = util.TraceLine({
-                start = enemy:GetPos(),
-                endpos = enemy:GetPos() + posTrVal,
+                start = enePos,
+                endpos = enePos + posTrVal,
                 filter = enemy
             })
 
+            local myPos = self:GetPos()
             local trSelfPosition = util.TraceLine({
-                start = self:GetPos(),
-                endpos = self:GetPos() + posTrVal,
+                start = myPos,
+                endpos = myPos + posTrVal,
                 filter = self
             })
 
@@ -2610,8 +2824,8 @@ function ENT:OnGrenadeAttackExecute(status, grenade, overrideEnt, landDir, landi
             local upDir, forwardDir, leftOrRightDir
 
             if self.CurrentGrenadeThrow_IsCloseRange then
-                upDir = up * mRand(50, 150) * scaleFactor
-                forwardDir = forward * mRand(100, 150) * scaleFactor
+                upDir = up * mRand(75, 100) * scaleFactor
+                forwardDir = forward * mRand(50, 100) * scaleFactor
                 leftOrRightDir = right * mRand(-35, 45) * scaleFactor
                 print("Reduced Close-Range Throw")
             elseif distanceToTarget > 2925 then
@@ -2653,37 +2867,47 @@ function ENT:OnInput(key, activator, caller, data)
 
     local curTime = CurTime()
     local disp = self:Disposition(activator)
-    if (disp == D_LI or disp == D_NU) and self.CanReactToUse and curTime > self.LastReactToUseTime and not self.Alerted and not self:IsBusy() and self:Visible(activator) then
 
-        if mRng(1, self.ReactToPlyIntChance) == 1 then
-            local chosenFlinch = table.Random(self.ReactToPlyUseAnim)
-            timer.Simple(self.ReactToUseDelay, function()
-                if IsValid(self) then
-                    self:RemoveAllGestures()
-                    self:PlayAnim("vjges_" .. chosenFlinch, false)
-                end
-            end)
-            self.LastReactToUseTime = curTime + self.ReactToUseCooldown
-        else
-            self.LastReactToUseTime = curTime + mRand(1, 2)
+    local busy = self:IsVJAnimationLockState() or self:IsBusy()
+    if busy then return end 
+
+    local npcState = self:GetNPCState()
+    if npcStat ~= NPC_STATE_ALERT and npcStat ~= NPC_STATE_COMBAT  then 
+        if (disp == D_LI or disp == D_NU) and self.CanReactToUse and curTime > self.LastReactToUseTime and self:Visible(activator) then
+
+            local chance = self.ReactToPlyIntChance or 3 
+            if mRng(1, chance) == 1 then
+                local chosenFlinch = self:GetRandomValidValue(self.ReactToPlyUseAnim)
+                if chosenFlinch then 
+                    timer.Simple(self.ReactToUseDelay, function()
+                        if IsValid(self) then
+                            self:RemoveAllGestures()
+                            self:PlayAnim("vjges_" .. chosenFlinch, false)
+                        end
+                    end)
+                end 
+                self.LastReactToUseTime = curTime + self.ReactToUseCooldown
+            else
+                self.LastReactToUseTime = curTime + mRand(1, 2)
+            end
         end
-    end
 
-    timer.Simple(mRand(0.5, 2.5), function()
-        if not IsValid(self) then return end
-        if self.IsCurrentlyIncapacitated and self.SpawnGrenadeWhenIncap then
-            if self.HasLimitedGrenadeCount and not (self.HumanGrenadeCount <= 0) then
-                if curTime < (self.Incap_SpawnGrenNextT or 0) then return end
-                if (disp == D_HT or disp == D_FR) and curTime > (self.LastGrenadeSpawnTime or 0) then
-                    if mRng(1, self.ChanceDropNade or 2) == 1 then
-                        self:LastStand_GrenSpwn()
-                    else
-                        self.LastGrenadeSpawnTime = curTime + mRand(1, 2)
+        timer.Simple(mRand(0.5, 2.5), function()
+            if not IsValid(self) then return end
+            if self.IsCurrentlyIncapacitated and self.SpawnGrenadeWhenIncap then
+                if self.HasLimitedGrenadeCount and not (self.HumanGrenadeCount <= 0) then
+                    if curTime < (self.Incap_SpawnGrenNextT or 0) then return end
+                    if (disp == D_HT or disp == D_FR) and curTime > (self.LastGrenadeSpawnTime or 0) then
+                        if mRng(1, self.ChanceDropNade or 2) == 1 then
+                            self:LastStand_GrenSpwn()
+                        else
+                            self.LastGrenadeSpawnTime = curTime + mRand(1, 2)
+                        end
                     end
                 end
             end
-        end
-    end)
+        end)
+    end 
 end
 
 function ENT:LastStand_GrenSpwn()
@@ -2691,20 +2915,29 @@ function ENT:LastStand_GrenSpwn()
         if self.HumanGrenadeCount <= 0 then return end
         self.HumanGrenadeCount = self.HumanGrenadeCount - 1
     end
+
     local rngSnd = mRng(85, 105)
     local grenade = ents.Create("obj_vj_grenade")
     local grenPin = "general_sds/ex_thrw_snd/m67_pin.wav"
     local cT = CurTime()
+
     if not IsValid(grenade) then return end
-    local frontPos = self:GetPos() + self:GetForward() * mRand(1, 5) +self:GetUp() * mRand(1, 5) +self:GetRight() * mRand(-5, 5)
+    local frontPos = self:GetPos() + self:GetForward() * mRand(1, 5) +self:GetUp() * mRand(1, 5) + self:GetRight() * mRand(-5, 5)
 
     grenade:SetPos(frontPos)
     grenade:Spawn()
+
     if grenPin then 
         VJ.EmitSound(grenade, grenPin, 70, rngSnd)
     end 
+
     self.LastGrenadeSpawnTime = cT + 100
-    local flinchAnim = table.Random(self.ReactToPlyUseAnim)
+
+    local flinchAnim = self:GetRandomValidValue(self.ReactToPlyUseAnim)
+    if not flinchAnim then return end 
+    local seq self:LookupSequence(flinchAnim)
+    if not seq or seq == -1 then return end 
+
     if mRng(1, 2) == 1 then
         self:RemoveAllGestures()
         self:PlayAnim("vjges_" .. flinchAnim, false)
@@ -2775,40 +3008,28 @@ function ENT:IdleIncap_LastChanceGren()
 end
 ---------------------------------------------------------------------------------------------------------------------------------------------
 function ENT:RetreatAfterMeleeAttack()
-    if self.VJ_IsBeingControlled or not IsValid(self) then return end 
     if not self.Flee_AfterMelee then return end 
+    if self.VJ_IsBeingControlled or not IsValid(self) then return end 
     if self:IsBusy("Activities") then return end 
-    if self.IsGuard then return end 
-    if self.MovementType == VJ_MOVETYPE_STATIONARY then return end 
+    if not self:IsAbleToMoveNow() then return end 
 
     local ene = self:GetEnemy()
     local curT = CurTime()
     local chance = self.Flee_AfterMeleeChance or 3
-    local rngDelay = mRand(0.1, 0.5)
-    local tAdd = mRand(5, 15)
 
     timer.Simple(0, function()
         if IsValid(self) then
             if IsValid(ene) and self:Visible(ene) and curT > (self.Flee_AfterMeleeT or 0)  and mRng(1, chance) == 1 and curT > self.TakingCoverT and self:GetWeaponState() ~= VJ.WEP_STATE_RELOADING then
-                self:ClearSchedule()
-                self:StopMoving()
                 self:StopAttacks(true)
                 print("Fleeing after melee attack")
                 
+                local rngDelay = mRand(0.1, 0.5)
                 timer.Simple(rngDelay, function()   
                     if IsValid(self) then
-                        self:SCHEDULE_COVER_ENEMY("TASK_RUN_PATH", function(x)
-                            if mRng(1, 2) == 1 then 
-                                x:EngTask("TASK_FACE_ENEMY", 0)
-                                x.CanShootWhenMoving = true
-                                x.TurnData = {Type = VJ.FACE_ENEMY}
-                            else
-                                x.CanShootWhenMoving = false  
-                                x.TurnData = {Type = VJ.FACE_ENEMY, Target = nil}
-                            end 
-                        end)
+                        self:Handle_ScheduledForceMove(false, "Enemy", "Both", "Run", "Rng")
                     end
                 end)
+                local tAdd = mRand(5, 15)  
                 self.NextMeleeAttackTime = curT + tAdd / mRng(1, 3)
                 self.Flee_AfterMeleeT = curT + tAdd
             end
@@ -2861,118 +3082,315 @@ function ENT:Custom_AttackKnockback(Hittarget)
 end 
 ---------------------------------------------------------------------------------------------------------------------------------------------
 ENT.HasMeleeDmgBuffToAliens = true 
-
 ENT.CanBreakPlyAmror = true 
 ENT.BreakPlyArmorChance = 6 
 ENT.BreakPlyArmorThresh = 50 -- 50% 
 
-ENT.ScreenFadeActive = false
+ENT.ScreenFadeActive = false 
 ENT.RetreatAfterMeleeAttackChance = 4
 ENT.CanKnckPlyWepOutHand = true 
 ENT.PlyWeaponKnockOutChance = 6
 ENT.FrcPlyHolsterWeaponChance = 3 
-
-function ENT:OnMeleeAttackExecute(status, ent, isProp)
-    if not IsValid(ent) then return end
-
-    local ply = ent:IsPlayer()
-    local fireDur = mRand(1, 15)
-    local rngSnd = mRng(75, 105)
-    if status == "Miss" or status == "PreDamage" then 
-        if mRng(1, self.RetreatAfterMeleeAttackChance) == 1 and not ent.isProp and ent:Alive() and not self:IsMoving() then
+---------------------------------------------------------------------------------------------------------------------------------------------
+function ENT:HandleMeleeRetreat(ent, status)
+    if (status == "Miss" or status == "PreDamage") then 
+        local chance = self.RetreatAfterMeleeAttackChance or 3 
+        if mRng(1, chance) == 1 and not ent.isProp and ent:Alive() then
             self:RetreatAfterMeleeAttack()
         end
     end 
+end
 
-    if status == "PreDamage"  then 
-        if ent:Alive() and IsValid(ent) then 
-            if self.HasMeleeDmgBuffToAliens then
-                if ent.IsVJBaseSNPC and ent.IsVJBaseSNPC_Creature then
-                    local buff = mRng(2, 3)
-                    if self.IsHeavilyArmored then
-                        local armorBuff = mRng(3, 5)
-                        self.MeleeAttackDamage = self.MeleeAttackDamage * buff * armorBuff
-                        print("Stacked creature + heavy armor buff:", self.MeleeAttackDamage)
-                    else
-                        self.MeleeAttackDamage = self.MeleeAttackDamage * buff
-                        print("Melee creature dmg buff:", self.MeleeAttackDamage)
-                    end
-                elseif self.IsHeavilyArmored then
-                    local armorBuff = mRng(3, 5)
-                    self.MeleeAttackDamage = self.MeleeAttackDamage * armorBuff
-                    print("Heavy armored melee buff:", self.MeleeAttackDamage)
-                else
-                    print("Regular melee dmg:", self.MeleeAttackDamage)
-                end
-            end
-        end 
+function ENT:ApplyMeleeDamageBuffs(ent)
+    if not self.HasMeleeDmgBuffToAliens or not ent:Alive() then return end
 
-        if self:IsOnFire() and not ent:IsOnFire() and (not ent.Immune_Fire or not ent.AllowIgnition) then
-            ent:Ignite(fireDur)
+    if ent.IsVJBaseSNPC and ent.IsVJBaseSNPC_Creature then
+        local buff = mRng(2, 3)
+        local melDB = self.RANDOMS_DEBUG
+        if self.IsHeavilyArmored then
+            local armorBuff = mRng(3, 5)
+            self.MeleeAttackDamage = self.MeleeAttackDamage * buff * armorBuff
+            if melDB then print("Stacked creature + heavy armor buff:", self.MeleeAttackDamage) end 
+        else
+            self.MeleeAttackDamage = self.MeleeAttackDamage * buff
+            if melDB then print("Melee creature dmg buff:", self.MeleeAttackDamage) end 
         end
+    elseif self.IsHeavilyArmored then
+        local armorBuff = mRng(3, 5)
+        self.MeleeAttackDamage = self.MeleeAttackDamage * armorBuff
+        if melDB then print("Heavy armored melee buff:", self.MeleeAttackDamage) end 
+    end
+end
 
-        if IsValid(ent) and ply and ent:Alive() then
-            local wep = ent:GetActiveWeapon()
+function ENT:HandleWeaponKnockout(ply)
+    if not self.CanKnckPlyWepOutHand then return end
 
-            if self.CanKnckPlyWepOutHand and IsValid(wep) then
-                if mRng(1, self.PlyWeaponKnockOutChance) == 1 then
-                    ent:DropWeapon(wep)
-                elseif mRng(1, self.FrcPlyHolsterWeaponChance) == 1 then
-                    ent:SetActiveWeapon(NULL)
-                end
-            end
+    local wep = ply:GetActiveWeapon()
+    if IsValid(wep) then
+        local knockChance = self.PlyWeaponKnockOutChance or 6 
+        local inactChance = self.FrcPlyHolsterWeaponChance or 3 
 
-            if self.CanBreakPlyAmror then
-                local breakChance = tonumber(self.BreakPlyArmorChance) or 6 
+        if mRng(1, knockChance) == 1 then
+            ply:DropWeapon(wep)
+        elseif mRng(1, inactChance) == 1 then
+            ply:SetActiveWeapon(NULL)
+        end
+    end
+end
+
+function ENT:HandleArmorBreaking(ply)
+    if not self.CanBreakPlyAmror then return end
+
+    local breakChance = self.BreakPlyArmorChance or 6 
+    if self.IsHeavilyArmored then 
+        breakChance = math.max(1, breakChance / 3) 
+    end 
+
+    if mRng(1, breakChance) == 1 then
+        local currentArmor = ply:Armor() or 0
+        local maxArmor = ply:GetMaxArmor() or 100
+        if currentArmor > (maxArmor * (self.BreakPlyArmorThresh / 100)) then
+            ply:SetArmor(0)
             
-                if self.IsHeavilyArmored then 
-                    breakChance = math.max(1, breakChance / 3) 
-                end 
-            
-                if mRng(1, breakChance) == 1 then
-                    local currentArmor = ent:Armor() or 0
-                    local maxArmor = ent:GetMaxArmor() or 100
-                    if currentArmor > (maxArmor * (self.BreakPlyArmorThresh / 100)) then
-                        local armBrkSnd = VJ.PICK(self.SoundTbl_ExtraArmorImpacts)
-                        ent:SetArmor(0)
-                        if armBrkSnd then 
-                            VJ.EmitSound(ent, armBrkSnd, rngSnd, rngSnd)
-                        end
-                    end
-                end
+            local armBrkSnd = self:GetRandomValidValue(self.SoundTbl_ExtraArmorImpacts)
+            if armBrkSnd then 
+                VJ.EmitSound(ply, armBrkSnd, mRng(75, 105))
             end
+        end
+    end
+end
 
-            local pitch = mRng(-125, 125)
-            local yaw = mRng(-125, 125)
-            local roll = mRng(-125, 125)
+function ENT:ApplyMeleeVisualEffects(ply)
+    
+    local pitch = mRng(-125, 125)
+    local yaw = mRng(-125, 125)
+    local roll = mRng(-125, 125)
 
-            if mRng(1, 3) == 1 then
-                local multiplier = mRng(3, 4)
-                pitch = pitch * multiplier
-                yaw = yaw * multiplier
-                roll = roll * multiplier
+    if mRng(1, 3) == 1 then
+        local mult = mRng(3, 4)
+        pitch, yaw, roll = pitch * mult, yaw * mult, roll * mult
+    end
+
+    local shakeT = mRand(0.55, 6.5)
+    local shakeDist = mRng(200, 450)
+    local shakeFreq = mRng(100, 250)
+    local shakeAmp = mRng(10, 45)
+
+    if mRng(1, 3) == 1 then
+        local sMult = mRng(3, 4)
+        shakeT, shakeDist, shakeFreq, shakeAmp = shakeT * sMult, shakeDist * sMult, shakeFreq * sMult, shakeAmp * sMult
+    end
+
+    ply:ViewPunch(Angle(pitch, yaw, roll))
+    ply:ScreenFade(SCREENFADE.IN, Color(mRng(60, 130), 0, 0, 200), mRand(3, 5), mRand(1, 5))
+    util.ScreenShake(ply:GetPos(), shakeAmp, shakeFreq, shakeT, shakeDist)
+end
+
+ENT.KnockDown_Ply = true
+ENT.KnockDown_Ply_Chance = 3
+ENT.KnockDown_PlyNextT = 0
+function ENT:Handle_KnockDownPlayer(ply)
+    if not self.KnockDown_Ply then return end
+    if not IsValid(ply) or not ply:IsPlayer() then return end
+    if not ply:Alive() then return end
+
+    local chance = self.KnockDown_Ply_Chance or 3
+    if mRng(1, chance) ~= 1 then return end
+
+    local c = CurTime()
+    if c < self.KnockDown_PlyNextT then return end
+
+    self.KnockDown_PlyNextT = c + mRand(1, 3)
+
+    if ply.VJ_Stalker_KnockDown then return end
+    ply.VJ_Stalker_KnockDown = true
+
+    ply.VJ_StoredJumpPower = ply:GetJumpPower()
+
+    ply:ConCommand("+duck")
+    ply:SetJumpPower(0)
+
+    local getUpT = mRand(0.5, 3.5)
+
+    timer.Simple(getUpT, function()
+        if not IsValid(ply) then return end
+        ply:ConCommand("-duck")
+        if ply.VJ_StoredJumpPower then
+            ply:SetJumpPower(ply.VJ_StoredJumpPower)
+        end
+        ply.VJ_Stalker_KnockDown = false
+        ply.VJ_StoredJumpPower = nil
+    end)
+end
+
+ENT.OnHit_DisPlyLight = true
+ENT.OnHit_DisPlyLight_Chance = 1
+ENT.OnHit_DisPlyLightNextT = 0
+
+ENT.OnHit_DisPlyLight_SoundChance = 2 
+ENT.OnHit_DisPlyLight_Sounds = {
+    "ambient/energy/spark1.wav",
+    "ambient/energy/spark2.wav",
+    "ambient/energy/spark3.wav",
+    "ambient/energy/spark4.wav",
+    "ambient/energy/spark5.wav",
+    "ambient/energy/zap1.wav",
+    "ambient/energy/zap2.wav",
+    "ambient/energy/zap3.wav",
+    "ambient/energy/zap4.wav",
+    "ambient/energy/zap5.wav",
+    "ambient/energy/zap6.wav",
+    "ambient/energy/zap7.wav",
+    "ambient/energy/zap8.wav",
+    "ambient/energy/zap9.wav",
+    "buttons/button10.wav",
+    "buttons/button19.wav",
+    "physics/metal/metal_box_impact_bullet1.wav",
+}
+
+function ENT:Sabotage_Flashlight(ply)
+    if not self.OnHit_DisPlyLight then return end
+    if not IsValid(ply) or not ply:IsPlayer() then return end
+    if not ply:Alive() then return end
+
+    local c = CurTime()
+    if c < self.OnHit_DisPlyLightNextT then return end
+
+    local chance = self.OnHit_DisPlyLight_Chance or 3
+    if mRng(1, chance) ~= 1 then return end
+
+    self.OnHit_DisPlyLightNextT = c + mRand(1, 5)
+
+    if ply:FlashlightIsOn() then
+        ply:Flashlight(false)
+        local cnce = self.OnHit_DisPlyLight_SoundChance or 3 
+        if mRng(1, cnce) == 1 then 
+            local snd = self:GetRandomValidValue(self.OnHit_DisPlyLight_Sounds)
+            if snd then
+                ply:EmitSound(snd, mRng(55, 75), mRng(75, 105))
             end
-
-            local screenShakeT = mRand(0.55, 6.5)
-            local screenShakeDist = mRng(200, 450)
-            local screenShakeFreq = mRng(100, 250)
-            local screenShakeAmp = mRng(10, 45)
-
-            if mRng(1, 3) == 1 then
-                local shakeMultiplier = mRng(3, 4)
-                screenShakeT = screenShakeT * shakeMultiplier
-                screenShakeDist = screenShakeDist * shakeMultiplier
-                screenShakeFreq = screenShakeFreq * shakeMultiplier
-                screenShakeAmp = screenShakeAmp * shakeMultiplier
-            end
-
-            ent:ViewPunch(Angle(pitch, yaw, roll))
-            ent:ScreenFade(SCREENFADE.IN, Color(mRng(60, 130), 0, 0, 200), mRand(3, 5), mRand(1, 5))
-            util.ScreenShake(ent:GetPos(), screenShakeAmp, screenShakeFreq, screenShakeT, screenShakeDist)
         end 
     end
 end
 
+ENT.HitPly_AffectDsp = true
+ENT.HitPly_AffectDspChance = 3
+ENT.HitPly_AffectDspNextT = 0
+ENT.HitPly_AffectDspDuration = 3
+ENT.HitPly_AffectDspTbl = {30, 31, 32, 33, 34, 35, 36}
+function ENT:ApplyDeafness(ply)
+    if not self.HitPly_AffectDsp then return end
+    if not IsValid(ply) or not ply:IsPlayer() then return end
+
+    local chance = self.HitPly_AffectDspChance or 3
+    if mRng(1, chance) ~= 1 then return end
+
+    local c = CurTime()
+    if c < self.HitPly_AffectDspNextT then return end
+    self.HitPly_AffectDspNextT = c + mRand(2, 5)
+
+    if ply.VJ_Stalker_DSPActive then return end
+    ply.VJ_Stalker_DSPActive = true
+
+    local picked = self:GetRandomValidValue(self.HitPly_AffectDspTbl)
+    if not picked then
+        ply.VJ_Stalker_DSPActive = nil
+        return
+    end
+
+    ply:EmitSound("ambient/levels/canals/headcrab_canals_rt_05.wav", 80, mRng(90, 120), 0.5)
+    ply:SetDSP(picked)
+
+    local resetTime = self.HitPly_AffectDspDuration or 3
+
+    timer.Simple(resetTime, function()
+        if IsValid(ply) then
+            ply:SetDSP(0)
+            ply.VJ_Stalker_DSPActive = nil
+        end
+    end)
+end
+
+ENT.SabtagePly_Wep = true 
+ENT.SabtagePly_WepAmmoSteal = true 
+ENT.SabtagePly_WepDisable = true 
+ENT.SabtagePly_WepNextT = 0 
+function ENT:HandleWeaponSabotage(ply)
+    if not self.SabtagePly_Wep then return end
+    local wep = ply:GetActiveWeapon()
+    if not IsValid(wep) then return end
+    if wep:IsWeapon() ~= true then return end
+    if wep:IsScripted() ~= true then return end
+
+    local c = CurTime()
+    if c < self.SabtagePly_WepNextT then return end 
+
+    self.SabtagePly_WepNextT = c + mRand(1, 5)
+    local effectRng = mRng(1, 2)
+
+    if self.SabtagePly_WepAmmoSteal and effectRng == 1 then 
+        if wep:Clip1() > 0 and wep:HasAmmo() then
+            wep:SetClip1(0)
+            ply:EmitSound("weapons/clipempty_rifle.wav", 75, 100)
+        end
+    elseif self.SabtagePly_WepDisable and effectRng == 2 then 
+        local jam = mRand(1, 5)
+        local delay = CurTime() + jam
+        wep:SetNextPrimaryFire(delay)
+        wep:SetNextSecondaryFire(delay)
+        ply:EmitSound("physics/metal/metal_box_impact_hard1.wav", 70, 150)
+    end
+end
+
+function ENT:OnMeleeAttackExecute(status, ent, isProp)
+    if not IsValid(ent) then return end
+    local isPlayer = ent:IsPlayer()
+
+    self:HandleMeleeRetreat(ent, status)
+
+    if status == "PreDamage" then 
+        self:ApplyMeleeDamageBuffs(ent)
+        self:OnFire_IgniteHitTar(ent) 
+
+        -- Player specific debuffs!
+        if isPlayer and ent:Alive() then
+            self:HandleWeaponKnockout(ent)
+            self:HandleArmorBreaking(ent)
+            self:ApplyMeleeVisualEffects(ent)
+            //self:Sabotage_ConcussionTilt(ent) -- I'll merge this later with other one. 
+            self:Sabotage_Flashlight(ent)
+            self:Handle_KnockDownPlayer(ent)
+            self:ApplyDeafness(ent)
+            //self:ApplyConcussionJitter(ent) -- And this one tooo
+            self:HandleWeaponSabotage(ent)
+        end
+    end
+end
+
+ENT.OnFire_CanIgniteHitTarget = true 
+ENT.OnFire_IgniteHitTarChance = 2 
+ENT.OnFire_IgniteHitTarNextT = 0 
+function ENT:OnFire_IgniteHitTar(target)
+    if not self.OnFire_CanIgniteHitTarget then return end 
+    if not self:IsOnFire() then return end 
+    if not IsValid(target) then return end 
+    if self:WaterLevel() > 0 or target:WaterLevel() > 0 then return end  
+    if not target:Alive() then return end 
+    if target:IsOnFire() then return end 
+    if not (target:IsPlayer() or target:IsNPC() or target:IsNextBot()) then return end
+    if target.IsVJBaseSNPC and (target.Immune_Fire or not target.AllowIgnition) then return end 
+
+    if CurTime() < self.OnFire_IgniteHitTarNextT then return end 
+
+    local fireDurT = mRand(1, 10)
+
+    local chance = self.OnFire_IgniteHitTarChance or 2 
+    if mRng(1, chance) ~= 1 then return end 
+
+    target:Ignite(fireDurT) 
+    self.OnFire_IgniteHitTarNextT = CurTime() + mRand(1, 5)
+end 
+---------------------------------------------------------------------------------------------------------------------------------------------
 function ENT:OnMeleeAttack(status, enemy)
     if status == "Init" then 
         self:Rng_MeleeAttHandle()
@@ -3009,7 +3427,7 @@ function ENT:Rng_MeleeAttHandle()
     if not selected then return end
     local rngDmg = mRand(10, 30) or 10
     if mRng(1, 3) == 1 then 
-        rngDmg = math.ceil(rngDmg * mRand(0.8, 1.25))
+        rngDmg = math_ceil(rngDmg * mRand(0.8, 1.25))
     end 
 
     self.AnimTbl_MeleeAttack = selected.anim
@@ -3027,8 +3445,8 @@ ENT.HealerEntReact_Anim = {"hg_nod_yes"}
 ENT.HealedEntReact_Anim = {"hg_nod_yes", "g_fist", "g_fist_l"}
 ENT.Extra_HealAnimms = {"heal", "grendrop", "grenplace"}
 function ENT:OnMedicBehavior(status, statusData)
-    local healAnims = table.Random(self.Extra_HealAnimms)
-    if healAnims and healAnims ~= "" then 
+    local healAnims = self:GetRandomValidValue(self.Extra_HealAnimms)
+    if healAnims then 
         self.AnimTbl_Medic_GiveHealth = "vjseq_" .. healAnims
     end 
 
@@ -3042,50 +3460,57 @@ function ENT:OnMedicBehavior(status, statusData)
 end
 
 function ENT:Human_HealedReaction(data)
-    if not self.AnimReact_OnHeal then return end 
-    local busy = self:IsVJAnimationLockState() or self.Alerted or self:IsBusy()
-    local healerResponse = table.Random({"vjges_" .. table.Random(self.HealerEntReact_Anim)})
-    local delay = mRand(0.1, 1.5)
-    if self.PlyAnimInRepOHeal then 
-        if busy or self.VJ_IsBeingControlled then return false end 
-        self:StopMoving()
-        self:RemoveAllGestures()
+    if not self.AnimReact_OnHeal then return end
 
-        timer.Simple(delay, function()
-            if not (IsValid(self) and IsValid(data)) then return end
-            if mRng(1, 2) == 1 and data.IsVJBaseSNPC_Human and not data:IsBusy() then
-                if istable(data.HealedEntReact_Anim) then
-                    local validAnims = {}
-                    for _, animName in ipairs(data.HealedEntReact_Anim) do
-                        local gestureName = "vjges_" .. animName
-                        local seqID = data:LookupSequence(gestureName)
-                        if seqID and seqID ~= -1 then
-                            table.insert(validAnims, gestureName)
+    local busy = self:IsVJAnimationLockState() or self:IsBusy()
+    local npcState = self:GetNPCState()
+
+    if npcState ~= NPC_STATE_ALERT and npcState ~= NPC_STATE_COMBAT then
+        local healerResponse = self:GetRandomValidValue(self.HealerEntReact_Anim)
+
+        if self.PlyAnimInRepOHeal then
+            if busy or self.VJ_IsBeingControlled then return false end
+
+            self:StopMoving()
+            self:RemoveAllGestures()
+
+            local delay = mRand(0.1, 1.5)
+
+            timer.Simple(delay, function()
+                if not IsValid(self) then return end
+                if not IsValid(data) then return end
+                if mRng(1, 2) == 1 and data.IsVJBaseSNPC_Human and not data:IsBusy() then
+                    local healedEntResp = self:GetRandomValidValue(self.HealedEntReact_Anim)
+                    if healedEntResp then
+                        data:PlayAnim("vjges_" .. healedEntResp, false)
+
+                        if self.RANDOMS_DEBUG then
+                            print("HealedEntAnim: " .. healedEntResp)
                         end
                     end
-                    if #validAnims > 0 then
-                        local chosen = table.Random(validAnims)
-                        data:PlayAnim(chosen, false)
-                        print("HealedEntAnim: " .. chosen)
+                end
+
+                if not healerResponse then return end
+                if mRng(1, 2) == 1 and not busy then
+                    self:PlayAnim("vjges_" .. healerResponse, false)
+                    if self.RANDOMS_DEBUG then
+                        print("Healer resp anim: " .. tostring(healerResponse))
                     end
                 end
-            end
-            if not healerResponse or healerResponse == "" then return end 
-            if mRng(1, 2) == 1 and not busy and healerResponse then
-                self:PlayAnim(healerResponse, false)
-                print("Healer resp anim: " .. healerResponse)
-            end
-        end)
-    end 
-end 
+            end)
+        end
+    end
+end
 ---------------------------------------------------------------------------------------------------------------------------------------------
 ENT.Water_ExtinguishFire = true 
 function ENT:WaterExtinguishSelFire()
     if not self.Water_ExtinguishFire then return end 
     if not IsValid(self) then return end 
+    if not self:Alive() then return end 
+    if not self:IsOnFire() then return end 
     local extinguishSnd = table.Random(self.WaterSplashSounds)
     local rngSnd = mRng(80, 105)
-    if self:WaterLevel() > 0 and self:IsOnFire() and (self:Alive() or not self.Dead) then
+    if self:WaterLevel() > 0 then
         self:Extinguish()
         if extinguishSnd then
             VJ.EmitSound(self, extinguishSnd, 75, rngSnd)
@@ -3100,14 +3525,17 @@ end
 
 ENT.React_ToOnFireConv = "vj_stalker_fire_react"
 function ENT:ReactToFire()
-    if not IsValid(self) or self.VJ_IsBeingControlled then return end
-    if not self.CanPlayBurningAnimations then return end 
+    if not self.ReactToFireDance then return end 
+
     if self.React_ToOnFireConv then
         local convVar = GetConVar(self.React_ToOnFireConv)
         if convVar and convVar:GetInt() == 0 then
-            return 
+            return
         end
     end
+
+    if self.VJ_IsBeingControlled then return end 
+    if not IsValid(self) then return end
 
     local onFire = self:IsOnFire()
     local hp = self:Health()
@@ -3166,8 +3594,8 @@ function ENT:ReactToFire()
 end
 
 function ENT:SetReactToFireVars()
+    if not self.ReactToFireDance then return end 
     if not IsValid(self) then return end 
-    if not self.CanPlayBurningAnimations then return end 
     if self:IsOnFire() and self.CurrentlyBurning then
         self._OriginalHealableTag = self.VJ_ID_Healable
         self.VJ_ID_Healable = false
@@ -3230,71 +3658,60 @@ function ENT:OnFireBehavior()
     end
 end
 ---------------------------------------------------------------------------------------------------------------------------------------------
-function ENT:OnDeath(dmginfo, hitgroup, status)
-    if not IsValid(self) then return false end 
+function ENT:Intercept_DeathSnd()
+    if not self.HasSounds or not self.HasDeathSounds then return end
+    if not IsValid(self) then return end
+    self.HasDeathSounds = false
+end
 
-    if self.HasDeathSounds and self.Headshot_Death and self.HeadShot_Death_StopDthSnd then 
-        VJ.STOPSOUND(self.CurrentDeathSound)
+function ENT:Handle_RngRadioBlip()
+    if not self.Random_RadioSoundPlay then return end 
+    local chance = self.Random_RadioSoundChance or 4 
+    if mRng(1, chance) ~= 1 then return end 
+    local snd = self.RandomRadioSound 
+    if not snd then return end 
+    local picked = istable(snd) and snd[mRng(1, #snd)] or snd 
+    if isstring(picked) and picked ~= 1 then 
+        VJ.EmitSound(self, picked, mRng(55, 75), mRng(65, 105))
     end 
+end 
 
+function ENT:OnDeath(dmginfo, hitgroup, status)
     local rngSnd = mRng(75, 105)
-    local isFireDeath = self:IsOnFire() and (dmginfo:IsDamageType(DMG_BURN) or dmginfo:IsDamageType(DMG_SLOWBURN)) and not self.Immune_Fire
-    local isHeadshot = self.Headshot_Death or hitgroup == HITGROUP_HEAD
+
+    local isHeadshot = self.Headshot_Death 
     local deflateChance = self.SevaSuitDeflateChance or 2 
-    local lastRadTrans = self.Radio_DeathSoundChance or 4 
     local atId = 0
 
     if status == "Init" then 
-        local wep = self:GetActiveWeapon()
-        if IsValid(wep) then 
-            local conv = GetConVar("vj_stalker_drop_seq_wep"):GetInt()
-            local wepClass = wep:GetClass()
-            local dropWeaponClass
-            local dropChance = tonumber(self.Weapon_DropSecondary_Chance) or 3 
-            if wepClass == self.HumanPrimaryWeapon and mRng(1, dropChance) == 1 and self.Weapon_DropSecondary and conv == 1 then
-                dropWeaponClass = self.HumanSecondaryWeapon
-            elseif wepClass == self.HumanSecondaryWeapon then
-                dropWeaponClass = self.HumanPrimaryWeapon
-            else
-                return
-            end
+        if self.Headshot_Death and self.HeadShot_Death_StopDthSnd then 
+            self:Intercept_DeathSnd()
+        end 
+        self:Handle_DropSecondaryWep(dmginfo)
+        self:Handle_RngRadioBlip()
 
-            local dropEnt = ents.Create(dropWeaponClass)
-            local rngVel = mRand(-25,25)
-            if IsValid(dropEnt) then
-                dropEnt:SetPos(self:GetPos() + Vector(mRand(-10, 10), mRand(-10, 10), mRand(25, 40)))
-                dropEnt:SetAngles(self:GetAngles())
-                dropEnt:Spawn()
-                dropEnt:SetOwner(NULL)
-                local phys = dropEnt:GetPhysicsObject()
-                if IsValid(phys) then
-                    phys:SetVelocity(self:GetForward() * rngVel + self:GetRight() * rngVel + Vector(0, 0, rngVel))
+        if self.IsScientific and mRng(1, deflateChance) == 1 then 
+            local snd = self.HazardSuit_DeathDeflate
+            if not snd then return end 
+            local sndPick = istable(snd) and snd[mRng(1, #snd)] or snd
+            if isstring(sndPick) and sndPick ~= "" then 
+                VJ.EmitSound(self, sndPick, 70, rngSnd)
+            end 
+        end
+
+        local dmgType = dmginfo:GetDamageType()
+        local isFireDeath = self:IsOnFire() and bit.band(dmgType, bit.bor(DMG_BURN, DMG_SLOWBURN)) ~= 0 and not self.Immune_Fire    
+        if isFireDeath then 
+            self.HasBeenBurntToDeath = true 
+            if self.HasBurnToDeathSounds and not self.HasPlayedBurnDeathSound and mRng(1, self.BurnToDeathSoundChance) == 1 then    
+                self:Intercept_DeathSnd()
+                self.HasPlayedBurnDeathSound = true
+                self.BurnToDeathSoundObj = VJ.CreateSound(self, self.BurnToDeathSound_Tbl, rngSnd, self:GetSoundPitch(self.DeathSoundPitch))
+                if self.BurnToDeathSoundObj then
+                    self.BurnToDeathSoundObj:Play()
                 end
             end
         end 
-
-        if self.Radio_RandomDeathSound and mRng(1, lastRadTrans) == 1 then 
-            local radDeath = table.Random({"general_sds/radio_snds/radio_random" .. mRng(1, 15) .. ".wav"})
-            if radDeath then 
-                VJ.EmitSound(self, radDeath, 65, rngSnd)
-            end 
-        end 
-
-        if self.IsScientific and mRng(1, deflateChance) == 1 then 
-            local deflateSound = VJ.PICK({"general_sds/deflate_suit_sound/ceda_suit_deflate_01.wav","general_sds/deflate_suit_sound/ceda_suit_deflate_02.wav","general_sds/deflate_suit_sound/ceda_suit_deflate_03.wav"})
-            if deflateSound then 
-                VJ.EmitSound(self, deflateSound, 70, rngSnd)
-            end 
-        end 
-
-        if isFireDeath and self.HasBurnToDeathSounds and not self.HasPlayedBurnDeathSound and mRng(1, self.BurnToDeathSoundChance) == 1 then
-            self.HasPlayedBurnDeathSound = true
-            VJ.STOPSOUND(self.CurrentDeathSound)
-            self.BurnToDeathSoundObj = VJ.CreateSound(self, self.BurnToDeathSound_Tbl, rngSnd, self:GetSoundPitch(self.DeathSoundPitch))
-            if self.BurnToDeathSoundObj then
-                self.BurnToDeathSoundObj:Play()
-            end
-        end
 
         if isHeadshot then 
             self.CanPlayHeadshotDeahtAnim = true
@@ -3315,75 +3732,186 @@ function ENT:OnDeath(dmginfo, hitgroup, status)
     end
 end
 
-function ENT:DeahtAnimation_Handle(dmginfo, hitgroup)
+function ENT:Handle_DropSecondaryWep(dmginfo)
+    if not self.Weapon_DropSecondary then return end 
+    if not dmginfo then return end
 
-    local deathConv = GetConVar("vj_stalker_death_anim"):GetInt()
-    local headshotConv = GetConVar("vj_stalker_disable_headshot_death_anim"):GetInt()
+    local conv = GetConVar("vj_stalker_drop_seq_wep"):GetInt()
+    if not conv or conv ~= 1 then return end 
+
+    local wep = self:GetActiveWeapon()
+    if IsValid(wep) then 
+        local wepClass = wep:GetClass()
+        local dropWeaponClass;
+        local dropChance = tonumber(self.Weapon_DropSecondary_Chance) or 3 
+        if wepClass == self.HumanPrimaryWeapon and mRng(1, dropChance) == 1 then
+            dropWeaponClass = self.HumanSecondaryWeapon
+        elseif wepClass == self.HumanSecondaryWeapon then
+            dropWeaponClass = self.HumanPrimaryWeapon
+        else
+            return;
+        end
+
+        if not dropWeaponClass then return end
+
+        local dropEnt = ents.Create(dropWeaponClass)
+        local rngVel = mRand(-25,25)
+        local safeRemEntConv = GetConVar("vj_stalker_drop_seq_wep_safe_rem"):GetInt()
+        if IsValid(dropEnt) then
+            dropEnt:SetPos(self:GetPos() + Vector(mRand(-10, 35), mRand(-10, 35), mRand(25, 55)))
+            dropEnt:SetAngles(self:GetAngles())
+            dropEnt:SetOwner(self)
+            dropEnt:Spawn()
+            dropEnt:Activate()
+            self:DeleteOnRemove(dropEnt)
+            local phys = dropEnt:GetPhysicsObject()
+            if IsValid(phys) then
+                local fwd, right = self:GetForward(), self:GetRight()
+                phys:SetVelocity(fwd * rngVel + right * rngVel + Vector(0, 0, rngVel))
+            end
+
+            local inflict = dmginfo:GetInflictor()
+            local dmgT = dmginfo:GetDamageType()
+
+            if (bit.band(dmgT, DMG_DISSOLVE) ~= 0)
+            or (IsValid(inflict) and inflict:GetClass() == "prop_combine_ball") then
+
+                local dissolver = self:GetOrCreateDissolver()
+                if IsValid(dissolver) then
+                    local targetName = "vj_dissolve_" .. dropEnt:EntIndex()
+                    dropEnt:SetName(targetName)
+
+                    dissolver:SetKeyValue("target", targetName)
+                    dissolver:SetKeyValue("dissolvetype", 0) 
+                    dissolver:Fire("Dissolve", targetName, 0)
+                end
+                return;
+            end
+            if safeRemEntConv and safeRemEntConv == 1 then
+                SafeRemoveEntityDelayed(dropEnt, mRand(20, 45))
+            end 
+        end
+    end 
+end 
+
+ENT.HasBeenBurntToDeath = false 
+ENT.Death_FireIgniteSndTbl = {"ambient/fire/gascan_ignite1.wav","ambient/fire/ignite.wav"}
+
+ENT.DeathAnim_Running = {"deathrunning_01","deathrunning_03","deathrunning_04","deathrunning_05","deathrunning_06","deathrunning_07","deathrunning_08","deathrunning_09","deathrunning_10","deathrunning_11a","deathrunning_11b","deathrunning_11c","deathrunning_11d","deathrunning_11e","deathrunning_11f","deathrunning_11g"}
+ENT.DeathAnim_Headshot = {"DIE_Headshot_FBack_01","DIE_Headshot_FBack_02","DIE_Headshot_FBack_03","DIE_Headshot_FFront_01","DIE_Headshot_FFront_02","DIE_Headshot_FFront_03","DIE_Headshot_FFront_04","DIE_Headshot_FFront_05"}
+ENT.DeathAnim_Explosion = {"death_explosion_1","death_explosion_2","death_explosion_3","death_explosion_4","death_explosion_5","death_explosion_6"}
+ENT.DeathAnim_Shock = {"electro_15","electrocuted_1","electrocuted_2","electrocuted_3","electrocuted_4","electrocuted_5"}
+ENT.DeathAnim_Fire = {"fire_03","fire_04","fire_01","fire_02","pd2_death_fire_1_new","pd2_death_fire_2_new","pd2_death_fire_3_new"}
+ENT.DeathAnim_BuckBack = {"die_shotgun_fback_01","die_shotgun_fback_02"}
+ENT.DeathAnim_BuckFront = {"DIE_Shotgun_FFront_01","DIE_Shotgun_FFront_02","DIE_Shotgun_FFront_03","DIE_Shotgun_FFront_04","DIE_Shotgun_FFront_05","DIE_Shotgun_FFront_06","DIE_Shotgun_FFront_07","DIE_Shotgun_FFront_08","DIE_Shotgun_FFront_09"}
+ENT.DeathAnim_BuckLeft = {"die_shotgun_fleft_01","die_shotgun_fleft_02","die_shotgun_fleft_03"}
+ENT.DeathAnim_BuckRight = {"die_shotgun_fright_01"}
+ENT.DeathAnim_Simple = {"die_simple_01","die_simple_02","die_simple_03","die_simple_04","die_simple_05","die_simple_06","die_simple_07","die_simple_08","die_simple_09","die_simple_10","die_simple_11","die_simple_12","die_simple_13","die_simple_14","die_simple_15","die_simple_16","die_simple_17","die_simple_18","die_simple_19","die_simple_20","die_simple_21","die_simple_22"}
+ENT.DeathAnim_BurnedFireFx = {"embers_small_01","env_fire_small_base","fire_medium_heatwave","smoke_medium_01","smoke_medium_02"}
+
+local function GetValDeathAnim(anim)
+    if not anim or anim == "" or anim == false then return nil end 
+
+    local selected;
+    if istable(anim) then 
+        local count = #anim
+        if count == 0 then return nil end 
+        selected = anim[mRng(count)]
+    elseif isstring(anim) then 
+        selected = anim 
+    end
+    if not isstring(selected) or selected == "" then return nil end
+
+    if not string.StartWith(selected, "vjseq_") then
+        selected = "vjseq_" .. selected
+    end
+
+    return selected
+end
+
+function ENT:DeahtAnimation_Handle(dmginfo, hitgroup)
+    if not self.HasDeathAnimation or self.Head_HasBeenDecapitated or self.Shoved_Back_Now then return end 
+
+    local deathConv = GetConVar("vj_stalker_death_anim")
+    if not deathConv or deathConv:GetInt() ~= 1 then return end 
 
     local rngSnd = mRng(75, 105)
-    local isFireDeath = self:IsOnFire() and (dmginfo:IsDamageType(DMG_BURN) or dmginfo:IsDamageType(DMG_SLOWBURN)) and not self.Immune_Fire
     local pcfxPoint = PATTACH_POINT_FOLLOW
 
-    local RUNNING = {"vjseq_deathrunning_01","vjseq_deathrunning_03","vjseq_deathrunning_04","vjseq_deathrunning_05","vjseq_deathrunning_06","vjseq_deathrunning_07","vjseq_deathrunning_08","vjseq_deathrunning_09","vjseq_deathrunning_10","vjseq_deathrunning_11a","vjseq_deathrunning_11b","vjseq_deathrunning_11c","vjseq_deathrunning_11d","vjseq_deathrunning_11e","vjseq_deathrunning_11f","vjseq_deathrunning_11g"}
-    local HEADSHOT = {"vjseq_DIE_Headshot_FBack_01","vjseq_DIE_Headshot_FBack_02","vjseq_DIE_Headshot_FBack_03","vjseq_DIE_Headshot_FFront_01","vjseq_DIE_Headshot_FFront_02","vjseq_DIE_Headshot_FFront_03","vjseq_DIE_Headshot_FFront_04","vjseq_DIE_Headshot_FFront_05"}
-    local EXPLOSION = {"vjseq_death_explosion_1","vjseq_death_explosion_2","vjseq_death_explosion_3","vjseq_death_explosion_4","vjseq_death_explosion_5","vjseq_death_explosion_6"}
-    local SHOCK = {"vjseq_electro_15","vjseq_electrocuted_1","vjseq_electrocuted_2","vjseq_electrocuted_3","vjseq_electrocuted_4","vjseq_electrocuted_5"}
-    local FIRE = {"vjseq_fire_03","vjseq_fire_04","vjseq_fire_01","vjseq_fire_02","vjseq_pd2_death_fire_1_new","vjseq_pd2_death_fire_2_new","vjseq_pd2_death_fire_3_new"}
-    local BUCK_BACK = {"vjseq_die_shotgun_fback_01","vjseq_die_shotgun_fback_02"}
-    local BUCK_FRONT = {"vjseq_DIE_Shotgun_FFront_01","vjseq_DIE_Shotgun_FFront_02","vjseq_DIE_Shotgun_FFront_03","vjseq_DIE_Shotgun_FFront_04","vjseq_DIE_Shotgun_FFront_05","vjseq_DIE_Shotgun_FFront_06","vjseq_DIE_Shotgun_FFront_07","vjseq_DIE_Shotgun_FFront_08","vjseq_DIE_Shotgun_FFront_09"}
-    local BUCK_LEFT = {"vjseq_die_shotgun_fleft_01","vjseq_die_shotgun_fleft_02","vjseq_die_shotgun_fleft_03"}
-    local BUCK_RIGHT = {"vjseq_die_shotgun_fright_01"}
-    local SIMPLE = {"vjseq_die_simple_01","vjseq_die_simple_02","vjseq_die_simple_03","vjseq_die_simple_04","vjseq_die_simple_05","vjseq_die_simple_06","vjseq_die_simple_07","vjseq_die_simple_08","vjseq_die_simple_09","vjseq_die_simple_10","vjseq_die_simple_11","vjseq_die_simple_12","vjseq_die_simple_13","vjseq_die_simple_14","vjseq_die_simple_15","vjseq_die_simple_16","vjseq_die_simple_17","vjseq_die_simple_18","vjseq_die_simple_19","vjseq_die_simple_20","vjseq_die_simple_21","vjseq_die_simple_22"}
-
-    if deathConv ~= 1 or not self:IsOnGround() or not self.HasDeathAnimation or (not isFireDeath and (self:IsVJAnimationLockState() or self:IsBusy())) then
+    if not self:IsOnGround() or self:GetActivity() == ACT_COVER or (not self.HasBeenBurntToDeath and (self:IsVJAnimationLockState() or self:IsBusy())) then
         return
     end
 
-    if self:IsMoving() and self:GetActivity() == ACT_RUN and self:IsOnGround() then
-        self.AnimTbl_Death = RUNNING
-        self.DeathAnimationChance = 2
-        print("Running (Forward)")
-        return
+    local atId = 0
 
-    elseif (self.CanPlayHeadshotDeahtAnim or isHeadshot) and headshotConv ~= 1 and not self:GetActivity() == ACT_COVER then
-        self.AnimTbl_Death = HEADSHOT
-        print("HEADSHOT")
-        return
+    local myPos = self:GetPos()
+    local moveDir = (self:GetCurWaypointPos() or myPos) - myPos
+    moveDir:Normalize()
+    local forwardDot = self:GetForward():Dot(moveDir)
+    local isMovingForward = forwardDot > 0.5
 
-    elseif dmginfo:IsExplosionDamage() then
-        self.AnimTbl_Death = EXPLOSION
+    local headshotConv = GetConVar("vj_stalker_disable_headshot_death_anim")  
+    local isHeadshot = self.Headshot_Death or (hitgroup == HITGROUP_HEAD)
+
+    if self:IsMoving() and isMovingForward then
+        if self:GetActivity() == ACT_RUN then
+            self.AnimTbl_Death = GetValDeathAnim(self.DeathAnim_Running)
+            self.DeathAnimationChance = 2
+
+            if self.RANDOMS_DEBUG then print("Running Death Animation") end
+            return;
+        end
+     
+    elseif headshotConv:GetInt() ~= 1 and (self.CanPlayHeadshotDeahtAnim or isHeadshot) then
+        self.AnimTbl_Death = GetValDeathAnim(self.DeathAnim_Headshot)
+        if self.RANDOMS_DEBUG then print("Headshot Death Animation") end 
+        return;
+
+    elseif dmginfo:IsExplosionDamage() or dmginfo:IsDamageType(DMG_BLAST) then
+        self.AnimTbl_Death = GetValDeathAnim(self.DeathAnim_Explosion)
         self.DeathAnimationChance = 2
-        print("Explosion")
-        return
+        if self.RANDOMS_DEBUG then print("Explosion Death Animation") end 
+        return;
 
     elseif dmginfo:IsDamageType(DMG_SHOCK) then
-        self.AnimTbl_Death = SHOCK
+        self.AnimTbl_Death = GetValDeathAnim(self.DeathAnim_Shock)
         self.DeathAnimationChance = 2
 
         local firePartEf = "smoke_gib_01"
         local elePartEf = "electrical_arc_01_parent"
-        ParticleEffectAttach(firePartEf, pcfxPoint, self, atId)
-        ParticleEffectAttach(firePartEf, pcfxPoint, self, atId)
-        ParticleEffectAttach(elePartEf, pcfxPoint, self, atId)
-        ParticleEffectAttach(elePartEf, pcfxPoint, self, atId)
-        print("Shocked")
-        return
+        for i = 1, mRng(2, 3) do 
+            ParticleEffectAttach(firePartEf, pcfxPoint, self, atId)
+        end 
+        if self.RANDOMS_DEBUG then print("Shocked Death Animation") end 
+        return;
 
-    elseif isFireDeath then
-        print("Fire")
-        self.AnimTbl_Death = FIRE
+    elseif self.HasBeenBurntToDeath then
+        if self.RANDOMS_DEBUG then print("Burn to Death Animation") end 
+        self.AnimTbl_Death = GetValDeathAnim(self.DeathAnim_Fire)
 
-        local fireIgnite = table.Random({"ambient/fire/gascan_ignite1.wav","ambient/fire/ignite.wav"})
+        local snd = self.Death_FireIgniteSndTbl
+        local fireIgnite; 
+
+        if snd and istable(snd) then 
+            fireIgnite = table.Random(self.Death_FireIgniteSndTbl)
+        end 
+
         local fireChance = tonumber(self.FireDeathFxChance) or 2
-
         if self.SpecialFireDeathFx and mRng(1, fireChance) == 1 and not isHeadshot then
-
-            if fireIgnite then
-                VJ.EmitSound(self, fireIgnite, 70, rngSnd)
+            if snd and istable(snd) and #snd > 0 then 
+                local fireIgnite = table.Random(snd)
+                if fireIgnite then
+                    VJ.EmitSound(self, fireIgnite, 70, rngSnd)
+                end
             end
-
-            local fireEffects = {"embers_small_01","env_fire_small_base","fire_medium_heatwave","smoke_medium_01","smoke_medium_02"}
-            for _, effect in ipairs(fireEffects) do ParticleEffectAttach(effect, pcfxPoint, self, atId) end
+            local pcfxTbl = self.DeathAnim_BurnedFireFx
+            if pcfxTbl and istable(pcfxTbl) and #pcfxTbl > 0 then
+                for _, effect in ipairs(pcfxTbl) do 
+                    if isstring(effect) and effect ~= "" then
+                        ParticleEffectAttach(effect, pcfxPoint, self, atId) 
+                    end
+                end 
+            end
 
             local function GetValAtt(ent)
                 local commonAttachments = {"chest","forward","center","zipline","muzzle","beam_damage","trinket_lowerback"}
@@ -3398,20 +3926,26 @@ function ENT:DeahtAnimation_Handle(dmginfo, hitgroup)
             local green = mRng(160, 200)
 
             self.FireLight = ents.Create("light_dynamic")
-            self.FireLight:SetKeyValue("brightness", rngBright)
-            self.FireLight:SetKeyValue("distance", rngDist)
-            self.FireLight:SetLocalPos(self:GetPos())
-            self.FireLight:SetLocalAngles(self:GetAngles())
-            self.FireLight:Fire("Color", red .. " " .. green .. " 0")
-            self.FireLight:SetParent(self)
-            self.FireLight:Spawn()
-            self.FireLight:Activate()
-            local attachName = GetValAtt(self)
-            if attachName then self.FireLight:Fire("SetParentAttachment", attachName) end
-            self.FireLight:Fire("TurnOn", "", 0)
-            self:DeleteOnRemove(self.FireLight)
+            if IsValid(self.FireLight) then
+                self.FireLight:SetKeyValue("brightness", mRng(1, 5))
+                self.FireLight:SetKeyValue("distance", mRand(35, 80))
+                self.FireLight:SetLocalPos(self:GetPos())
+                self.FireLight:SetLocalAngles(self:GetAngles())
+                self.FireLight:Fire("Color", red .. " " .. green .. " 0")
+                self.FireLight:SetParent(self)
+                self.FireLight:Spawn()
+                self.FireLight:Activate()
+                
+                local attachName = GetValAtt(self)
+                if attachName then 
+                    self.FireLight:Fire("SetParentAttachment", attachName) 
+                end
+                
+                self.FireLight:Fire("TurnOn", "", 0)
+                self:DeleteOnRemove(self.FireLight)
+            end
         end
-        return
+        return;
 
     elseif dmginfo:IsDamageType(DMG_BUCKSHOT) then
 
@@ -3428,34 +3962,35 @@ function ENT:DeahtAnimation_Handle(dmginfo, hitgroup)
             local dotRight = playerAim:Dot(snpcRight)
 
             if dotForward > 0.5 then
-                self.AnimTbl_Death = BUCK_BACK
+                self.AnimTbl_Death = GetValDeathAnim(self.DeathAnim_BuckBack)
                 self.DeathAnimationChance = 2
-                print("Shotgun Death from Back")
-                return
+                if self.RANDOMS_DEBUG then print("Shotgun Death from Back") end 
+                return;
 
             elseif dotForward < -0.5 then
-                self.AnimTbl_Death = BUCK_FRONT
+                self.AnimTbl_Death = GetValDeathAnim(self.DeathAnim_BuckFront)
                 self.DeathAnimationChance = 2
-                print("Shotgun Death from Front")
-                return
+                if self.RANDOMS_DEBUG then print("Shotgun Death from Front") end
+                return;
 
             elseif dotRight > 0.5 then
-                self.AnimTbl_Death = BUCK_LEFT
+                self.AnimTbl_Death = GetValDeathAnim(self.DeathAnim_BuckLeft)
                 self.DeathAnimationChance = 2
-                print("Shotgun Death from Left")
-                return
+                if self.RANDOMS_DEBUG then print("Shotgun Death from Left") end
+                return;
 
             elseif dotRight < -0.5 then
-                self.AnimTbl_Death = BUCK_RIGHT
+                self.AnimTbl_Death = GetValDeathAnim(self.DeathAnim_BuckRight)
                 self.DeathAnimationChance = 2
-                print("Shotgun Death from Right")
-                return
+                if self.RANDOMS_DEBUG then print("Shotgun Death from Right") end
+                return;
             end
         end
     end
     self.DeathAnimationChance = 5
-    self.AnimTbl_Death = SIMPLE
-    return
+    self.AnimTbl_Death = GetValDeathAnim(self.DeathAnim_Simple) 
+    if self.RANDOMS_DEBUG then print("Using fallback death animation") end
+    return;
 end
 ---------------------------------------------------------------------------------------------------------------------------------------------
 function ENT:ShovedBack(dmginfo)
@@ -3500,7 +4035,7 @@ function ENT:ShovedBack(dmginfo)
     end
 
     if self:Health() <= (self:GetMaxHealth() * 0.5) then
-        adjustedChance = math.max(1, math.ceil(adjustedChance / 2))
+        adjustedChance = math.max(1, math_ceil(adjustedChance / 2))
     end
 
     adjustedChance = math.max(1, adjustedChance)
@@ -3583,9 +4118,11 @@ function ENT:ShovedBack(dmginfo)
 end
 
 function ENT:HitWallWhenShoved()
+    if not self.ShovedDir then return end 
     local conv = GetConVar("vj_stalker_shove_wall_collide")
-    if not self.ShovedDir or conv:GetInt() ~= 1 then return end
-    local isDead = self:Health() <= 0 or self.Dead or not self:Alive()
+    if not conv or conv:GetInt() ~= 1 then return end
+
+    local isDead = self:Health() <= 0 or not self:Alive()
     local frwrd = self:GetForward()
     local right = self:GetRight()
     if self.CollideWall and not isDead then 
@@ -3599,11 +4136,14 @@ function ENT:HitWallWhenShoved()
 
         local startPos = self:GetPos() + self:OBBCenter() - traceDir * 10
         local traceDist = 20
+
+        local obbMin = self:OBBMins()
+        local obbMax = self:OBBMaxs()
         local tr = util.TraceHull({
             start = startPos,
             endpos = startPos + traceDir * traceDist,
-            mins = self:OBBMins(),
-            maxs = self:OBBMaxs(),
+            mins = obbMin,
+            maxs = obbMax,
             filter = self
         })
 
@@ -3611,8 +4151,8 @@ function ENT:HitWallWhenShoved()
             tr = util.TraceHull({
             start = startPos,
             endpos = startPos + traceDir * 6,
-            mins = self:OBBMins(),
-            maxs = self:OBBMaxs(),
+            mins = obbMin,
+            maxs = obbMax,
             filter = self
             })
         end
@@ -3686,61 +4226,67 @@ function ENT:React_DmgFrPly(attacker, dmginfo)
     if self:IsVJAnimationLockState() then return end 
     if self.VJ_IsBeingControlled then return end
     if not self:Alive() then return end 
+    local disps = (relation == D_LI or relation == D_NU)
+    if IsValid(attacker) and attacker:IsPlayer() and not VJ_CVAR_IGNOREPLAYERS and disps then
+            
+        local cT = CurTime()
+        if cT < (self.React_FrIFire_NextT or 0) then return end
+        if self:IsBusy() then return end
 
-    local cT = CurTime()
-    if cT < (self.React_FrIFire_NextT or 0) then return end
-    if self:IsBusy() then return end
+        local ene = self:GetEnemy()
+        if IsValid(ene) and self:Visible(ene) then return end
 
-    local ene = self:GetEnemy()
-    if IsValid(ene) and self:Visible(ene) then return end
+        if self._ReactFrFirePending then return end
 
-    if self._ReactFrFirePending then return end
+        local chance = tonumber(self.React_FrIFire_Chance) or 5
+        if mRng(1, chance) ~= 1 then return end 
 
-    local chance = tonumber(self.React_FrIFire_Chance) or 5
-    if mRng(1, chance) ~= 1 then return end 
+        self._ReactFrFirePending = true
+    
+        if self:IsMoving() then self:StopMoving() end 
+        self:RemoveAllGestures()
 
-    self._ReactFrFirePending = true
- 
-    if self:IsMoving() then self:StopMoving() end 
-    self:RemoveAllGestures()
-
-    local annoyedAnim = table.Random(self.React_FrIFire_AnimTbl)
-    if not annoyedAnim then return end
-
-    timer.Simple(mRand(0.15, 0.95), function()
-        if not IsValid(self) then return end 
-        local seqName = "vjges_" .. annoyedAnim
-        self:PlayAnim(seqName, false)
-        self.React_FrIFire_NextT = CurTime() + mRand(2, 10)
-        self._ReactFrFirePending = false
-    end)
-end
+        local annoyedAnim = table.Random(self.React_FrIFire_AnimTbl)
+        if not annoyedAnim then return end
+        
+        local delT = mRand(0.15, 0.95)
+        timer.Simple(delT, function()
+            if not IsValid(self) then return end 
+            self._ReactFrFirePending = false
+            local seqName = "vjges_" .. annoyedAnim
+            self:PlayAnim(seqName, false)
+            self:SetTurnTarget(attacker)
+            self:SCHEDULE_FACE("TASK_FACE_TARGET")
+            self.React_FrIFire_NextT = CurTime() + mRand(2, 10)
+        end)
+    end
+end 
 ---------------------------------------------------------------------------------------------------------------------------------------------
     -- [Corpse wound graabbing] --
 ENT.CorpseWndGrabbing = true 
 ENT.CorpseWndGrab_MinT = 1
 ENT.CorpseWndGrab_MaxT = 12 
-ENT.CorpseWndGrabChance = 10
+ENT.CorpseWndGrabChance = mRng(5, 10)
 ENT.CorpseWndGrabFrc = 100
 ENT.CorpseWndGrabDelay = 0.1
 
     -- [Ex corpse phys] -- 
 ENT.Ex_Crp_Phys = true 
 ENT.Ex_Crp_Phys_Trq = true 
-ENT.Ex_Crp_Phys_Trq_Chance = 2 
+ENT.Ex_Crp_Phys_Trq_Chance = 3
 
     -- [Headshot corpse physics] --
-ENT.HeadShot_PhysDownFrc = mRand(35, 85) 
-ENT.HeadShot_PhysForwardFrc = mRand(-150, 150) 
+ENT.HeadShot_PhysDownFrc = 400
+ENT.HeadShot_PhysForwardFrc = 1000
 
     -- [Post mortem twitching] --
 ENT.HasPostMortemTwitching = true 
 ENT.CorpseTwitchChance = 10
 ENT.CorpseTwitchReps = mRng(1, 15)
-ENT.CorpseTwitchMinDelay = 0.1
+ENT.CorpseTwitchMinDelay = 0.05
 ENT.CorpseTwitchMaxDelay = 1.5
-ENT.CorpseTwitchForceMin = 150
-ENT.CorpseTwitchForceMax = 600 
+ENT.CorpseTwitchForceMin = 50
+ENT.CorpseTwitchForceMax = 250 
 ENT.CorpseTwitchLifeMinT = 1
 ENT.CorpseTwitchLifeMaxT = 15 
 
@@ -3858,23 +4404,48 @@ function ENT:Delayed_DissolveAfterCorpse(corpse)
 end
 
 function ENT:PlyFlatlineOnDeath(corpse)
-    if not IsValid(corpse) then return end
+    if not self.Flatline_DeathSnd then return end 
+
     local conv = GetConVar("vj_stalker_flatline"):GetInt()
+    if conv ~= 1 then return end 
+    if not IsValid(corpse) then return end
+
     local chance = tonumber(self.Flatline_DeathChance) or 3 
-    if self.Flatline_DeathSnd and mRng(1, chance) == 1 and conv == 1 then
-        timer.Simple(mRand(0.01, 0.05), function()
-            if IsValid(corpse) then
-                local flatlineSnd = "general_sds/flatline/flatline" .. mRng(1, 8) .. ".wav"
-                local snd = CreateSound(corpse, flatlineSnd)
-                if snd then
-                    snd:PlayEx(mRand(0.75, 0.9), mRng(75, 115)) 
-                    corpse:CallOnRemove("StopFlatlineSnd", function()
-                        if snd then snd:Stop() end
-                    end)
-                end
-            end 
+    if mRng(1, chance) ~= 1 then return end
+
+    local flatSnd = self.Flatline_DeathTbl
+
+    if flatSnd and #flatSnd > 0 then
+        local flat;
+
+        if istable(flatSnd) then
+            flat = table.Random(flatSnd)
+        else
+            flat = flatSnd
+        end
+
+        local delay = mRand(0.01, 0.05)
+        local volume = mRand(0.75, 0.9)
+        local pitch = mRng(75, 115)
+
+        timer.Simple(delay, function()
+            if not IsValid(corpse) then return end
+            if corpse.FlatlinePlaying then return end
+
+            corpse.FlatlinePlaying = true
+
+            local snd = CreateSound(corpse, flatlineSnd)
+            if snd then
+                snd:PlayEx(volume, pitch)
+
+                local id = "StopFlatlineSnd_" .. corpse:EntIndex()
+                corpse:CallOnRemove(id, function()
+                    if snd then snd:Stop() end
+                    corpse.FlatlinePlaying = nil
+                end)
+            end
         end)
-    end
+    end 
 end
 
 function ENT:Instant_DissolveCorpse(corpse)
@@ -3920,56 +4491,65 @@ end
 function ENT:Ele_CorpseDeathEffects(corpse)
     if not IsValid(corpse) then return end 
     if not self.Corpse_EleDeathEffects then return end 
+    if self:WaterLevel() > 3 then return end  
 
     local conv = GetConVar("vj_stalker_ele_death_fx")
     if conv:GetInt() ~= 1 then return end 
 
-    local sparkChance = self.Corpse_EleDeathEffects_Chance
-
+    local sparkChance = self.Corpse_EleDeathEffects_Chance or 8 
+    local snd = self:GetRandomValidValue(self.EnergyZap_Tbl) 
     if mRng(1, sparkChance) == 1 then
         local duration = mRand(1, 15) or 10 
         local interval = mRand(0.05, 0.95) or 0.5
         local repetitions = duration / interval 
         local timerName = "ElectricityEffects_" .. corpse:EntIndex() .. "_" .. CurTime()
-
         timer.Create(timerName, interval, repetitions, function()
             if not IsValid(corpse) then timer.Remove(timerName) return end
+
+            if snd then  
+                corpse:EmitSound(snd, mRng(65, 85), mRng(75, 105)) 
+            end 
+
+            local pos = corpse:GetPos()
+            local start = corpse:GetPos()
+
             local DeathSparkeffect2 = EffectData()
-            DeathSparkeffect2:SetOrigin(corpse:GetPos())
-            DeathSparkeffect2:SetStart(corpse:GetPos())
+            DeathSparkeffect2:SetOrigin(pos)
+            DeathSparkeffect2:SetStart(start)
             DeathSparkeffect2:SetMagnitude(mRand(50, 90)) 
             DeathSparkeffect2:SetEntity(corpse)
 
             local DeathSparkeffect1 = EffectData()
-            DeathSparkeffect1:SetOrigin(corpse:GetPos())
-            DeathSparkeffect1:SetStart(corpse:GetPos())
+            DeathSparkeffect1:SetOrigin(pos)
+            DeathSparkeffect1:SetStart(start)
             DeathSparkeffect1:SetMagnitude(mRng(5, 15)) 
             DeathSparkeffect1:SetEntity(corpse)
 
             local DeathSparkeffect = ents.Create("spark_shower")
             DeathSparkeffect:SetAngles(Angle(0, mRng(-180, 180), 0))
-            DeathSparkeffect:SetPos(corpse:GetPos())
+            DeathSparkeffect:SetPos(start)
             DeathSparkeffect:Spawn()
             DeathSparkeffect:Activate()
 
             local eleDeathFx = EffectData()
-            eleDeathFx:SetOrigin(corpse:GetPos())
-            eleDeathFx:SetStart(corpse:GetPos())
+            eleDeathFx:SetOrigin(pos)
+            eleDeathFx:SetStart(start)
             eleDeathFx:SetEntity(corpse)
+
             util.Effect("cball_explode", eleDeathFx)
             util.Effect("ManhackSparks", eleDeathFx)
-            
             util.Effect("teslaHitBoxes", DeathSparkeffect2)
             util.Effect("StunstickImpact", DeathSparkeffect1)
-            corpse:EmitSound("ambient/energy/zap" .. mRng(1, 9) .. ".wav") 
         end)
     end
 end
 
 function ENT:ManipulateCorpseFingers(corpse)
+    if not self.DeathFingerBoneManipuation then return end
+    local conv = GetConVar("vj_stalker_death_finger_manip"):GetInt() 
+    if not conv or conv ~= 1 then return end 
     local manChance = self.ManipulateFingBoneChance or 4 
     if mRng(1, manChance) == 1 then return end
-    if not (self.DeathFingerBoneManipuation and GetConVar("vj_stalker_death_finger_manip"):GetInt() == 1) then return end
 
     local fingerPrefix = {"ValveBiped.Bip01_L_Finger", "ValveBiped.Bip01_R_Finger"}
     for _, prefix in ipairs(fingerPrefix) do
@@ -4005,185 +4585,257 @@ end
 function ENT:ApplyCorpseTwitching(corpse)
     if not self.HasPostMortemTwitching then return end 
 
-    local twitchConv =  GetConVar("vj_stalker_body_twitching"):GetInt()
+    local twitchConv = GetConVar("vj_stalker_body_twitching"):GetInt()
     if twitchConv ~= 1 then return end 
-
+    if self.DC_Writhing then return end 
     if corpse:IsOnFire() then return end 
 
-    local twChance      = tonumber(self.CorpseTwitchChance) or 5 
-    local twitchReps    = tonumber(self.CorpseTwitchReps) or 3 
-    local minDelay      = tonumber(self.CorpseTwitchMinDelay) or 0.2
-    local maxDelay      = tonumber(self.CorpseTwitchMaxDelay) or 0.6
-    local forceMin      = tonumber(self.CorpseTwitchForceMin) or 150
-    local forceMax      = tonumber(self.CorpseTwitchForceMax) or 600
-    local minLife       = tonumber(self.CorpseTwitchLifeMinT) or 1
-    local maxLife       = tonumber(self.CorpseTwitchLifeMaxT) or 10
-    local twitchType    = mRng(1, 2)
-    local totalLife     = tonumber(mRand(minLife, maxLife)) 
+    local twChance   = tonumber(self.CorpseTwitchChance) or 5 
+    local twitchReps = tonumber(self.CorpseTwitchReps) or 3 
+    local minDelay   = tonumber(self.CorpseTwitchMinDelay) or 0.2
+    local maxDelay   = tonumber(self.CorpseTwitchMaxDelay) or 0.6
+    local forceMin   = tonumber(self.CorpseTwitchForceMin) or 150
+    local forceMax   = tonumber(self.CorpseTwitchForceMax) or 600
+    local minLife    = tonumber(self.CorpseTwitchLifeMinT) or 1
+    local maxLife    = tonumber(self.CorpseTwitchLifeMaxT) or 10
 
-    if mRng(1, twChance) == 1 then
-        timer.Simple(totalLife, function()
-            if not IsValid(corpse) then return end
-            local function TwitchRep(count)
-                if not IsValid(corpse) or not count or count <= 0 then return end
-                local physCount = corpse:GetPhysicsObjectCount()
-                if physCount <= 0 then return end
+    local vecRand    = VectorRand()
+    local twitchType = mRng(1, 2)
+    local totalLife  = mRand(minLife, maxLife)
 
-                if twitchType == 1 then
-                    local phys = corpse:GetPhysicsObjectNum(mRng(0, physCount - 1))
-                    if IsValid(phys) then
-                        local twitchForce = VectorRand() * mRand(forceMin, forceMax)
-                        phys:ApplyForceOffset(twitchForce, corpse:GetPos())
-                    end
+    if mRng(1, twChance) ~= 1 then return end
 
-                elseif twitchType == 2 then
-                    local limited = mRng(1, 4) == 1
-                    local boneCount
+    timer.Simple(totalLife, function()
+        if not IsValid(corpse) then return end
 
-                    if limited then
-                        boneCount = math.Clamp(math.floor(physCount / 5), 1, physCount)
-                    else
-                        boneCount = mRng(2, physCount)
-                    end
-                    local used = {}
+        local physCount = corpse:GetPhysicsObjectCount()
+        if physCount <= 0 then return end
 
-                    for i = 1, boneCount do
-                        local id = mRng(0, physCount - 1)
-                        if not used[id] then
-                            used[id] = true
-                            local phys = corpse:GetPhysicsObjectNum(id)
-                            if IsValid(phys) then
-                                local twitchForce = VectorRand() * mRand(forceMin * mRand(0.2, 0.7), forceMax)
-                                local offset = corpse:LocalToWorld(corpse:OBBCenter() + VectorRand() * mRand(5, 20))
-                                phys:ApplyForceOffset(twitchForce, offset)
+        local obbCenter = corpse:OBBCenter()
+        local timerName = "Twitch_" .. corpse:EntIndex()
+
+        timer.Create(timerName, mRand(minDelay, maxDelay), twitchReps, function()
+            if not IsValid(corpse) then 
+                timer.Remove(timerName)
+                return 
+            end
+
+            if twitchType == 1 then
+                local phys = corpse:GetPhysicsObjectNum(mRng(0, physCount - 1))
+                if IsValid(phys) then
+                    local randVec = vecRand
+                    local twitchForce = randVec * mRand(forceMin, forceMax)
+                    phys:ApplyForceOffset(twitchForce, corpse:GetPos())
+                end
+
+            elseif twitchType == 2 then
+                local limited = (mRng(1, 4) == 1)
+                local boneCount
+
+                if limited then
+                    boneCount = math.Clamp(math_floor(physCount / 5), 1, physCount)
+                else
+                    boneCount = mRng(2, physCount)
+                end
+
+                local fullTwitch = (mRng(1, 10) == 1)
+
+                if self.LastDamageType and bit.band(self.LastDamageType, DMG_SHOCK) ~= 0 then
+                    boneCount = physCount
+                elseif fullTwitch then
+                    boneCount = physCount
+                else
+                    boneCount = math.min(boneCount, 8)
+                end
+
+                local used = {}
+                local offRng = mRand(1, 20)
+
+                for i = 1, boneCount do
+                    local id = mRng(0, physCount - 1)
+                    if not used[id] then
+                        used[id] = true
+
+                        local phys = corpse:GetPhysicsObjectNum(id)
+                        if IsValid(phys) then
+                            local randVec = vecRand
+                            local randOffset = vecRand
+                            local forceScale = mRand(0.2, 0.7)
+
+                            if boneCount == physCount then
+                                forceScale = forceScale * 1.5
                             end
+
+                            local twitchForce = randVec * mRand(forceMin * forceScale, forceMax)
+                            local offset = corpse:LocalToWorld(obbCenter + randOffset * offRng)
+                            phys:ApplyForceOffset(twitchForce, offset)
                         end
                     end
                 end
-                if self.RANDOMS_DEBUG then 
-                    print("(Corpse Twitching) Twitch type == : " .. tonumber(twitchType))
-                end 
-                timer.Simple(mRand(minDelay, maxDelay), function()
-                    TwitchRep(count - 1)
-                end)
             end
-            TwitchRep(twitchReps)
+
+            if self.RANDOMS_DEBUG then 
+                print("(Corpse Twitching) Twitch type == : " .. twitchType)
+            end
         end)
-    end
-end 
-//TODO 
--- MAYBE ADD DIFFERENT STAT SETS BASED ON CERTAIN DMG? SHOCK OR FIRE CAUSE MORE ERATIC WRITHING?
+    end)
+end
+
 function ENT:ApplyCorpseRoll(corpse, duration, interval)
+    if not self.DC_Writhe then return end 
     if not IsValid(corpse) then return end
-    if self.Headshot_Death then return end 
-    local isHeadshot = self.Headshot_Death or hitgroup == HITGROUP_HEAD
+
     local conv = GetConVar("vj_stalker_body_writhe"):GetInt()
+    if not conv or conv ~= 1 then return end
+
+    local isHeadshot = self.Headshot_Death or (hitgroup == HITGROUP_HEAD)
+    if self.Headshot_Death or isHeadshot then return end
+
+    if self:WaterLevel() > 3 then return end 
+
     local chance = tonumber(self.DC_Writhe_Chance) or 10 
+    if corpse:IsOnFire() then chance = chance / 2 end 
+    
     local minT = tonumber(self.DC_Writhe_MinT) or 5 
     local maxT = tonumber(self.DC_Writhe_MaxT) or 15 
     local decThresh = tonumber(self.DC_Writh_Decay_Thresh) or 0.20
-    local trDist = tonumber(self.DC_Writhe_TraceDist) or 250 
+    local trDist = tonumber(self.DC_Writhe_TraceDist) or 40 
     local useAllBones = self.DC_Writhe_UseAllBones or false 
+        local spineBones = {
+            "ValveBiped.Bip01_Spine","ValveBiped.Bip01_Spine1",
+            "ValveBiped.Bip01_Spine2","ValveBiped.Bip01_Spine4",
+            "ValveBiped.Bip01_Pelvis","ValveBiped.Bip01_L_Calf",
+            "ValveBiped.Bip01_R_Calf","ValveBiped.Bip01_Neck1",
+            "ValveBiped.Bip01_R_Head1"
+        }
 
-    if isHeadshot then return false end 
-    if not conv or conv ~= 1 then return end
-    if self.DC_Writhe and not self.DC_Writhing then  
+    local decayConv = GetConVar("vj_stalker_body_writhe_decay")
+    local allBoneConv = GetConVar("vj_stalker_body_writhe_useallbones")
+
+    if not self.DC_Writhing then  
         if mRng(1, chance) == 1 then 
             self.DC_Writhing = true 
             duration = duration or mRand(minT, maxT)
             interval = interval or 0.01
-            local repeats = math.floor(duration / interval)
+            local repeats = math_floor(duration / interval)
             local timerName = "CorpseRoll_" .. corpse:EntIndex()
             local i = 0
-
-            local spineBones = {
-                "ValveBiped.Bip01_Spine","ValveBiped.Bip01_Spine1",
-                "ValveBiped.Bip01_Spine2","ValveBiped.Bip01_Spine4",
-                "ValveBiped.Bip01_Pelvis","ValveBiped.Bip01_L_Calf",
-                "ValveBiped.Bip01_R_Calf",
-            }
-
-            local rollDirection = 1 -- 1 = right, -1 = left
+            local nextFlip = 0 
+            local rollDirection = 1 
 
             local function CheckObstructions()
-                if not IsValid(corpse) then return false,false end
-                local startPos = corpse:GetPos() + Vector(0,0,10)
+                if not IsValid(corpse) then return false, false end
+
+                local startPos = corpse:GetPos() + Vector(0, 0, 10)
                 local rightDir = corpse:GetRight()
-                local leftDir = -rightDir
-                local traceData = {
-                    start = startPos,
-                    endpos = startPos + rightDir * trDist,
-                    filter = corpse,
-                }
-                local trRight = util.TraceHull(traceData)
-                traceData.endpos = startPos + leftDir * trDist
-                local trLeft = util.TraceHull(traceData)
+
+                local filterTbl = {corpse}
+
+                local function doTrace(dir)
+                    return util.TraceHull({
+                        start = startPos,
+                        endpos = startPos + dir * trDist,
+                        mins = Vector(-8, -8, -8),
+                        maxs = Vector(8, 8, 8),
+                        filter = filterTbl
+                    })
+                end
+
+                local trRight = doTrace(rightDir)
+                local trLeft = doTrace(-rightDir)
+
                 return trLeft.Hit, trRight.Hit
             end
 
             timer.Create(timerName, interval, repeats, function()
                 if not IsValid(corpse) then 
-                    self.DC_Writhing = false
+                    if IsValid(self) then self.DC_Writhing = false end
                     timer.Remove(timerName) 
                     return 
                 end
 
                 i = i + 1
-                local leftBlocked, rightBlocked = CheckObstructions()
-                if leftBlocked and rightBlocked then
-                    self.DC_Writhing = false
-                    timer.Remove(timerName)
-                    return
-                elseif rollDirection == -1 and leftBlocked then
-                    rollDirection = 1
-                elseif rollDirection == 1 and rightBlocked then
-                    rollDirection = -1
-                elseif mRng() < 0.02 then
-                    rollDirection = rollDirection * -1
+                local curTime = CurTime()
+        
+                if curTime > nextFlip then
+                    local leftBlocked, rightBlocked = CheckObstructions()
+                    if leftBlocked and rightBlocked then
+                        self.DC_Writhing = false
+                        timer.Remove(timerName)
+                        return
+                    elseif (rollDirection == -1 and leftBlocked) or (rollDirection == 1 and rightBlocked) then
+                        rollDirection = rollDirection * -1
+                        nextFlip = curTime + 0.5 
+                    elseif mRng() < 0.01 then 
+                        rollDirection = rollDirection * -1
+                        nextFlip = curTime + 0.3
+                    end
                 end
 
                 local decayFactor = 1
-                if self.DC_Writh_Decay then
+                if self.DC_Writh_Decay and (decayConv and decayConv:GetInt() == 1) then
                     local progress = i / repeats 
                     if progress >= (1 - decThresh) then
                         local decayProgress = (progress - (1 - decThresh)) / decThresh
                         decayFactor = 1 - math_Clamp(decayProgress, 0, 1)
-                    end
+                    end 
                 end
 
-                local rollForce = corpse:GetRight() * mRand(100, 2255) * rollDirection * decayFactor
-                local forwardForce = corpse:GetForward() * mRand(5, 55) * rollDirection * decayFactor
-                local liftForce = Vector(0, 0, mRand(5, 10)) * rollDirection * decayFactor
-                local angVel = corpse:GetForward() * mRand(250, 425) * rollDirection * decayFactor
+                local rollForce = corpse:GetRight() * mRand(10, 55) * rollDirection * decayFactor
+                local forwardForce = corpse:GetForward() * mRand(1, 25) * decayFactor
+                local angVel = corpse:GetForward() * mRand(10, 85) * rollDirection * decayFactor
+                local maxVel = mRand(30, 90)
+                local afcConv = GetConVar("vj_stalker_body_writhe_afc")
 
-                if useAllBones then
+                if useAllBones and (allBoneConv and allBoneConv:GetInt() == 1) then
                     for boneID = 0, (corpse:GetBoneCount() - 1) do
+                        local bName = corpse:GetBoneName(boneID)
+                        if string.find(bName, "Arm") or string.find(bName, "Hand") or string.find(bName, "Finger") then
+                            continue 
+                        end
                         local physID = corpse:TranslateBoneToPhysBone(boneID)
                         if physID and physID >= 0 then
                             local phys = corpse:GetPhysicsObjectNum(physID)
                             if IsValid(phys) then
+
+                                local vel = phys:GetVelocity()
+                                if vel:Length() > maxVel then
+                                    phys:SetVelocity(vel:GetNormalized() * maxVel)
+                                end
+
                                 local angDiv = mRng(3, 5)
                                 local torqueDiv = mRng(3, 5)
-                                phys:AddAngleVelocity(Vector(math.floor(angVel.x / angDiv),math.floor(angVel.y / angDiv),math.floor(angVel.z / angDiv)))
+                                    
+                                phys:AddAngleVelocity(angVel / angDiv)
                                 phys:ApplyTorqueCenter((rollForce * mRand(0.85, 1.25)) / torqueDiv)
-                                if self.DC_Writhe_AFC then
-                                    phys:ApplyForceCenter(Vector(math.ceil((rollForce.x + forwardForce.x)),math.ceil((rollForce.y + forwardForce.y)),math.ceil((rollForce.z + forwardForce.z))))
+                                    
+                                if self.DC_Writhe_AFC and (afcConv and afcConv:GetInt() == 1) then
+                                    local combinedForce = (rollForce + forwardForce)
+                                    phys:ApplyForceCenter(Vector(math_ceil(combinedForce.x), math_ceil(combinedForce.y), math_ceil(combinedForce.z))) 
                                 end
                             end
                         end
-                    end
-                else -- Default
+                    end 
+                else
                     for _, boneName in ipairs(spineBones) do
                         local boneID = corpse:LookupBone(boneName)
                         if boneID then
                             local physID = corpse:TranslateBoneToPhysBone(boneID)
                             local phys = corpse:GetPhysicsObjectNum(physID)
                             if IsValid(phys) then
+
+                                local vel = phys:GetVelocity()
+                                if vel:Length() > maxVel then
+                                    phys:SetVelocity(vel:GetNormalized() * maxVel)
+                                end
+
                                 local angDiv = mRng(1, 3) 
-                                phys:AddAngleVelocity(Vector(math.ceil(angVel.x / angDiv),math.ceil(angVel.y / angDiv),math.ceil(angVel.z / angDiv)))
+                                phys:AddAngleVelocity(Vector(math_ceil(angVel.x / angDiv), math_ceil(angVel.y / angDiv), math_ceil(angVel.z / angDiv)))
                                 phys:ApplyTorqueCenter(rollForce * mRand(0.85, 1.25))
-                                if self.DC_Writhe_AFC then
-                                    phys:ApplyForceCenter(Vector(math.floor((rollForce.x + forwardForce.x)),math.floor((rollForce.y + forwardForce.y)),math.floor((rollForce.z + forwardForce.z))))
+                                
+                                if self.DC_Writhe_AFC and (afcConv and afcConv:GetInt() == 1) then                            
+                                    local combinedForce = (rollForce + forwardForce)
+                                    phys:ApplyForceCenter(Vector(math_floor(combinedForce.x), math_floor(combinedForce.y), math_floor(combinedForce.z)))
                                 end
                             end
                         end
@@ -4213,9 +4865,10 @@ function ENT:RngDeathEyePos(body)
 end
 
 function ENT:RngDeathEyelids(body)
+    if not self.Corpse_RngEyeLids then return end 
     local eyeLidConv = GetConVar("vj_stalker_corpse_rng_eyelids"):GetInt()
     if eyeLidConv ~= 1 then return end 
-    if not IsValid(body) or not self.Corpse_RngEyeLids then return end
+    if not IsValid(body) then return end
     local chance = tonumber(self.Corpse_RngEyeLids_Chance) or 2
     if mRng(1, chance) ~= 1 then return end
     local flexCount = body:GetFlexNum()
@@ -4240,7 +4893,7 @@ function ENT:RngFaceFlexPos(body)
     if mRng(1, chance) ~= 1 then return end
     local flexCount = body:GetFlexNum()
     if not flexCount or flexCount <= 0 then return end
-    local affectCount = math.max(1, math.floor(flexCount * mRand(0.15, 0.35)))
+    local affectCount = math.max(1, math_floor(flexCount * mRand(0.15, 0.35)))
     for _ = 1, affectCount do
         local i = mRng(0, flexCount - 1)
         local weight = mRand(0.05, 0.45)
@@ -4256,10 +4909,11 @@ function ENT:Corpse_GrabRngWound(corpse)
 
     local conv = GetConVar("vj_stalker_death_wound_grabbing"):GetInt()
     if conv ~= 1 then return end 
-
-    if not IsValid(corpse) or self.Headshot_Death then return end 
+    if self.Headshot_Death then return end 
+    if not IsValid(corpse) then return end 
 
     if corpse:IsOnFire() then return end 
+    if self:WaterLevel() > 3 then return end 
 
     local delayT = tonumber(self.CorpseWndGrabDelay) or 0.25
     local grabChance = tonumber(self.CorpseWndGrabChance) or 10 
@@ -4312,7 +4966,7 @@ function ENT:Corpse_GrabRngWound(corpse)
         local timerName = "CorpseWoundGrab_" .. corpse:EntIndex()
         local totalDuration = mRand(minT, maxT) or 5 
         local interval = 0.02
-        local repeats = math.floor(totalDuration / interval)
+        local repeats = math_floor(totalDuration / interval)
 
         local forceBase = self.CorpseWndGrabFrc or 120
         local smoothedTarget = corpse:GetBonePosition(targetBone)
@@ -4320,10 +4974,12 @@ function ENT:Corpse_GrabRngWound(corpse)
         timer.Create(timerName, interval, repeats, function()
             if not IsValid(corpse) then timer.Remove(timerName) return end
 
-            local rawTarget =
-                corpse:GetBonePosition(targetBone) +
-                grabOffset +
-                Vector(mRand(-1.5, 1.5), mRand(-1.5, 1.5), mRand(0, 2))
+            local bonePos = corpse:GetBonePosition(targetBone)
+            
+            local center = corpse:WorldSpaceCenter()
+            local outwardDir = (bonePos - center):GetNormalized()
+            local outwardOffset = outwardDir * mRand(6, 12)
+            local rawTarget = bonePos + outwardOffset + Vector(mRand(-1.5, 1.5), mRand(-1.5, 1.5), mRand(0, 2))
 
             smoothedTarget = LerpVector(0.15, smoothedTarget, rawTarget)
 
@@ -4350,86 +5006,326 @@ function ENT:Corpse_GrabRngWound(corpse)
     end)
 end
 
-function ENT:Corpse_ExtraPhysics(corpse)
+function ENT:Corpse_ExtraPhysics(dmginfo, hitgroup, corpse)
     if not self.ApplyHeadshotDeathPhys then return end 
     if not IsValid(corpse) then return end 
+    
+    local exPhysConv = GetConVar("vj_stalker_death_ex_crpse_phys"):GetInt()
+    if exPhysConv ~= 1 then return end 
+
     if self.IsCurrentlyIncapacitated then return end 
-
+    if self.HasBeenBurntToDeath then return end 
+    if self:WaterLevel() > 3 then return end 
+    
     local appliedCustomPhysics = false
-    if self.Headshot_Death then
-        local downForce = -self.HeadShot_PhysDownFrc or 200 
-        local rngForBackForce = self.HeadShot_PhysForwardFrc or mRand(-200, 200) 
-        local pullForce = VectorRand() * rngForBackForce + Vector(0, 0, mRand(-300, -650))
 
-        local rngDir = VectorRand():GetNormalized()
-        local rngSpeed = Vector(0, 0, mRand(255, 550))
-        local rngAngVel = rngDir * rngSpeed
+    local dmgForce = vector_origin
+    local dmgType = 0
 
-        local defLinDamp = mRand(0.05, 0.05)
-        local defAngDamp = defLinDamp
-        
-        for i = 0, corpse:GetPhysicsObjectCount() - 1 do
-            local phys = corpse:GetPhysicsObjectNum(i)
-            local rngFrce = mRng(3, 6) or 5
-            local mass = 200
-            if IsValid(phys) then
-                phys:ApplyForceCenter(pullForce)
-                phys:SetMass(math.min(phys:GetMass() * 2, phys:GetMass() + mass))
-                phys:SetDamping(defLinDamp, defAngDamp)
-                phys:AddAngleVelocity(rngAngVel)
-            end
+    if dmginfo ~= nil then
+        local okForce, force = pcall(function() return dmginfo:GetDamageForce() end)
+        if okForce and force then
+            dmgForce = force
         end
-        print("headshot phys applied")
-        appliedCustomPhysics = true
+
+        local okType, dtype = pcall(function() return dmginfo:GetDamageType() end)
+        if okType and dtype then
+            dmgType = dtype
+        end
     end
 
-    local exPhysConv = GetConVar("vj_stalker_death_ex_crpse_phys"):GetInt()
-    if not appliedCustomPhysics and exPhysConv == 1 and self:IsOnGround() then
-        if self.Ex_Crp_Phys and not self.IsCurrentlyIncapacitated then
+    local function ManipulateCorpseMass(phys)
+        if not IsValid(phys) then return end
+        local baseMass = phys:GetMass()
 
+        if baseMass < 100 then
+            phys:SetMass(100)
+            baseMass = 100
+        end
+
+        local mult = mRand(0.5, 1.95)
+        local bonus = mRng(75, 150)
+        if mRng(1, 2) == 1 and bonus then 
+            bonus = math_ceil(bonus * 2 / mRng(1, 3))  
+        end 
+
+        if self.IsHeavilyArmored then 
+            bonus = bonus + mRng(150, 250)
+        end 
+
+        local newMass = math_floor(baseMass * mult + bonus)
+        phys:SetMass(newMass)
+    end
+
+    local isBlastDamage = bit.band(dmgType, DMG_BLAST) ~= 0
+
+    if isBlastDamage then
+        appliedCustomPhysics = true
+
+        local blastMultiplier = 1.5
+
+        if mRng(1, 3) == 1 then
+            blastMultiplier = mRng(3, 6)
+        end
+
+        local blastForce = dmgForce
+        if blastForce == vector_origin then
+            blastForce = VectorRand() * mRand(500, 2500)
+        end
+
+        blastForce = blastForce * blastMultiplier
+
+        local upwardForce = Vector(0, 0, mRand(150, 900))
+
+        for i = 0, corpse:GetPhysicsObjectCount() - 1 do
+            local phys = corpse:GetPhysicsObjectNum(i)
+            if IsValid(phys) then
+                ManipulateCorpseMass(phys)
+                phys:Wake()
+                local damp = mRand(0.01, 0.08)
+                phys:SetDamping(damp, damp)
+                if mRng(1, 2) == 1 then
+                    phys:SetVelocity(vector_origin)
+                end
+                local finalForce = blastForce + upwardForce + (VectorRand() * mRand(25, 300))
+                phys:ApplyForceCenter(finalForce)
+                if mRng(1, 2) == 1 then
+                    phys:AddAngleVelocity(VectorRand() * mRng(250, 1800))
+                end
+                if mRng(1, 3) == 1 then
+                    phys:ApplyTorqueCenter(VectorRand() * mRand(150, 650))
+                end
+            end
+        end 
+    end
+
+    if not appliedCustomPhysics and self.Headshot_Death then
+        local downForce = Vector(0, 0, self.HeadShot_PhysDownFrc or 200)
+        local rngForBackForce = mRng(self.HeadShot_PhysForwardFrc, 1000) or mRand(-50, 300) 
+
+        local dir = self:GetForward()
+
+        if mRng(1, 2) == 1 then
+            dir = -dir
+        end
+
+        if mRng(1, 2) == 1 then 
+            downForce.z = math.min(350, math_floor(downForce.z * mRng(1.5, 5.5))) or 600
+
+            if self.RANDOMS_DEBUG then
+                print("[Headshot Ext-Physics] Altered Z down force is " .. downForce.z .. " compared to " .. tonumber(-self.HeadShot_PhysDownFrc))
+            end 
+        end
+
+        downForce = -downForce
+
+        local strength = rngForBackForce
+        local pullForce = dir * strength
+
+        local rngDir = VectorRand():GetNormalized()
+        local rngSpeed = Vector(0, 0, mRand(250, 450))
+        local rngAngVel = rngDir * rngSpeed
+
+        local defLinDamp = 0.01
+        local defAngDamp = defLinDamp 
+        
+        if mRng(1, 3) == 1 then 
+            pullForce = pullForce + Vector(0, 0, mRand(-150, -750))
+        end 
+        if self.RANDOMS_DEBUG then
+            print("[Headshot Ext-Physics] Force phys speed is " .. tonumber(rngSpeed.z))
+        end 
+
+        for i = 0, corpse:GetPhysicsObjectCount() - 1 do
+            local phys = corpse:GetPhysicsObjectNum(i)
+            if IsValid(phys) then
+                ManipulateCorpseMass(phys)
+                if mRng(1, 2) == 1 then
+                    phys:ApplyForceCenter(pullForce)
+                end 
+                phys:ApplyForceCenter(downForce)
+                phys:SetDamping(defLinDamp, defAngDamp)
+                phys:Wake()
+                if mRng(1, 2) == 1 then
+                    phys:AddAngleVelocity(rngAngVel)
+                end 
+            end
+        end
+
+        if mRng(1, 2) == 1 then 
+            local headBone = corpse:LookupBone("ValveBiped.Bip01_Head1")
+            local neckBone = corpse:LookupBone("ValveBiped.Bip01_Neck1")
+
+            local function ApplyBoneForce(boneID)
+                if not boneID then return end
+                local physID = corpse:TranslateBoneToPhysBone(boneID)
+                if physID and physID >= 0 then
+                    local phys = corpse:GetPhysicsObjectNum(physID)
+                    if IsValid(phys) then
+                        if self.RANDOMS_DEBUG then
+                            print("Force has been applied to head bones")
+                        end 
+                        local headForce = dmgForce * mRand(0.25, 1.05)
+                        phys:ApplyForceCenter(headForce + VectorRand() * mRand(5, 10)) 
+                        phys:AddAngleVelocity(VectorRand() * mRng(5, 15))
+                        phys:Wake()
+                    end
+                end
+            end
+            ApplyBoneForce(headBone)
+            ApplyBoneForce(neckBone)
+        end 
+        appliedCustomPhysics = true
+    end
+    
+    if not appliedCustomPhysics then
+        if self.Ex_Crp_Phys and not self.IsCurrentlyIncapacitated then
+            local useDirectional = mRng(1, 4) == 1
             for i = 0, corpse:GetPhysicsObjectCount() - 1 do
                 local phys = corpse:GetPhysicsObjectNum(i)
-                local addMass = mRand(100, 200)
-                if mRng(1, 2) == 1 and addMass then 
-                    addMass = math.ceil(addMass * 2 / mRng(1, 3))  
-                end 
+
                 local dampVal 
-                local choices = mRng(1, 3)
+                local choices = mRng(1, 5)
+
                 if choices == 1 then 
-                    dampVal = mRand(0.01, 0.1) -- Heavy 
+                    dampVal = mRand(0.01, 0.1)
                 elseif choices == 2 then 
                     dampVal = 0.05
+                elseif choices == 3 then 
+                    dampVal = 0.01
+                elseif choices == 4 then 
+                    dampVal = mRng(1, 4)
                 else 
-                    dampVal = mRand(0.15, 0.7) -- Lighter 
+                    dampVal = mRand(0.15, 0.7)
                 end 
 
                 local hsLinDamp = dampVal
                 local hsAngDamp = hsLinDamp
                 local vR = VectorRand()
-                if IsValid(phys) then
-                    phys:SetDamping(hsLinDamp, hsAngDamp)
-                    phys:SetMass(math.min(phys:GetMass() * 2, phys:GetMass() + addMass))
 
-                    local vel = vR * math.ceil(mRand(200, 600) * mRng(0.5, 1.25))
-                    phys:ApplyForceCenter(vel)
+                if IsValid(phys) then
+                    ManipulateCorpseMass(phys)
+                    phys:Wake()
+                    phys:SetDamping(hsLinDamp, hsAngDamp)
+                    if mRng(1, 2) == 1 then
+                        phys:SetVelocity(vector_origin)
+                    end 
+
+                    local vel;
+                    if useDirectional and dmgForce ~= vector_origin then
+                        vel = dmgForce:GetNormalized() * mRand(150, 1059)
+                    else
+                        vel = vR * math_ceil(mRand(100, 1500) * mRng(0.25, 1.25))
+                    end
+                    if mRng(1, 2) == 1 then
+                        phys:ApplyForceCenter(vel)
+                    end 
 
                     local rngVelEnhance = mRand(0.5, 2)
-                    local rngAng =  vR * mRng(100, 800)
-                    local rngTrq = vR * mRand(100, 250)
-                    
-                    phys:AddAngleVelocity(rngAng * rngVelEnhance)
+                    local rngAng = vR * mRng(1, 2753)
+                    local rngTrq = vR * mRand(50, 250)
+            
+                    if mRng(1, 3) == 1 then
+                        phys:AddAngleVelocity(rngAng * rngVelEnhance)
+                    end 
                     local chance = tonumber(self.Ex_Crp_Phys_Trq_Chance) or 2 
                     if self.Ex_Crp_Phys_Trq and mRng(1, chance) == 1 then 
-                        local final = rngTrq * mRand(0.5, 1.2)
+                        local final = rngTrq * mRand(0.25, 1.15)
                         phys:ApplyTorqueCenter(final) 
                     end 
                 end
             end 
         end
     end
+end
+
+function ENT:Handle_HeadDecapitation(dmginfo, corpse)
+    if not self.Head_HasBeenDecapitated then return end 
+    if not IsValid(corpse) then return end 
+    local hBone = self:LookupBone(tostring(self.Head_DecapBones["Head"]))
+    if hBone then 
+        corpse:ManipulateBoneScale(hBone, Vector(0, 0, 0)) 
+                
+        local nBone = self:LookupBone(tostring(self.Head_DecapBones["Neck"]))
+        if nBone then
+            corpse:ManipulateBonePosition(nBone, Vector(-0.3, 0, 0))
+        end
+    end
 end 
+
+function ENT:Handle_ExpensiveDecapPcfx(dmginfo, corpse)
+    local target = IsValid(corpse) and corpse or self
+    if not IsValid(target) then return end
+    if not self.Head_HasBeenDecapitated then return end
+
+    local cheap = GetConVar("vj_stalker_headshot_low_effects"):GetInt()
+    if cheap and cheap == 1 then return end 
+
+
+    local attName = "head" -- Fallback
+    local attTbl = self.HeadshotDeathAttTbl or {"head", "mouth", "neck"}
+    local attIndex = -1
+    
+    for _, name in ipairs(attTbl) do
+        local idx = target:LookupAttachment(name)
+        if idx > 0 then 
+            attIndex = idx 
+            break 
+        end
+    end
+
+    local neckBoneID = target:LookupBone(self.Head_DecapBones and self.Head_DecapBones.Neck or "ValveBiped.Bip01_Neck1")
+    local startPos = attIndex > 0 and target:GetAttachment(attIndex).Pos or target:GetWorldSpaceCenter()
+    local bloodCol = self:Determine_BloodColor()
+
+    local ed = EffectData()
+    local posi, angl = self:GetBonePosition(neckBoneID)
+    ed:SetOrigin(posi)
+    ed:SetAngles(angl)
+    ed:SetColor(bloodCol)
+    ed:SetScale(mRand(25, 55))
+    util.Effect("VJ_Blood1", ed, true, true)
+
+    if attIndex > 0 then
+        if mRand(1, 2) == 1 then
+            ParticleEffectAttach("blood_advisor_puncture_withdraw", PATTACH_POINT_FOLLOW, target, attIndex)
+        end 
+        ParticleEffectAttach("blood_impact_red_01", PATTACH_POINT_FOLLOW, target, attIndex)
+    end
+
+    local timerName = "Decap_Blood_" .. target:EntIndex()
+    local i = 0
+    
+    timer.Create(timerName, mRand(0.05, 0.15), mRand(25, 120), function()
+        if not IsValid(target) then 
+            timer.Remove(timerName) 
+            return 
+        end
+
+        local pos
+        if attIndex > 0 then
+            local att = target:GetAttachment(attIndex)
+            pos = att and att.Pos
+        elseif neckBoneID then
+            pos = target:GetBonePosition(neckBoneID)
+        end
+
+        if not pos then return end
+
+        if attIndex then 
+            ParticleEffectAttach("blood_impact_red_01", PATTACH_POINT_FOLLOW, target, attIndex)
+        end
+
+        if i % 3 == 0 and target:WaterLevel() == 0 then
+            util.Decal("Blood", pos, pos - Vector(0, 0, 80), target)
+        end
+        i = i + 1
+    end)
+end
+
 function ENT:OnCreateDeathCorpse(dmginfo, hitgroup, corpse)
     if not IsValid(corpse) then return end
+    self:Handle_ExpensiveDecapPcfx(dmginfo, corpse)
     self:Delayed_DissolveAfterCorpse(corpse)
     self:Instant_DissolveCorpse(corpse)
     self:PlyFlatlineOnDeath(corpse) 
@@ -4441,22 +5337,40 @@ function ENT:OnCreateDeathCorpse(dmginfo, hitgroup, corpse)
     self:RngFaceFlexPos(corpse)
     self:RngDeathEyelids(corpse)
     self:Corpse_GrabRngWound(corpse)
-    self:Corpse_ExtraPhysics(corpse)
+    self:Corpse_ExtraPhysics(dmginfo, hitgroup, corpse)
+    self:Handle_HeadDecapitation(dmginfo, corpse)
     RagdollBloodEffects(self, corpse)
 end
 ---------------------------------------------------------------------------------------------------------------------------------------------
+ENT.Idle_TellJoke = true 
+ENT.Idle_TellJokeRange = 500 -- An ally must be within this range to tell a joke
+ENT.Idle_TellJokeChance = 3
+ENT.Idle_TellJokeAllyReq = 2 -- Max amount of idle allies nearby to tell joke to them.
+ENT.Idle_JokerState = false -- false == not active, "Intro" == before tell joke, "TellingJoke" == saying the joke
+ENT.Idle_JokePlayAnim = true 
+ENT.Idle_JokeNextT = 0 
 
-//todo, more brain gib optimizations
+ENT.Idle_CanListenToJoke = true 
+ENT.Idle_ListenToJoke = false
+ENT.Idle_ListenJokeState = false -- false == not active, "Listen" == do nothing as we listen until end, "React" play anim and laugh or say it bad,
+ENT.Idle_ListenJokeAnim = true 
+/*function ENT:Handle_IdleTellJoke()
+    if self:GetNPCState ~= NPC_STATE_IDLE then return end 
+end*/ 
+---------------------------------------------------------------------------------------------------------------------------------------------
 function ENT:HandleHeadshot(dmginfo, hitgroup)
+    local imnBullet = self.Immune_Bullet
+    if imnBullet then return end 
+
     local killConv = GetConVar("vj_stalker_headshot_kill_chance"):GetInt()
     self.HeadshotInstaKillChance = killConv
 
     local dT = dmginfo:GetDamageType()
     local isHeadshot = false 
     local minDmgHd = mRand(5, 10)
-    local instaKillChance = tonumber(self.HeadshotInstaKillChance) or 2 
     local headHitGroup = HITGROUP_HEAD
-    local bulDmg = (dmginfo:IsBulletDamage() or dT == DMG_BULLET or dT == DMG_AIRBOAT or dT == DMG_BUCKSHOT or dT == DMG_SNIPER)
+    local DMG_HEADSHOT_TYPES = bit.bor(DMG_BULLET, DMG_AIRBOAT, DMG_BUCKSHOT, DMG_SNIPER)
+    local bulDmg = (dmginfo:IsBulletDamage() or bit.band(dT, DMG_HEADSHOT_TYPES) ~= 0)
     local rngSnd = mRng(75, 105)
 
     local stopDmgConv     = GetConVar("vj_stalker_helm_prev_dmg"):GetInt()
@@ -4464,15 +5378,15 @@ function ENT:HandleHeadshot(dmginfo, hitgroup)
     local helmBreakConv   = GetConVar("vj_stalker_breakable_helmet"):GetInt()
     local instKillConv    = GetConVar("vj_stalker_headshot_insa_kill"):GetInt()
     local mindDmgConv     = GetConVar("vj_stalker_headshot_min_dmg_check"):GetInt()
-    local manBoneLook     = tostring(self.Headshot_SearchBone)
-    local imnBullet       = self.Immune_Bullet
+    local manBoneLook     = tostring(self.Head_DecapBones["Head"])
+    local decapitHeadConv = GetConVar("vj_stalker_headshot_decapitation"):GetInt()
 
-    if hitgroup == headHitGroup and bulDmg and not imnBullet then
+    if hitgroup == headHitGroup and bulDmg then
         isHeadshot = true
     else
         if manBoneLook then 
             local headBone = self:LookupBone(manBoneLook)
-            if headBone and bulDmg and not imnBullet then
+            if headBone and bulDmg then
                 local hitPos = dmginfo:GetDamagePosition()
                 local headBonePos, _ = self:GetBonePosition(headBone)
                 if headBonePos /*and headBonePos > 0*/ and hitPos:Distance(headBonePos) <= mRand(10, 13) then
@@ -4482,37 +5396,62 @@ function ENT:HandleHeadshot(dmginfo, hitgroup)
         end
     end
 
+    local setDmgCap = tonumber(self.ArmoredHelmet_MaxDamageCap) or 100
+    local dmgAmount = dmginfo:GetDamage() or 0
+    local ignoreHelmet = dmgAmount > (setDmgCap) and self.ArmoredHelmet_DamageCap 
+    local hasValidHelm = self.ArmoredHelmet and armoredHelmConv ~= 1 and not ignoreHelmet
+    local decapHpThreshConv = GetConVar("vj_stalker_headshot_decap_hp_thrsh"):GetInt()
+
+    local hpThresh = tonumber(self.Head_DecapHpThresh) or 0.75
+    local hpPercent = self:Health() / self:GetMaxHealth()
+    local allowHpCheck = (decapHpThreshConv == 1)
+
+    local passedHpCheck = (not allowHpCheck) or (hpPercent <= hpThresh)
+
+    if isHeadshot and (decapitHeadConv and decapitHeadConv == 1) then
+        local decapChance = self.Head_DecapChance or 2
+        local decapCap = self.Head_DecapCap or 110
+
+        if hasValidHelm or self.IsHeavilyArmored then 
+            decapChance = math.max(1, math_ceil(decapChance * 3)) 
+            if self.RANDOMS_DEBUG then print("(Headshot decapcitation) chance multiplied = " .. decapChance) end 
+        end 
+
+        if self.Head_Decap and dmgAmount >= decapCap and not self.IsImmuneToHeadShots and passedHpCheck then
+            if mRng(1, decapChance) == 1 then 
+                if self.RANDOMS_DEBUG then print("(Headshot decapcitation) damage take to trigger = " .. dmgAmount) end 
+                self.Head_HasBeenDecapitated = true
+                self.Headshot_Death = true
+                dmginfo:SetDamage(self:GetMaxHealth() * 5)
+                self:Handle_DecapitationEffects()
+            end 
+        end
+    end 
+
     local curT = CurTime()
     local flinchGes = self.Headshot_FlinchChance or 2
     if self.Headshot_ImpactFlinching and curT >= (self.Headshot_NextFlinchT or 0) and mRng(1, flinchGes) == 1 then
-        if self.Headshot_ImpFlinchAnim and self.Headshot_ImpFlinchAnim ~= false then
-            if istable(self.Headshot_ImpFlinchAnim) then
-                selLandAnim = "vjges_" .. VJ.PICK(self.Headshot_ImpFlinchAnim)
-            elseif isstring(self.Headshot_ImpFlinchAnim) then
-                selLandAnim = "vjges_" .. self.Headshot_ImpFlinchAnim
-            end
-        end
-        if selLandAnim then 
-            self:PlayAnim(selLandAnim, false)
+        local animations = self:GetRandomValidValue(self.Headshot_ImpFlinchAnim)
+        if animations then 
+            self:PlayAnim("vjges_" .. animations, false)
         end 
         self.Headshot_NextFlinchT = curT + mRand(0.5, 1.5)
     end
 
-    local dmgAmount = dmginfo:GetDamage() or 0
-    local setDmgCap = tonumber(self.ArmoredHelmet_MaxDamageCap) or 100
-    local sndChance = tonumber(self.ArmoredHelmet_ImpSoundChance) or 3 
-    local exImpSnd = self.SoundTbl_ExtraArmorImpacts
-    local ignoreHelmet = dmgAmount > (setDmgCap) and self.ArmoredHelmet_DamageCap 
-    if self.ArmoredHelmet and isHeadshot and armoredHelmConv == 1 and not ignoreHelmet then
+    local sndChance = tonumber(self.ArmoredHelmet_ImpSoundChance) or 3  
+    local exImpSnd = self:GetRandomValidValue(self.SoundTbl_ExtraArmorImpacts)   
+    if isHeadshot and hasValidHelm and not ignoreHelmet then
         if self.ArmoredHelmet_ImpSound and mRng(1, sndChance) == 1 then 
             if exImpSnd then 
                 self:PlaySoundSystem("Impact", exImpSnd)
             end 
         end 
+
         local sparkChance = self.ArmoredHelmet_SparkFxChance or 3
         if self.ArmoredHelmet_ImpSparkFx and mRng(1, sparkChance) == 1 then 
             local dmgPos = dmginfo:GetDamagePosition()
-            local offset = Vector(mRand(-3, 3),mRand(-3, 3),mRand(-3, 3))
+            local rngOff = mRand(-3, 3)
+            local offset = Vector(rngOff, rngOff, rngOff)
             local spawnPos = dmgPos + offset
             local effectData = EffectData()
             effectData:SetOrigin(spawnPos)
@@ -4522,8 +5461,6 @@ function ENT:HandleHeadshot(dmginfo, hitgroup)
             util.Effect("StunstickImpact", effectData, true, true)
         end
 
-        //self.ArmoredHelmet_BreakLimit = self.ArmoredHelmet_BreakLimit or mRng(3,5)
-        //self.ArmoredHelmet_HitsTaken = (self.ArmoredHelmet_HitsTaken or 0) + 1
         local breakLimit = tonumber(self.ArmoredHelmet_BreakLimit) or mRng(3,5)
         local hitsTaken = (self.ArmoredHelmet_HitsTaken or 0) + 1
 
@@ -4544,14 +5481,19 @@ function ENT:HandleHeadshot(dmginfo, hitgroup)
         end
     end
     
-    if isHeadshot then
-        print(instaKillChance) 
+    if isHeadshot or self.Head_HasBeenDecapitated then
         self:HeadshotSoundEffect(isHeadshot)
     end
 
     if instKillConv == 1 and isHeadshot and not self.IsImmuneToHeadShots then
         local skipMinDmgCheck = mindDmgConv ~= 1
         local passedMinDmg = dmginfo:GetDamage() > minDmgHd
+        local instaKillChance = tonumber(self.HeadshotInstaKillChance) or 2 
+        
+        local attacker = dmginfo:GetAttacker()
+        if IsValid(attacker) and (attacker:IsNPC() or attacker:IsNextBot()) then -- Make combat with other npcs more fair.
+            instaKillChance = (math_ceil(instaKillChance + 2 * instaKillChance)) or 3
+        end 
 
         if mRng(1, instaKillChance) == 1 and (skipMinDmgCheck or passedMinDmg) then
             if self.Headshot_DoubleDmg then
@@ -4565,113 +5507,388 @@ function ENT:HandleHeadshot(dmginfo, hitgroup)
     end
 end
 ---------------------------------------------------------------------------------------------------------------------------------------------
-function ENT:HeadshotDeathEffects()
-    if not self.Headshot_Death then return end
+ENT.Head_Decap = true 
+ENT.Head_DecapCap = 110 -- Required damage to destroy the NPCs head. 
+ENT.Head_DecapChance = 2 
+ENT.Head_DecapHpThresh = 0.75
+ENT.Head_HasBeenDecapitated = false 
+ENT.Head_DecapBones = {
+    ["Head"] = "ValveBiped.Bip01_Head1",
+    ["Neck"] = "ValveBiped.Bip01_Neck1"
+}
 
-    local headConv = GetConVar("vj_stalker_headshot_fx")
-    if headConv:GetInt() ~= 1 then return end 
-
-    if not IsValid(self) then return end 
-
-    local hsGore = VJ.PICK(self.GoreOrGibSounds)
-    local effectChance = tonumber(self.Headshot_FxChance) or 2 
-    local headAttachment = nil
-    local headAttachmentName = nil
-    local attTbl = self.HeadshotDeathAttTbl or {}
+function ENT:CacheHeadData()
+    self.CachedHeadBone = self:LookupBone(self.Head_DecapBones["Head"])
+    self.CachedNeckBone = self:LookupBone(self.Head_DecapBones["Neck"])
+    
+    self.CachedHeadAtts = {}
+    local attTbl = self.HeadshotDeathAttTbl or {"mouth", "head", "eyes"}
     for _, attName in ipairs(attTbl) do
-        local attachmentIndex = self:LookupAttachment(attName)
-        if attachmentIndex and attachmentIndex > 0 then
-            headAttachment = self:GetAttachment(attachmentIndex)
-            headAttachmentName = attName 
-            break
+        local idx = self:LookupAttachment(attName)
+        if idx > 0 then
+            table.insert(self.CachedHeadAtts, {id = idx, name = attName})
         end
     end
+end
 
-    if not headAttachment or not headAttachmentName then
-        return false
+function ENT:Handle_DecapitationEffects()
+    if not self.Head_HasBeenDecapitated then return end
+
+    local cheap = GetConVar("vj_stalker_headshot_low_effects"):GetInt() == 1
+    if not cheap or cheap ~= 1 then return end 
+
+    local headBone = self.CachedHeadBone or self:LookupBone(self.Head_DecapBones["Head"])
+    if not headBone then return end
+
+    local headPos, headAng = self:GetBonePosition(headBone)
+    if not headPos then return end
+
+    local bloodCol = self:Determine_BloodColor()
+    local basePos = headPos
+
+    local ed = EffectData()
+    ed:SetOrigin(headPos)
+    ed:SetColor(bloodCol)
+    ed:SetScale(mRand(25, 55))
+    util.Effect("VJ_Blood1", ed, true, true)
+
+    ed:SetOrigin(headPos)
+    ed:SetAngles(headAng)
+    ed:SetScale(mRand(3, 10))
+    ed:SetFlags(3)
+    ed:SetColor(0)
+    util.Effect("bloodspray", ed, true, true)
+
+    self:Handle_HeadGoreGibs(headPos)
+end
+
+function ENT:Handle_HeadGoreGibs(position)
+    if not self.Headshot_HaveGibs then return false end 
+
+    local gibType = self:DetermineGibType()
+    if not gibType then return false end 
+    
+    local basePos = position
+    if not basePos then return false end 
+
+    local gibAmount = self.Headshot_GibMaxAm or 3
+    local count = gibAmount
+    for i = 1, count do
+        self:CreateGibEntity("obj_vj_gib", gibType .. "Small", {Pos = basePos + VectorRand() * 6})
     end
+end 
 
-    local goreSnd = GetConVar("vj_stalker_headshot_gore_sound"):GetInt() 
-    local rngSnd = mRng(65, 95)
-    if mRng(1, effectChance) == 1 then
+function ENT:HeadshotDeathEffects()
+    if not self.Headshot_Death or self.Head_HasBeenDecapitated then return end 
 
-        if goreSnd == 1 then 
+    local headConv = GetConVar("vj_stalker_headshot_fx")
+    if headConv:GetInt() ~= 1 then return end
+
+    if not IsValid(self) then return end
+    
+    local attData = self.CachedHeadAtts and self.CachedHeadAtts[1]
+    if not attData then return end
+
+    local headAttachment = self:GetAttachment(attData.id)
+    if not headAttachment then return end
+
+    local goreSnd = GetConVar("vj_stalker_headshot_gore_sound"):GetInt()
+    if goreSnd == 1 then
+        local hsGore = self:GetRandomValidValue(self.GoreOrGibSounds)
+        local rngSnd = mRng(65, 95)
+        if hsGore then
             VJ.EmitSound(self, hsGore, 70, rngSnd)
         end 
+    end
+
+    local effectChance = tonumber(self.Headshot_FxChance) or 2
+    if mRng(1, effectChance) == 1 then
 
         local gibPos = headAttachment.Pos + self:GetUp() * mRng(5, 25) + self:GetRight() * mRng(-15, 15)
-        local bloodT = mRand(1, 3.25)
-        local gibAmount = tonumber(self.Headshot_GibMaxAm) or 3 
-        local bloodeffect = ents.Create("info_particle_system")
+        local bloodT = mRand(1, 3.5)
 
+        local bloodeffect = ents.Create("info_particle_system")
         bloodeffect:SetKeyValue("effect_name", "blood_advisor_puncture_withdraw")
         bloodeffect:SetPos(gibPos)
         bloodeffect:SetAngles(headAttachment.Ang)
-        bloodeffect:SetParent(self) 
-        bloodeffect:Fire("SetParentAttachment", headAttachmentName, 0)  
+        bloodeffect:SetParent(self)
+        bloodeffect:Fire("SetParentAttachment", attData.name, 0)
         bloodeffect:Spawn()
         bloodeffect:Activate()
         bloodeffect:Fire("Start", "", 0)
         bloodeffect:Fire("Kill", "", bloodT)
 
-        local headAtt = self:LookupAttachment(headAttachmentName)
-        if headAtt > 0 then
-            ParticleEffectAttach("blood_impact_red_01", PATTACH_POINT_FOLLOW, self, headAtt)
-        end
-        if self.Headshot_HaveGibs then
-            for _ = 1, mRng(1, gibAmount) do
-                self:CreateGibEntity("obj_vj_gib", "UseHuman_Small", {Pos = gibPos})
-            end
-        end 
+        ParticleEffectAttach("blood_impact_red_01", PATTACH_POINT_FOLLOW, self, attData.id)
+        self:Handle_HeadGoreGibs(gibPos)
     end
     return true
 end
 ---------------------------------------------------------------------------------------------------------------------------------------------
-function ENT:HeadshotSoundEffect(hasBeenHeadshot) 
-    local hsSfxChance = self.HeadshotSoundSfxChance
+function ENT:HeadshotSoundEffect(hasBeenHeadshot)
+    if not self.Headshot_Death_Sfx then return end 
+    if not hasBeenHeadshot then return end  
+    if not IsValid(self) then return end
+
     local conv = GetConVar("vj_stalker_headshot_sfx"):GetInt()
-    local hS = table.Random(self.SoundTbl_OnHeadshot)
-    local rngSnd = mRng(85, 105)
-    if hS == false or hS == nil then return end
-    if not IsValid(self) or conv ~= 1 then return end 
-    if self.Headshot_Death_Sfx and hasBeenHeadshot and mRng(1, hsSfxChance) == 1 then
-        self:EmitSound(hS, 65, rngSnd)
+    if not conv or conv ~= 1 then return end 
+
+    local hS = self:GetRandomValidValue(self.SoundTbl_OnHeadshot)
+    if not hs then return end 
+
+    local hsSfxChance = self.HeadshotSoundSfxChance or 3
+    local rngSnd = mRng(75, 105)
+    if mRng(1, hsSfxChance) == 1 then
+        self:EmitSound(hS, mRng(65, 85), rngSnd)
     end 
+end
+---------------------------------------------------------------------------------------------------------------------------------------------
+
+-- [useDefAi] (boolean or "Both")
+-- Controls which scheduling system is used:
+--    true  = Use default GLua schedules (SetSchedule)
+--    false = Use VJ Base schedules (SCHEDULE_*)
+--    "Both" = Randomly choose between GLua or VJ each call
+-- ------------------------------------------------------
+-- [coverType] (string or "Both")
+-- Determines the type of movement/cover behavior:
+--    "LastPos"  = Move to last saved position.
+--    "Enemy"  = Move relative to the enemy 
+--    "Origin" = Move relative to current/original position
+--    "Both"   = Randomly pick between "Enemy" or "Origin" (Not including last position)
+--
+-- NOTE:
+-- "Enemy" requires a valid enemy, otherwise it will fallback safely.
+-- ------------------------------------------------------
+-- [canShoot] (boolean or "Both")
+-- Controls whether the SNPC can shoot while moving:
+--    true  = Always shoot while moving
+--    false = Never shoot while moving
+--    "Both" = Randomly decide per execution
+-- ------------------------------------------------------
+-- [moveType] (string or "Both")
+-- Controls movement speed/type:
+--    "Walk" = Uses walking schedules/tasks
+--    "Run"  = Uses running schedules/tasks
+--    "Both" = Randomly choose between Walk or Run
+-- NOTE:
+-- Automatically maps to correct equivalents:
+--    VJ   → TASK_WALK_PATH / TASK_RUN_PATH
+--    GLua → SCHED_FORCED_GO / SCHED_FORCED_GO_RUN (LastPos Exclusive)
+-- ------------------------------------------------------
+-- [delayCmbBehavior] (boolean or "Rng")
+-- Controls delay before next combat/chase behavior:
+--    false/nil = No delay applied
+--    true      = Applies a randomized delay (1–5 seconds)
+--    "Rng"    = 1 in 2 chance to activate
+-- Affects:
+--    self.NextChaseTime
+--    self.TakingCoverT
+------------------------------------------------------
+
+ENT.ForbiddenSchedules = {
+    [SCHED_FORCED_GO] = true,
+    [SCHED_TAKE_COVER_FROM_ENEMY] = true,
+    [SCHED_FORCED_GO_RUN] = true,
+    [SCHED_TAKE_COVER_FROM_ORIGIN] = true, 
+    [SCHED_HIDE_AND_RELOAD] = true, 
+    [SCHED_RELOAD] = true, 
+}
+
+
+function ENT:Handle_ScheduledForceMove(useDefAi, coverType, canShoot, moveType, delayCmbBehavior)
+    if not self:Alive() then return end
+    if not self:IsOnGround() then return end
+    if not self:IsAbleToMoveNow() then return end
+
+    local curSched = self:GetCurrentSchedule()
+    if self.ForbiddenSchedules[curSched] then
+        if self.RANDOMS_DEBUG then 
+            print("Skipping forced schedule due to active schedule ID: " .. curSched) 
+        end 
+        return
+    end
+
+    local enemy = self:GetEnemy()
+
+    local function ResolveBool(val)
+        if val == "Both" then
+            return mRng(1, 2) == 1
+        end
+        return val == true
+    end
+
+    local function ResolveChoice(val, choices)
+        if val == "Both" then
+            return choices[mRng(1, #choices)]
+        end
+        return val
+    end
+
+    local function ApplyShootSettings(task, shouldShoot)
+        if shouldShoot then
+            task.CanShootWhenMoving = true
+            task.TurnData = {Type = VJ.FACE_ENEMY}
+        else
+            task.CanShootWhenMoving = false
+            task.TurnData = {Type = VJ.FACE_ENEMY, Target = nil}
+        end
+    end
+
+    local MOVE_MAP = {
+        VJ = {
+            Walk = "TASK_WALK_PATH",
+            Run  = "TASK_RUN_PATH"
+        },
+        GLUA = { 
+            Walk = SCHED_FORCED_GO,
+            Run  = SCHED_FORCED_GO_RUN
+        }
+    }
+
+    local useSystem;
+    if useDefAi == "Both" then
+        useSystem = (mRng(1, 2) == 1) and "GLUA" or "VJ"
+    else
+        useSystem = useDefAi and "GLUA" or "VJ"
+    end
+
+    local finalMoveType = ResolveChoice(moveType or "Run", {"Walk", "Run"})
+    local finalCover    = ResolveChoice(coverType or "Origin", {"Origin", "Enemy", "LastPos"})
+    local shouldShoot   = ResolveBool(canShoot)
+
+    local pickedMove = MOVE_MAP[useSystem][finalMoveType]
+    if not pickedMove then return end
+    
+    self:ClearSchedule()
+    self:StopMoving()
+
+    if useSystem == "VJ" then
+        if finalCover == "Enemy" and IsValid(enemy) then
+            self:SCHEDULE_COVER_ENEMY(pickedMove, function(task)
+                task.DisableChasingEnemy = true
+                ApplyShootSettings(task, shouldShoot)
+            end)
+        elseif finalCover == "Origin" then
+            self:SCHEDULE_COVER_ORIGIN(pickedMove, function(task)
+                task.DisableChasingEnemy = true
+                ApplyShootSettings(task, shouldShoot)
+            end)
+        elseif finalCover == "LastPos" then 
+            self:SCHEDULE_GOTO_POSITION(pickedMove, function(task)
+                task.DisableChasingEnemy = true
+                ApplyShootSettings(task, shouldShoot)
+            end) 
+        end 
+    else
+        local sched;
+        if finalCover == "Enemy" and IsValid(enemy) then
+            sched = SCHED_TAKE_COVER_FROM_ENEMY
+        elseif finalCover == "Origin" then
+            sched = SCHED_TAKE_COVER_FROM_ORIGIN
+        elseif finalCover == "LastPos" then 
+            sched = pickedMove 
+        end
+        if sched then
+            self:SetSchedule(sched)
+        end
+    end
+
+    local delay = delayCmbBehavior
+    local shouldDelay = false 
+
+    if delay then 
+        shouldDelay = true 
+
+    elseif delay == "Rng" then 
+        if mRng(1, 2) == 1 then 
+            shouldDelay = true 
+        else 
+            shouldDelay = false 
+        end 
+    end 
+
+    if shouldDelay then
+        local cT = CurTime()
+        local delay = mRand(1, 5)
+
+        self.NextChaseTime = cT + delay
+        self.TakingCoverT  = cT + delay
+    end
+
+    if self.RANDOMS_DEBUG then
+        print("[ForceMove]")
+        print(" System:", useSystem)
+        print(" Move:", finalMoveType)
+        print(" Cover:", finalCover)
+        print(" Shoot:", shouldShoot)
+    end
 end
 ---------------------------------------------------------------------------------------------------------------------------------------------
 ENT.Inst_AlrtTo_Dmg = true 
 ENT.Inst_AlrtTo_Dmg_Dist = 3500
-ENT.Inst_AlrtTo_Dmg_Chance = 3 
-function ENT:ReactToDmg(dmginfo)
+ENT.Inst_AlrtTo_Dmg_Chance = 6
+function ENT:InstantAlert_ToDmg(dmginfo)
+    if not self.Inst_AlrtTo_Dmg then return end 
+    if not self:Alive() then return end 
+    if self:IsBusy() or self:IsVJAnimationLockState() then return end 
+
+    local conv = GetConVar("ai_ignoreplayers")
+    local npcState = self:GetNPCState()
+    local stateCmb = NPC_STATE_COMBAT
+    
+    if npcState == stateCmb then return end 
 
     local dgmAtt = dmginfo:GetAttacker()
     local ene = self:GetEnemy()
-    local dist = tonumber(self.Inst_AlrtTo_Dmg_Dist) or 3500
-    local chance = tonumber(self.Inst_AlrtTo_Dmg_Chance) or 3 
 
-    if not IsValid(dgmAtt) or dgmAtt == self or self.Alerted or IsValid(ene) then return end  
+    if not IsValid(dgmAtt) or dgmAtt == self or IsValid(ene) then return end  
 
-    if dgmAtt:IsPlayer() and self.Inst_AlrtTo_Dmg then
-        if GetConVar("ai_ignoreplayers"):GetBool() then return end
-        
-        local playerDisposition = self:Disposition(dgmAtt)
-        if playerDisposition == D_LI or playerDisposition == D_NU then return end
+    local isPlayer = dgmAtt:IsPlayer()
+    local isNPC = dgmAtt:IsNPC()
+    local isNextBot = dgmAtt:IsNextBot()
 
-        print("Damage attacker (player): " .. tostring(dgmAtt))
+    if not (isPlayer or isNPC or isNextBot) then return end
 
-    elseif (dgmAtt:IsNPC() or dgmAtt:IsNextBot()) then
-        local disposition = dgmAtt:Disposition(self)
-        if disposition == D_LI or disposition == D_NU then return end  
+    local disp = self:Disposition(dgmAtt)
+    if disp == D_LI or disp == D_NU then return end  
+
+    if isPlayer then
+        if conv:GetBool() or dgmAtt:GetFlags() == FL_NOTARGET then return end
+         if self.RANDOMS_DEBUG then print("(InstantAlert_ToDmg) Damage attacker (player): " .. tostring(dgmAtt)) end 
     end
 
-    timer.Simple(0.1, function()
-        if not IsValid(self) or not IsValid(dgmAtt) or IsValid(ene) or not self:Alive() then return end
+    local chance = tonumber(self.Inst_AlrtTo_Dmg_Chance) or 3 
+    if mRng(1, chance) ~= 1 then return end 
 
-        local distSqr = self:GetPos():DistToSqr(dgmAtt:GetPos())
-        if distSqr <= (dist * dist) and mRng(1, chance) == 1 then
-            self:ForceSetEnemy(dgmAtt, false)
-            self:UpdateEnemyMemory(dgmAtt, dgmAtt:GetPos())
+    local dist = self.Inst_AlrtTo_Dmg_Dist or 3500
+    local distSqr = self:GetPos():DistToSqr(dgmAtt:GetPos())
+    local maxDistSqr = dist * dist
+    
+    if distSqr > maxDistSqr then return end
+    local chance = tonumber(self.Inst_AlrtTo_Dmg_Chance) or 6
+    local halfDistSqr = (dist * 0.5) * (dist * 0.5)
+    if distSqr <= halfDistSqr then
+        chance = math.max(1, math_floor(chance * 0.2)) 
+        if self.RANDOMS_DEBUG then 
+            print("(InstantAlert_ToDmg) Attacker close! Chance buffed to 1 in " .. chance) 
         end
+    end
+
+    timer.Simple(0.25, function()
+        if not IsValid(self) or not IsValid(dgmAtt) or IsValid(ene) then return end
+
+        local currentEne = self:GetEnemy()
+        if IsValid(currentEne) then return end
+
+        self:StopMoving()
+        self:ForceSetEnemy(dgmAtt, false)
+        self:UpdateEnemyMemory(dgmAtt, dgmAtt:GetPos())
+        self:PointAtEntity(dgmAtt)
+        self:SetCondition(COND_SEE_ENEMY) 
+        if npcState ~= stateCmb then 
+            self:SetNPCState(NPC_STATE_ALERT)
+        end
+        if self.RANDOMS_DEBUG then print("(InstantAlert_ToDmg) we have been alerted to the enemy who hurt us!") end
     end)
 end
 ---------------------------------------------------------------------------------------------------------------------------------------------
@@ -4698,7 +5915,14 @@ function ENT:Blast_FlinchGesture(dmginfo)
 
         local curT = CurTime()
         if curT <= (self.BlastType_FlinchNextT or 0) then return end
-        if mRng(1, self.BlastType_FlinchChance or 3) ~= 1 then 
+
+        local chance = self.BlastType_FlinchChance or 3
+
+        if self.IsHeavilyArmored then 
+            chance = math.min(3, math_floor(chance * 3))
+        end 
+
+        if mRng(1, chance) ~= 1 then 
             self.BlastType_FlinchNextT = curT + mRand(1, 3)
             return 
         end
@@ -4728,14 +5952,14 @@ function ENT:Blast_FlinchGesture(dmginfo)
 end 
 
 function ENT:Extra_LayeredGesFlinching(dmginfo)
-    if not self.ExFlinch_Feedback_Ges then return end 
-    if not self:Alive() then return end 
-    if not self:IsOnGround() then return end 
-    if self:IsVJAnimationLockState() then return end 
     if not dmginfo then return end
+    if not self.ExFlinch_Feedback_Ges then return end 
 
     local gesFlinchConv = GetConVar("vj_stalker_ges_flinch"):GetInt()
-    if gesFlinchConv ~= 1 then return end 
+    if not gesFlinchConv or gesFlinchConv ~= 1 then return end 
+
+    if not self:Alive() then return end 
+    if self:IsVJAnimationLockState() then return end 
 
     local curT = CurTime()
     if curT <= (self.ExFlinch_Ges_NextT or 0) then return end 
@@ -4743,9 +5967,13 @@ function ENT:Extra_LayeredGesFlinching(dmginfo)
     local flinChance = self.ExFlinch_Ges_Chance or 6
     local tDel = mRand(0.01, 0.25)
 
+    if self.IsHeavilyArmored then 
+        flinChance = math.min(3, math_floor(flinChance * 3))
+    end 
+
     local maxHp = self:GetMaxHealth()
     if self.ExFlinch_HpThresh and maxHp > 0 and (self:Health() / maxHp) <= self.ExFlinch_HpThresh_Min then
-        flinChance = math.max(1, math.floor(flinChance / 2))
+        flinChance = math.max(1, math_floor(flinChance / 2))
     end
 
     if mRng(1, flinChance) == 1 then
@@ -4777,193 +6005,252 @@ function ENT:Extra_LayeredGesFlinching(dmginfo)
             if not seq or seq <= 0 then return end
 
             local layer = self:AddGestureSequence(seq, true)
+            local plyRate =  mRand(0.5, 1.75) or 1 
             if layer then
-                self:SetLayerPlaybackRate(layer, mRand(0.65, 1))
+                self:SetLayerPlaybackRate(layer, plyRate)
             end
             self.ExFlinch_Ges_NextT = CurTime() + mRand(0.5, 2.5)
         end)
     end
 end
 
+ENT.No_FriendlyFire = true
 function ENT:Handle_FriendlyFire(dmginfo)
+    if not self.No_FriendlyFire then return end 
+    if not self:Alive() then return end 
+
     local conv = GetConVar("vj_stalker_friendly_fire")
     if not conv or conv:GetInt() ~= 1 then return end 
+
+    local att = dmginfo:GetAttacker() 
+    if not IsValid(att) then return end 
+    if att == self then return end 
+
+    if IsValid(self) and ((not VJ_CVAR_IGNOREPLAYERS and att:IsPlayer()) or att:IsNextBot() or att:IsNPC()) then
+        if self:Disposition(att) == D_LI then 
+            if dmginfo:GetDamage() > 0 then 
+                dmginfo:SetDamage(0)
+            end 
+        end
+    end
 end
 
-function ENT:OnDamaged(dmginfo, hitgroup, status)   
+function ENT:Handle_ToxCoughReact(dmginfo)
+    if not self.ToxDmg_React or not self:Alive() or self.Immune_Toxic then return end 
 
-    local dmgType = dmginfo:GetDamageType()
-    local rngSnd = mRng(75, 105)
-    local curT = CurTime()
     local coughConv = GetConVar("vj_stalker_coughing"):GetInt()
-    local minDmgConv = GetConVar("vj_stalker_min_dmg_cap"):GetInt()
-    local minDmgSfxConv = GetConVar("vj_stalker_min_dmg_cap_sfx"):GetInt()
-    local cancelDial = GetConVar("vj_stalker_dmg_cancel_dial"):GetInt()
+    if coughConv ~= 1 then return end
 
+    local curT = CurTime()
+    if curT < self.ToxDmg_NextT then return end 
+    local isToxic = dmginfo:IsDamageType(DMG_RADIATION + DMG_POISON + DMG_NERVEGAS + DMG_PARALYZE + DMG_ACID)
+    
+    if isToxic then 
+        if mRng(1, self.ToxDmg_Chance or 3) == 1 then 
+            local sndTbl = self.ToxDmg_CoughTbl
+            if sndTbl and #sndTbl > 0 then 
+                local snd = table.Random(sndTbl)
+                if snd then 
+                    self:PlaySoundSystem("IdleDialogue", snd)
+                end 
+                self.ToxDmg_NextT = curT + mRand(2.5, 5)
+            end 
+        else
+            self.ToxDmg_NextT = curT + 0.5
+        end 
+    end 
+end
+
+ENT.Impact_ElectircalEffects = {"ambient/energy/spark".. mRng(1, 6) .. ".wav"}
+ENT.Impact_ElectricalNextT = 0 
+function ENT:Electric_DmgSpark(dmginfo)
+    if not self.Ele_SparkImpFx then return end 
+    if not self:Alive() then return end
+    local c = CurTime()
+    
+    if c < self.Impact_ElectricalNextT then return end 
+    
+    local chance = self.Ele_SparkImpFx_Chance or 20
+    if mRng(1, chance) == 1  then
+        local snd = self.Impact_ElectircalEffects or ""
+        local rngSnd = mRng(75, 105)
+        local rngAng = mRng(-360, 360)
+        local randAng = Angle(rngAng, rngAng, rngAng)
+        local dmgPos = dmginfo:GetDamagePosition()
+        local vecRand = VectorRand(-15, 15)
+        ParticleEffect("electrical_arc_01_parent", dmgPos + vecRand, randAng, nil)
+
+        if snd and #snd > 0 then 
+            local picked = table.Random(snd)
+            VJ.EmitSound(self, picked, 70, rngSnd)
+        end 
+        self.Impact_ElectricalNextT = c + mRand(1, 5)
+    end
+end 
+
+function ENT:Handle_DmgCancelDialogue(dmginfo)
+    if not self.Dmg_Cancel_IdleDial or not self.HasSounds or not self:Alive() then return end
+
+    if self.IsPlayingFirePain then return end -- To prevent 
+
+    local cancelDial = GetConVar("vj_stalker_dmg_cancel_dial"):GetInt()
+    if not cancelDial or cancelDial ~= 1 then return end 
+
+    local wasTalking = false 
+    if self.CurrentIdleSound then
+        self.CurrentIdleSound:Stop() 
+        wasTalking = true
+    end 
+    if self.CurrentSpeechSound then 
+        self.CurrentSpeechSound:Stop()
+        wasTalking = true
+    end
+    if self.CurrentExtraSpeechSound then 
+        self.CurrentExtraSpeechSound:Stop()
+        wasTalking = true
+    end 
+    if wasTalking then
+        self.IdleSoundBlockTime = CurTime() + mRand(2.5, 5)
+    end
+end
+
+function ENT:OnDamaged(dmginfo, hitgroup, status) 
     if status == "PreDamage" then
         self:GibWhenDamaged(dmginfo)
+        self:Handle_FriendlyFire(dmginfo)
         self:Extra_LayeredGesFlinching(dmginfo)
         self:Blast_FlinchGesture(dmginfo)
         self:HandleReinforcedArmorImpact(dmginfo)
         self:PanicOnDamageByEne(dmginfo)
         self:MngDmgTypeScales(dmginfo)
-        self:ReactToDmg(dmginfo)
+        self:InstantAlert_ToDmg(dmginfo)
         self:ShovedBack(dmginfo)
         self:Handle_OnFirePain(dmginfo)
+        self:Handle_ToxCoughReact(dmginfo)
+        self:React_DmgFrPly(attacker, dmginfo)
+        self:Electric_DmgSpark(dmginfo)
+        self:Handle_DmgCancelDialogue(dmginfo)
+        self:DamagedByShockFx(dmginfo) 
 
-        self.Medical_LastDamagedT = cutT
-
-        local badSnd = self.CurrentIdleSound
-        if cancelDial == 1 and self.Dmg_Cancel_IdleDial and self:Alive() and badSnd then
-                self.IdleSoundBlockTime= curT + mRand(0.25, 0.5)
-                if badSnd then
-                    VJ.STOPSOUND(self.CurrentIdleSound)
-                end 
-            end 
-
-        if mRng(1, self.Ele_SparkImpFx_Chance) == 1 and self.Ele_SparkImpFx then
-            local snd = {"ambient/energy/spark".. mRng(1, 6) .. ".wav"}
-            local sndPick = table.Random(snd)
-            local rngAng = mRng(-360, 360)
-            local randAng = Angle(rngAng, rngAng, rngAng)
-            if snd and snd ~= "" then 
-                VJ.EmitSound(self, sndPick, rngSnd, rngSnd)
-            end 
-            ParticleEffect("electrical_arc_01_parent", dmginfo:GetDamagePosition() + VectorRand(-5, 5), randAng, nil)
-        end
-
-        if self.ImpMetal_SparkArmor and mRng(1, self.ImpMetal_SparkArmorChance) == 1 then
-            local effectData = EffectData()
-            effectData:SetOrigin(dmginfo:GetDamagePosition())
-            util.Effect("StunstickImpact", effectData)
-        end
-
-        if coughConv == 1 and self.ToxDmg_React and curT > (self.ToxDmg_NextT or 0) and (self:Alive() or not self.Dead) and not self.Immune_Toxic then 
-            local dmgDetect = dmgType == DMG_RADIATION or dmgType == DMG_POISON or dmgType == DMG_NERVEGAS or dmgType == DMG_PARALYZE or dmgType == DMG_ACID 
-            if dmgDetect then 
-                if mRng(1, self.ToxDmg_Chance) == 1 and IsValid(self) then 
-                    local snd = VJ.PICK(self.ToxDmg_CoughTbl) or {}
-                    //self.CoughingSound = VJ.CreateSound(self, snd, rngSnd, rngSnd)
-                    if snd then 
-                        self:PlaySoundSystem("IdleDialogue", snd)
-                        self.ToxDmg_NextT = curT + mRand(2.5, 5)
-                    end 
-                end 
-            end 
-        end 
-    
         if self.CanHaveHeadshotFx then
             self:HandleHeadshot(dmginfo, hitgroup)
         end
-
-        local shockChance = tonumber(self.ShockDmgFxChance) or 2 
-        if dmgType == DMG_SHOCK and mRng(1, shockChance) == 1 then
-            self:DamagedByShockFx() 
-        end  
-
-        local attacker = dmginfo:GetAttacker()
-        local relation = self:Disposition(attacker)
-        local disps = (relation == D_LI or relation == D_NU)
-        if self.React_FriFire then 
-            if IsValid(attacker) and attacker:IsPlayer() and not VJ_CVAR_IGNOREPLAYERS and disps then
-                print("The attacker is a friendly player:", attacker:GetName())
-                self:SetTurnTarget(attacker)
-                self:SCHEDULE_FACE("TASK_FACE_TARGET")
-                self:React_DmgFrPly(attacker, dmginfo)
-            end
-        end 
-    end
+    end 
 
     if status == "Init" then
-        local damage = dmginfo:GetDamage()
-        local imp = {"vj_base/impact/armor" .. mRng(1, 10) .. ".wav"}
-        local minCapChnce = tonumber(self.MinDmg_Cap_Chance) or 3 
-        local minImpChnce = tonumber(self.MinDmg_Cap_Feedback_Sfx_Chance) or 2
-        if minDmgConv == 1 and damage <= self.MinDmg_Cap and self.MinDmg_CapAbility and mRng(1, minCapChnce) == 1 and not (dmgType == DMG_BURN or dmgType ==  DMG_SLOWBURN) and curT > (self.MinDmg_Cap_NextT or 0)  then
-            self.MinDmg_Cap_NextT = curT + 0.25
-            dmginfo:SetDamage(0)
-            self.MinDmg_Cap_Active = true
-
-            if minDmgSfxConv == 1 and self.MinDmg_Cap_Feedback_Sfx and mRng(1, minImpChnce) == 1 then 
-                if imp then 
-                    self:PlaySoundSystem("Impact", imp)
-                end 
-            end 
-
-            timer.Simple(0.05, function()
-                if IsValid(self) then 
-                    self.MinDmg_Cap_Active = false
-                end
-            end)
-        end
-    end
-
+        self:Handle_MinDmgCap(dmginfo)
+    end 
     if status == "PostDamage" then
         self:Armored_Richochet(dmginfo)
         self:Armor_DmgSparking(dmginfo)
     end
 end
 
+function ENT:Handle_MinDmgCap(dmginfo)
+    if not self.MinDmg_CapAbility then return end 
+    local minDmgConv = GetConVar("vj_stalker_min_dmg_cap")
+    if minDmgConv:GetInt() ~= 1  then return end 
+    if not dmginfo then return end
+    local heavy = self.IsHeavilyArmored
+    local minCapChnce = tonumber(self.MinDmg_Cap_Chance) or 3 
+
+    if heavy then 
+        minCapChnce = math.max(1, math_floor(minCapChnce / 2))
+    end 
+
+    if mRng(1, minCapChnce) ~= 1 then return end 
+    local damage = dmginfo:GetDamage()
+    local minDmg = self.MinDmg_Cap or 5 
+
+    if heavy then 
+        minDmg = minDmg * 2
+    end 
+
+    local dmgType = dmginfo:GetDamageType()
+    local curT    = CurTime()
+
+    if damage <= minDmg and bit.band(dmgType, bit.bor(DMG_BURN, DMG_SLOWBURN)) == 0 and curT > (self.MinDmg_Cap_NextT or 0) then
+        self.MinDmg_Cap_NextT = curT + 0.05 
+        dmginfo:SetDamage(0)
+
+        local imp; 
+        local snd = self.MinDmg_CapImpTbl 
+        local imp = istable(snd) and snd[mRng(1, #snd)] or snd
+        if not imp then return end
+        local minDmgSfxConv = GetConVar("vj_stalker_min_dmg_cap_sfx"):GetInt()
+        local minImpChnce = tonumber(self.MinDmg_Cap_Feedback_Sfx_Chance) or 2
+         
+        if minDmgSfxConv == 1 and self.MinDmg_Cap_Feedback_Sfx and mRng(1, minImpChnce) == 1 then 
+            self:PlaySoundSystem("Impact", imp)
+        end
+    end
+end 
 
 function ENT:Handle_OnFirePain(dmginfo)
+    if not self.HasFireSpecPain then return end 
     if not IsValid(self) then return end
-    local firePainConv = 1
+    if not self:Alive() then return end 
 
     local cv = GetConVar("vj_stalker_fire_dmg_vo")
-    if cv then firePainConv = cv:GetInt() end
+    if cv:GetInt() ~= 1 then return end
 
-    if firePainConv ~= 1 then return end
-
-    if not self.HasFireSpecPain or not self.HasSounds then return end
+    if self.Immune_Fire or not self.HasSounds then return end
     local dmgType = dmginfo:GetDamageType()
-    if self.Immune_Fire then return end
-    if not (dmgType == DMG_BURN or dmgType == DMG_SLOWBURN or self:IsOnFire()) then return end
-    if self.OnFirePain == false or self.OnFirePain == nil then return end
+    if bit.band(dmgType, bit.bor(DMG_BURN, DMG_SLOWBURN)) ~= 0 or self:IsOnFire() then
+        if self.OnFirePain == false or self.OnFirePain == nil then return end
 
-    local burnSnd = nil
-    if istable(self.OnFirePain) and next(self.OnFirePain) then
-        if table.Random then
-            burnSnd = table.Random(self.OnFirePain)
-        else
-            burnSnd = self.OnFirePain[mRng(1, #self.OnFirePain)]
+        local firePain = self.OnFirePain
+        if not firePain or firePain == false then return end
+
+        local burnSnd;
+
+        if istable(firePain) and #firePain > 0 then
+            burnSnd = table.Random(firePain)
+        elseif isstring(firePain) then
+            burnSnd = firePain
         end
-    elseif isstring(self.OnFirePain) then
-        burnSnd = tostring(self.OnFirePain)
-    end
 
-    if not burnSnd or burnSnd == "" then return end
-    local soundSysType = "Pain"
-    if self.PlaySoundSystem then
-        self:PlaySoundSystem(soundSysType, burnSnd)
-    else
-        self:EmitSound(burnSnd)
-    end
+        if not burnSnd or burnSnd == "" then return end
+        self.IsPlayingFirePain = true
+        self:PlaySoundSystem("Pain", burnSnd)
+        timer.Simple(0.1, function()
+            if IsValid(self) then
+                self.IsPlayingFirePain = false
+            end
+        end)
+    end 
 end
 
 function ENT:Armor_DmgSparking(dmginfo)
+    if not self.ArmorSparking then return end 
     local armorConv = GetConVar("vj_stalker_armor_spark"):GetInt()
-    if armorConv ~= 1 or not IsValid(self) then return end
+    if armorConv ~= 1 then return end
 
     local cT = CurTime()
     if cT < (self.Armor_SparkNextT or 0) then return end
+
     local dmgType = dmginfo:GetDamageType()
-    local armorSparkChance = tonumber(self.ArmorSparking_Chance) or 12
+    local armorSparkChance = self.ArmorSparking_Chance or 12
     local dmgPos = dmginfo:GetDamagePosition()
     local ang = self:GetAngles()
     local dT = dmginfo:GetDamageType()
-    local magMin = tonumber(self.Armor_SparkMag_Min) or 0.05
-    local magMax = tonumber(self.Armor_SparkMag_Max) or 1
-    local legMin = tonumber(self.Armor_SparkLeg_Min) or 0.05
-    local legMax = tonumber(self.Armor_SparkLeg_Max) or 3 
-    local sparkMagnitude = mRand(magMin, magMax) 
-    local sparkTrailLength = mRand(legMin, legMax)
-    local isBullet = dmginfo:IsBulletDamage() or dmgType == DMG_BULLET or dmgType == DMG_AIRBOAT or dmgType == DMG_BUCKSHOT or dmgType == DMG_SNIPER
-    if isBullet then 
-        if self.Reinforced_Armor and self.ArmorSparking and mRng(1, armorSparkChance) == 1 then
+
+    local magMin = self.Armor_SparkMag_Min or 0.05
+    local magMax = self.Armor_SparkMag_Max or 1
+    local legMin = self.Armor_SparkLeg_Min or 0.05
+    local legMax = self.Armor_SparkLeg_Max or 3 
+
+    local bulDmg = bit.bor(DMG_BULLET, DMG_BUCKSHOT, DMG_SNIPER, DMG_AIRBOAT)
+    if dmginfo:IsDamageType(bulDmg) or dmginfo:IsBulletDamage() then 
+        local dmg = dmginfo:GetDamage()
+        if dmg < 0 then return end 
+        if mRng(1, armorSparkChance) == 1 then
             self.Armor_SparkNextT = cT + mRand(0.1, 0.5)
             local damageSpark = ents.Create("env_spark")
             local color = self.Armor_SparkColor or "255 255 255"
             local stopT = mRand(0.05,0.225) or 0.1
+            local sparkMagnitude = mRand(magMin, magMax) 
+            local sparkTrailLength = mRand(legMin, legMax)
             if IsValid(damageSpark) then
                 damageSpark:SetKeyValue("Magnitude", sparkMagnitude)
                 damageSpark:SetKeyValue("Spark Trail Length", sparkTrailLength)
@@ -4984,42 +6271,116 @@ end
 ENT.Reinforced_Armor_ImpSnds = true 
 ENT.Reinforced_Armor_ImpSnds_Chance = 10 
 function ENT:HandleReinforcedArmorImpact(dmginfo)
-    if not IsValid(self) then return false end 
+    if not self.HasSounds or not self.HasImpactSounds then return end
+    if not (self.Reinforced_Armor and self.Reinforced_Armor_ImpSnds) then return end
+
     local dmgType = dmginfo:GetDamageType()
-    local burnDmg = (dmgType == DMG_BURN or dmgType == DMG_SLOWBURN) and self:IsOnFire()
-    local chance = self.Reinforced_Armor_ImpSnds_Chance or 15 
-    if burnDmg then return false end 
-    if self.Reinforced_Armor and self.Reinforced_Armor_ImpSnds and self.HasSounds and self.HasImpactSounds and mRng(chance) == 1 then
-        local soundToPlay = mRng(2) == 1 and "vj_base/impact/armor" .. mRng(1, 10) .. ".wav" or VJ.PICK(self.SoundTbl_ExtraArmorImpacts)
-        if soundToPlay then
-            self:PlaySoundSystem("Impact", soundToPlay)
-        else
-            self:EmitSound(soundToPlay)
-        end
+    if bit.band(dmgType, bit.bor(DMG_BURN, DMG_SLOWBURN)) ~= 0 or self:IsOnFire() then return end
+
+    local chance = tonumber(self.Reinforced_Armor_ImpSnds_Chance) or 15
+    if mRng(1, chance) ~= 1 then return end
+
+    local snd1 = self.MinDmg_CapImpTbl
+    local snd2 = self.SoundTbl_ExtraArmorImpacts
+    local candidates = {}
+
+    if istable(snd1) and #snd1 > 0 then
+        table.insert(candidates, snd1[mRng(1, #snd1)])
+    elseif isstring(snd1) and snd1 ~= "" then
+        table.insert(candidates, snd1)
     end
-end 
+
+    if istable(snd2) and #snd2 > 0 then
+        table.insert(candidates, snd2[mRng(1, #snd2)])
+    elseif isstring(snd2) and snd2 ~= "" then
+        table.insert(candidates, snd2)
+    end
+
+    if #candidates == 0 then return end 
+    local soundToPlay = candidates[mRng(1, #candidates)]
+    if soundToPlay then
+        self:EmitSound(soundToPlay,mRng(75, 80), mRng(95, 105), 1, CHAN_BODY)
+    end 
+end
 
 ENT.Reinforced_Armor_Richochet = true 
-ENT.Reinforced_Armor_RichochetChance = 20
+ENT.Reinforced_Armor_RichochetChance = 30
 ENT.Reinforced_Armor_IsRichocheting = false 
+ENT.Reinforced_Armor_RichochetNextT = 0 
+
+ENT.Reinforced_Armor_ImpFx = true
+ENT.Reinforced_Armor_ImpFxChance = 2
+ENT.Reinforced_Armor_ImpFxNextT = 0 
+ENT.Reinforced_Armor_ImpFxTrue = false
+function ENT:Handle_StunstickImpFx(dmginfo, forcedActive)
+    if self.Reinforced_Armor_ImpFx then 
+
+        local always = forcedActive
+        local chance = self.Reinforced_Armor_ImpFxChance or 2 
+
+        if always then 
+            chance = 1 
+        end 
+        
+        if mRng(1, chance) ~= 1 then return end 
+
+        self.Reinforced_Armor_ImpFxTrue = false 
+        if not self.Reinforced_Armor_ImpFxTrue then 
+            local c = CurTime()
+             if c > (self.Reinforced_Armor_ImpFxNextT or 0) then 
+                self.Reinforced_Armor_ImpFxTrue = true 
+                self.Reinforced_Armor_ImpFxNextT = c + mRand(1, 3)
+
+                local spark = EffectData()
+                local scle = mRand(0.05, 0.5)
+                local hitPos = dmginfo:GetDamagePosition()
+                local surfaceNormal = (self:GetPos() - hitPos):GetNormalized()
+
+                spark:SetOrigin(hitPos)
+                spark:SetNormal(surfaceNormal)
+                spark:SetScale(scle)
+                util.Effect("StunstickImpact", spark)
+            end
+        end 
+    end 
+end 
+
 function ENT:Armored_Richochet(dmginfo)
+    if not self.Reinforced_Armor_Richochet then return end 
+
     local armorRichConv = GetConVar("vj_stalker_armor_ricochet"):GetInt()
     if armorRichConv == 1 and self.Reinforced_Armor then
+
+        local heavyFilterConv = GetConVar("vj_stalker_heavyarm_richo_filter")
+        if heavyFilterConv:GetInt() == 1 then 
+            if not self.IsHeavilyArmored then 
+                return 
+            end 
+        end 
+
+        if CurTime() < self.Reinforced_Armor_RichochetNextT then return end 
         local dmgType = dmginfo:GetDamageType()
         local chance = self.Reinforced_Armor_RichochetChance or 20 
         local rngSnd = mRng(85, 105)
-        local ricoSnd = VJ.PICK(self.Rein_Armor_Richochet_Tbl)
-        if self.Reinforced_Armor_Richochet and mRng(1, chance) == 1 and 
-           (dmginfo:IsBulletDamage() or dmgType == DMG_BULLET or dmgType == DMG_AIRBOAT or 
-            dmgType == DMG_BUCKSHOT or dmgType == DMG_SNIPER) then
+        local mask = bit.bor(DMG_BULLET, DMG_BUCKSHOT, DMG_SNIPER, DMG_AIRBOAT)
+        if bit.band(dmginfo:GetDamageType(), mask) == 0 then return end
+        if mRng(1, chance) == 1 then 
             self.Reinforced_Armor_IsRichocheting = true
             local attacker = dmginfo:GetAttacker()
             if not IsValid(attacker) then attacker = self end
             if IsValid(attacker) and IsValid(self) then
                 local hitPos = dmginfo:GetDamagePosition()
+                
+                local ricoSndTbl = self.Rein_Armor_Richochet_Tbl
+                if ricoSndTbl and #ricoSndTbl > 0 then
+                    local snd = table.Random(ricoSndTbl)
+                    VJ.EmitSound(self, snd, mRng(65, 85), mRng(90, 110))
+                end
+
                 if hitPos == Vector(0, 0, 0) or not hitPos then
                     hitPos = self:GetPos() + self:OBBCenter()
                 end
+
                 local bulletDir = (hitPos - attacker:GetPos()):GetNormalized()
                 local surfaceNormal = (self:GetPos() - hitPos):GetNormalized()
                 local dotProduct = bulletDir:Dot(surfaceNormal)
@@ -5031,13 +6392,14 @@ function ENT:Armored_Richochet(dmginfo)
                 reflection = angle:Forward()
                 local startPos = hitPos + reflection * 5
                 local effectData = EffectData()
+                local rngScle = mRng(2500, 5000) or 5000
                 effectData:SetStart(startPos)
                 effectData:SetOrigin(startPos + reflection * 2000)
-                effectData:SetScale(5000)
+                effectData:SetScale(rngScle)
                 util.Effect("Tracer", effectData)
-                if ricoSnd and mRng(1, 2) == 1 then 
-                    VJ.EmitSound(self, ricoSnd, rngSnd, rngSnd)
-                end 
+
+                self:Handle_StunstickImpFx(dmginfo, false)
+                
                 local bullet = {}
                 bullet.Src = startPos
                 bullet.Dir = reflection
@@ -5051,6 +6413,7 @@ function ENT:Armored_Richochet(dmginfo)
                 bullet.TracerName = "Tracer"
                 bullet.IgnoreEntity = self
                 self:FireBullets(bullet)
+                self.Reinforced_Armor_RichochetNextT = CurTime() + mRand(1, 3)
                 self.Reinforced_Armor_IsRichocheting = false
             end
         end
@@ -5066,81 +6429,81 @@ ENT.Panic_DmgEne_Chance = 12
 function ENT:PanicOnDamageByEne(dmginfo)
     if not self.Panic_DmgEne then return end 
 
-    local conv = GetConVar("vj_stalker_panic_after_dmg"):GetInt() 
-    if conv ~= 1 then return end
+    local conv = GetConVar("vj_stalker_panic_after_dmg")
+    if not conv or conv:GetInt() ~= 1 then return end
 
     if self.VJ_IsBeingControlled then return end
     if not self:Alive() then return end 
 
-    local busy = self:IsBusy() or self:IsVJAnimationLockState() 
-    if busy then return end
+    if self:IsBusy() or self:IsVJAnimationLockState() then return end
 
-    local panicChance = tonumber(self.Panic_DmgEne_Chance)
     local curTime = CurTime()
-    local attacker = dmginfo:GetAttacker()
-    local enemy = self:GetEnemy()
-    local coverType = mRng(1, 3)
-    local bScheds = self:GetCurrentSchedule() == 30 or self:GetCurrentSchedule() == 27 
-    local disp = self:Disposition(attacker)
+    if curTime < (self.Panic_DmgEne_NextT or 0) then return end
 
+    local attacker = dmginfo and dmginfo:GetAttacker()
+    local enemy = self:GetEnemy()
+
+    if not IsValid(attacker) and not IsValid(enemy) then return end
+
+    local disp = IsValid(attacker) and self:Disposition(attacker)
     if disp == D_LI or disp == D_NU then return end 
 
-    if bScheds then return end 
-    if not IsValid(attacker) and not IsValid(enemy) then return end
+    local sched = self:GetCurrentSchedule()
+    if sched == 30 or sched == 27 then return end
 
     local wep = self:GetActiveWeapon()
     local hasNonMeleeWeapon = not IsValid(wep) or (IsValid(wep) and not wep.IsMeleeWeapon)
+
+    local panicChance = tonumber(self.Panic_DmgEne_Chance) or 10
 
     if self.IsHeavilyArmored then 
         panicChance = panicChance * 2
     end 
 
     if self:Health() <= (self:GetMaxHealth() * 0.5) then
-        panicChance = math.max(1, math.floor(panicChance / 2))
+        panicChance = math.max(1, math_floor(panicChance / 2))
     end
 
-    if hasNonMeleeWeapon and curTime >= (self.Panic_DmgEne_NextT or 0) and mRng(1, panicChance) == 1 then
-        self:ClearSchedule()
-        self:StopMoving()
-        timer.Simple(mRand(0.05, 0.45), function()
-            if not IsValid(self) then return end
-            print("[PANIC IN DMGA]")
-            local pickedCover = false 
-            if coverType == 1 then
-                self:SCHEDULE_COVER_ORIGIN("TASK_RUN_PATH", function(x)
-                    x.DisableChasingEnemy = true
-                    if mRng(1, 2) == 1 then
-                        x.CanShootWhenMoving = true
-                        x.TurnData = {Type = VJ.FACE_ENEMY}
-                    else
-                        x.CanShootWhenMoving = false  
-                        x.TurnData = {Type = VJ.FACE_ENEMY, Target = nil}
-                    end
-                end)
-                pickedCover = true
-            elseif coverType == 2 and IsValid(enemy) then
-                self:SCHEDULE_COVER_ENEMY("TASK_RUN_PATH", function(x)
-                    x.DisableChasingEnemy = true
-                    if mRng(1, 2) == 1 then
-                        x.CanShootWhenMoving = true
-                        x.TurnData = {Type = VJ.FACE_ENEMY}
-                    else
-                        x.CanShootWhenMoving = false  
-                        x.TurnData = {Type = VJ.FACE_ENEMY, Target = nil}
-                    end
-                end)
-                pickedCover = true
-            elseif coverType == 3 then
-                self:SetSchedule(SCHED_TAKE_COVER_FROM_ORIGIN)
-                pickedCover = true
-            end
-            if pickedCover then
-                self.Panic_DmgEne_NextT = curTime + mRand(1, 5)
-            end
-        end)
-        return true
+    if not hasNonMeleeWeapon then return end
+    if mRng(1, panicChance) ~= 1 then return end
+
+    local coverMap = {
+        [1] = "Origin",
+        [2] = "Enemy",
+        [3] = "Origin" 
+    }
+
+    local coverType = coverMap[mRng(1,3)] or "Both"
+    local aiType
+    local aiPick = mRng(1,3)
+    if aiPick == 1 then
+        aiType = false -- VJ
+    elseif aiPick == 2 then
+        aiType = true -- Default
+    else
+        aiType = "Both"
     end
-    return false
+    local delay = mRand(0.05, 0.45)
+
+    timer.Simple(delay, function()
+        if not IsValid(self) then return end
+
+        if self.RANDOMS_DEBUG then
+            print("[PANIC IN DMGA - Helper Triggered]")
+        end
+
+        self:Handle_ScheduledForceMove(
+            aiType,         -- useDefAi
+            coverType,      -- coverType
+            "Both",         -- canShoot
+            "Run",          -- moveType (panic = always run)
+            true           
+        )
+
+        self.Panic_DmgEne_NextT = CurTime() + mRand(1, 5)
+    end)
+
+    return true
 end
 ---------------------------------------------------------------------------------------------------------------------------------------------
 local dmgScales = {
@@ -5159,163 +6522,155 @@ local dmgScales = {
     [DMG_BULLET] = {0.75, 0.95}
 }
 
+local LIMB_HITGROUPS = {
+    [HITGROUP_STOMACH]  = true,
+    [HITGROUP_RIGHTLEG] = true,
+    [HITGROUP_LEFTLEG]  = true,
+    [HITGROUP_RIGHTARM] = true,
+    [HITGROUP_LEFTARM]  = true,
+    [HITGROUP_CHEST]    = true,
+    [HITGROUP_GEAR]     = true,
+}
+
 function ENT:MngDmgTypeScales(dmginfo, hitgroup)
-    if not IsValid(self) or not self.HasRngDmgScale or self.Dead or self.IsCurrentlyIncapacitated then return end
+    if not self.HasRngDmgScale or not self:Alive() or self.IsCurrentlyIncapacitated then return end
+
+    local dmgType = dmginfo:GetDamageType()
     local pr = self.RANDOMS_DEBUG
-    local dmg = dmginfo:GetDamageType()
-    local initialDamage = dmginfo:GetDamage()
+    local initial = dmginfo:GetDamage()
+    local cv_heavyIgnoreMelee = GetConVar("vj_stalker_heavy_ign_melee")
 
-    -- Scientific stats
+    local function dbg(msg)
+        if pr then print(msg) end
+    end
+
     if self.IsScientific then
-        if bit.band(dmg, DMG_BURN + DMG_SLOWBURN) ~= 0 then
+        if bit.band(dmgType, bit.bor(DMG_BURN, DMG_SLOWBURN)) ~= 0 then
             dmginfo:ScaleDamage(0.2)
-            if pr then
-                print(string.format("Fire Dmg (Scientific) Scaled: Initial = %.2f | Scaled = %.2f", initialDamage, dmginfo:GetDamage()))
-            end 
+            dbg(("Fire (Scientific): %.2f -> %.2f"):format(initial, dmginfo:GetDamage()))
             return
-        elseif bit.band(dmg, DMG_SHOCK + DMG_DISSOLVE) ~= 0 then
+        elseif bit.band(dmgType, bit.bor(DMG_SHOCK, DMG_DISSOLVE)) ~= 0 then
             dmginfo:ScaleDamage(0.1)
-            if pr then
-                print(string.format("Shock/Dissolve Dmg (Scientific) Scaled: Initial = %.2f | Scaled = %.2f", initialDamage, dmginfo:GetDamage()))
-            end 
+            dbg(("Shock (Scientific): %.2f -> %.2f"):format(initial, dmginfo:GetDamage()))
             return
-        elseif bit.band(dmg, DMG_BLAST) ~= 0 then
+        elseif bit.band(dmgType, DMG_BLAST) ~= 0 then
             dmginfo:ScaleDamage(0.5)
-            if pr then
-                print(string.format("Blast Dmg (Scientific) Scaled: Initial = %.2f | Scaled = %.2f", initialDamage, dmginfo:GetDamage()))
-            end
+            dbg(("Blast (Scientific): %.2f -> %.2f"):format(initial, dmginfo:GetDamage()))
             return
         end
     end
 
-    -- Exo/Heavy unit stats
     if self.IsHeavilyArmored then
-        if bit.band(dmg, DMG_BURN + DMG_SLOWBURN) ~= 0 then
+        if bit.band(dmgType, bit.bor(DMG_BURN, DMG_SLOWBURN)) ~= 0 then
             dmginfo:ScaleDamage(0.5)
-            if pr then
-                print(string.format("Fire Dmg (Heavy) Scaled: Initial = %.2f | Scaled = %.2f", initialDamage, dmginfo:GetDamage()))
-            end 
+            dbg(("Fire (Heavy): %.2f -> %.2f"):format(initial, dmginfo:GetDamage()))
             return
-        elseif bit.band(dmg, DMG_BLAST) ~= 0 then
+        elseif bit.band(dmgType, DMG_BLAST) ~= 0 then
             dmginfo:ScaleDamage(0.2)
-            if pr then 
-                print(string.format("Blast Dmg (Heavy) Scaled: Initial = %.2f | Scaled = %.2f", initialDamage, dmginfo:GetDamage()))
-            end 
+            dbg(("Blast (Heavy): %.2f -> %.2f"):format(initial, dmginfo:GetDamage()))
             return
-        elseif bit.band(dmg, DMG_SLASH) ~= 0 then
-            dmginfo:ScaleDamage(0.45)
-            if pr then
-                print(string.format("Blast Dmg (Slash) Scaled: Initial = %.2f | Scaled = %.2f", initialDamage, dmginfo:GetDamage()))
+        elseif bit.band(dmgType, bit.bor(DMG_SLASH, DMG_CLUB)) ~= 0 then
+            if cv_heavyIgnoreMelee and cv_heavyIgnoreMelee:GetBool() then
+                dmginfo:SetDamage(0)
+                return true
             end
+            dmginfo:ScaleDamage(0.45)
+            dbg(("Melee (Heavy): %.2f -> %.2f"):format(initial, dmginfo:GetDamage()))
             return
-        elseif bit.band(dmg, DMG_ACID + DMG_RADIATION + DMG_POISON + DMG_NERVEGAS + DMG_PARALYZE) ~= 0 then
+        elseif bit.band(dmgType, bit.bor(DMG_ACID, DMG_RADIATION, DMG_POISON, DMG_NERVEGAS, DMG_PARALYZE)) ~= 0 then
             dmginfo:ScaleDamage(0.8)
-            if pr then
-                print(string.format("Toxic Dmg (Heavy) Scaled: Initial = %.2f | Scaled = %.2f", initialDamage, dmginfo:GetDamage()))
-            end 
+            dbg(("Toxic (Heavy): %.2f -> %.2f"):format(initial, dmginfo:GetDamage()))
             return
         end
     end
 
-    -- Bullet dmg
-    if dmginfo:IsBulletDamage() and self.HasBulletDmgScale then
-        local hitHitgroup = hitgroup == HITGROUP_STOMACH or hitgroup == HITGROUP_RIGHTLEG or hitgroup == HITGROUP_RIGHTARM or hitgroup == HITGROUP_LEFTLEG or hitgroup == HITGROUP_LEFTARM or hitgroup == HITGROUP_CHEST or hitgroup == HITGROUP_GEAR
-        if hitHitgroup and mRng(1, 3) == 1 then
-            local reducedScale = mRand(0.2, 0.3)
-            dmginfo:ScaleDamage(reducedScale)
-            if pr then
-                print(string.format("Severe Bullet Dmg Reduction (Limb/Torso): Initial = %.2f | Scaled = %.2f (Scale: %.2fx)",
-                initialDamage, dmginfo:GetDamage(), reducedScale))
-            end 
-            return
+    if self.HasBulletDmgScale and dmginfo:IsBulletDamage() then
+        local scale;
+        if LIMB_HITGROUPS[hitgroup] and mRng(1, 3) == 1 then
+            scale = mRand(0.2, 0.3)
+            dbg(("Bullet Limb Reduce: %.2f -> %.2f (%.2fx)"):format(initial, initial * scale, scale))
         else
-            local scale = mRand(0.75, 0.95)
-            dmginfo:ScaleDamage(scale)
-            if pr then
-                print(string.format("Bullet Dmg Scaled: Initial = %.2f | Scaled = %.2f (Scale: %.2fx)", 
-                initialDamage, dmginfo:GetDamage(), scale))
-            end 
-            return
+            scale = mRand(0.75, 0.95)
+            dbg(("Bullet Scale: %.2f -> %.2f (%.2fx)"):format(initial, initial * scale, scale))
         end
+
+        dmginfo:ScaleDamage(scale)
+        return
     end
 
-    -- Fallback dmg scales
-    for dtype, scaleRange in pairs(dmgScales) do
-        if bit.band(dmg, dtype) ~= 0 then
-            local scale = mRand(scaleRange[1], scaleRange[2])
+    for dtype, range in pairs(dmgScales) do
+        if bit.band(dmgType, dtype) ~= 0 then
+            local scale = mRand(range[1], range[2])
             dmginfo:ScaleDamage(scale)
-            if pr then
-            print(string.format("%s Dmg Scaled (Fallback): Initial = %.2f | Scaled = %.2f (Scale: %.2fx)", 
-                tostring(dtype), initialDamage, dmginfo:GetDamage(), scale))
-            end 
+            dbg(("Fallback %s: %.2f -> %.2f"):format(dtype, initial, dmginfo:GetDamage()))
             return
         end
     end
 end
 ---------------------------------------------------------------------------------------------------------------------------------------------
-function ENT:DamagedByShockFx()
+function ENT:DamagedByShockFx(dmginfo)
     if not self.HasShockDmgFx then return end 
-    if not IsValid(self) then return end
+    
+    local conv = GetConVar("vj_stalker_shock_dmg_fx")
+    if not conv or conv:GetInt() ~= 1 then return end 
 
-    local origin = self:GetPos()
-    local magnitude = mRng(1, 3)
-    local scale = mRng(1, 3)
-    local radius = mRng(1, 3)
+    if not dmginfo:IsDamageType(DMG_SHOCK) then return end 
+
     local curT = CurTime()
+    if curT < (self.NextShockFxT or 0) then return end
 
-    local teslaEffectData = EffectData()
-    teslaEffectData:SetEntity(self)
-    teslaEffectData:SetMagnitude(magnitude)
-    teslaEffectData:SetScale(scale)
-    teslaEffectData:SetRadius(radius)
-    teslaEffectData:SetStart(origin)
-    teslaEffectData:SetOrigin(origin)
+    local shockChance = tonumber(self.ShockDmgFxChance) or 2 
+    if mRng(1, shockChance) ~= 1 then return end 
 
-    util.Effect("TeslaHitBoxes", teslaEffectData, true, true)
+    local stunDuration = mRand(0.5, 6.5) 
+    self.NextShockFxT = curT + stunDuration + 1 
 
-    local stunDuration = mRand(0.925, 10.25)
     local entIndex = self:EntIndex()
     local endTime = curT + stunDuration
 
-    if not self:Alive() then return end 
-    timer.Create("TeslaEffectTimer_" .. entIndex, 0.1, math.ceil(stunDuration / 0.1), function()
-        if IsValid(self) then
-            util.Effect("TeslaHitBoxes", teslaEffectData, true, true)
+    local sharedRng = mRng(1, 5)
+    local tesla = EffectData()
+    tesla:SetEntity(self)
+    tesla:SetMagnitude(sharedRng)
+    tesla:SetScale(sharedRng)
+    tesla:SetRadius(sharedRng)
+
+    local function PlayShockLogic()
+        if not IsValid(self) or not self:Alive() or CurTime() > endTime then 
+            timer.Remove("ShockEffect_" .. entIndex)
+            return 
         end
-    end)
 
-    local function EmitShockSoundAndEffect()
-        if not IsValid(self) then return end
-        if CurTime() > endTime then return end
-        local sndRng = mRng(85, 105)
-        local sndTbl = {"ambient/energy/zap" .. mRng(1, 9) .. ".wav"}
-        local sounds = table.Random(sndTbl)
-        if sounds then 
-            VJ.EmitSound(self, sounds, sndRng, sndRng)
+        local snd = self:GetRandomValidValue(self.EnergyZap_Tbl)
+        if snd then 
+            VJ.EmitSound(self, snd, 75, mRng(85, 110))
         end 
+        self:AddGesture(ACT_GESTURE_FLINCH_HEAD)
+        util.Effect("TeslaHitBoxes", tesla, true, true)
 
-        local cballEffect = EffectData()
-        local sparkOrigin = self:GetPos() + self:GetUp() * mRng(10, 35)
-        local mag = mRng(5,25)
-        cballEffect:SetOrigin(sparkOrigin)
-        cballEffect:SetStart(sparkOrigin)
-        cballEffect:SetMagnitude(mag)
-        cballEffect:SetEntity(self)
-        util.Effect("cball_explode", cballEffect)
+        local conv = GetConVar("vj_stalker_shock_dmg_fx_cheap")
+        if not conv or conv:GetInt() ~= 1 then return end 
 
-        timer.Simple(mRand(0.325, 1.255), EmitShockSoundAndEffect)
+        local sparkOrigin = self:GetPos() + self:GetUp() * mRng(5, 75) + VectorRand() * 55
+        local rngScle = mRng(0.05, 0.5)
+        local cball = EffectData()
+        cball:SetOrigin(sparkOrigin)
+        cball:SetScale(rngScle) 
+        util.Effect("cball_explode", cball)
     end
 
-    timer.Simple(mRand(0.1, 0.35), EmitShockSoundAndEffect)
-
-    timer.Simple(stunDuration, function()
+    timer.Create("ShockEffect_" .. entIndex, mRand(0.05, 0.55), 0, function()
+        PlayShockLogic()
         if IsValid(self) then
-            timer.Remove("TeslaEffectTimer_" .. entIndex)
+            timer.Adjust("ShockEffect_" .. entIndex, mRand(0.05, 0.55))
         end
     end)
 end
 ---------------------------------------------------------------------------------------------------------------------------------------------
 ENT.LandingOnGround_Anim = "jump_holding_land"
+ENT.LandOnGround_SoundTbl = {"general_sds/land_sound/jumplanding.wav","general_sds/land_sound/jumplanding2.wav","general_sds/land_sound/jumplanding3.wav","general_sds/land_sound/jumplanding4.wav","general_sds/land_sound/landing.mp3"}
+
+
 function ENT:DetectLanding()
     if not self.Detect_LandAnim then return end 
     if self.IsLanding then return end 
@@ -5325,57 +6680,45 @@ function ENT:DetectLanding()
         return
     end
 
-    local rngSnd = mRng(75, 115)
-    local rngVol = mRng(65, 80)
-
-    local landAnim = self.LandingOnGround_Anim
+    local landAnim = self:GetRandomValidValue(self.LandingOnGround_Anim)
     if not landAnim then return end 
     
-    local selectAnim;
-    if landAnim then 
-        if istable(landAnim) then
-            selectAnim = table.Random(landAnim)
-        elseif isstring(landAnim) then 
-            selectAnim = landAnim
-        end
-    end 
-
     local seq = self:GetSequence()
     local currentSequence = seq and self:GetSequenceName(seq) or ""
-    
-    if currentSequence == selectAnim or self:GetActivity() == ACT_LAND then
+    local landDuration = self:SequenceDuration(self:LookupSequence(landAnim))  or 1 
+
+    if currentSequence == landAnim or self:GetActivity() == ACT_LAND then
         self.IsLanding = true  
 
-        local landSnds = table.Random({"general_sds/land_sound/jumplanding.wav","general_sds/land_sound/jumplanding2.wav","general_sds/land_sound/jumplanding3.wav","general_sds/land_sound/jumplanding4.wav","general_sds/land_sound/landing.mp3"})
-        local gruntSnd = self.JumpLandGruntTbl 
-        local selectLand = mRng(1, #landSnds) or ""
-        local selectGrunt = mRng(1, #gruntSnd) or ""
-
-        if selectLand then 
-            VJ.EmitSound(self, selectLand, rngVol, rngSnd)
-        end 
-        if selectGrunt and mRng(1, 2) == 1 then 
-            VJ.EmitSound(self, selectGrunt, rngVol, rngSnd)
-        end 
+        local rngSnd = mRng(75, 115)
+        local rngVol = mRng(65, 80)
         
-        local landDuration = self:SequenceDuration(self:LookupSequence(selectAnim))  or 1 
+        local landSnds = self:GetRandomValidValue(self.LandOnGround_SoundTbl)
+        if landSnds then 
+            VJ.EmitSound(self, landSnds, rngVol, rngSnd)
+        end 
+
+        local gruntSnd = self:GetRandomValidValue(self.JumpLandGruntTbl)
+        if gruntSnd and mRng(1, 2) == 1 then 
+            VJ.EmitSound(self, gruntSnd, rngVol, rngSnd)
+        end 
+
         local myPos = self:GetPos()
         local isInWater = bit.band(util.PointContents(myPos), CONTENTS_WATER) == CONTENTS_WATER
         local conv = GetConVar("vj_stalker_jump_land_particles"):GetInt() 
-        local pcfxScale = tonumber(self.Landing_FxScale)
+        local pcfxScale = tonumber(self.Landing_FxScale) or 60 
 
         if conv == 1 then 
             if not self:ValidBreakableMats(self:GetPos()) then return end 
             if self.Landing_Effects and self.IsLanding and not isInWater then
+                local ed = EffectData()
                 if self.LargeLandFx then 
-                    local effectData = EffectData()
-                    effectData:SetOrigin(myPos)
-                    effectData:SetScale(pcfxScale)
-                    util.Effect("ThumperDust", effectData) 
+                    ed:SetOrigin(myPos)
+                    ed:SetScale(pcfxScale)
+                    util.Effect("ThumperDust", ed) 
                 else 
-                    local effectData = EffectData()
-                    effectData:SetOrigin(myPos)
-                    util.Effect("vj_randoms_dust_land_small", effectData)  
+                    ed:SetOrigin(myPos)
+                    util.Effect("vj_randoms_dust_land_small", ed)  
                 end      
             end  
         end 
@@ -5413,13 +6756,15 @@ function ENT:Handle_IsPanickingState()
 
     local shareDel = mRand(1, 5) or 3 
     local curT = CurTime()
-    local gestureSignal = VJ.PICK(self.DetectDangerReactAnim)
-    local animChance = self.DetectDangerAnimChance
 
     if self.HasDetectDangerAnim then 
+        local animChance = self.DetectDangerAnimChance or 3
         if curT > self.Danger_DetectSiganlT and  mRng(1, animChance) == 1 then
-            self:PlayAnim("vjges_" .. gestureSignal, false) 
-            self.Danger_DetectSiganlT = curT + mRand(1, 10)
+            local gestureSignal = self:GetRandomValidValue(self.DetectDangerReactAnim)
+            if gestureSignal then 
+                self:PlayAnim("vjges_" .. gestureSignal, false) 
+                self.Danger_DetectSiganlT = curT + mRand(1, 10)
+            end 
         end 
     end 
 
@@ -5522,21 +6867,20 @@ ENT.CrouchActs = {
 
 function ENT:OnFootstepSound(moveType, sdFile)
     if moveType == "Walk" or moveType == "Run" or moveType == "Event" then 
-        if not self:IsOnGround() or self.MovementType == VJ_MOVETYPE_STATIONARY then 
-            return 
-        end 
+        
+        if self._OrigSoundTbl_FootStep == nil and self.SoundTbl_FootStep then
+            self._OrigFootstepSoundState = self.SoundTbl_FootStep
+        end
+
+        if self.CrouchMovement and self.SoundTbl_FootStep ~= self.Footstep_Sneaking then
+            if self.RANDOMS_DEBUG then print("Now wea are using sneak specific footstep sounds!!") end 
+            self.SoundTbl_FootStep = self.Footstep_Sneaking 
+            return true 
+        else
+            self.SoundTbl_FootStep = self._OrigFootstepSoundState
+        end
 
         self:Dynamic_FeetSteps()
-        if self._OrigSoundTbl_FootStep == nil and self.FootstepSoundLevel then
-            self._OrigFootstepSoundLevel = tonumber(self.FootstepSoundLevel) or 75 
-        end
-        if self.CrouchMovement then
-            self.FootstepSoundLevel = 0 -- somehow, this variable cannot be changed.
-        else
-            if self.FootstepSoundLevel ~= self._OrigFootstepSoundLevel then
-                self.FootstepSoundLevel = self._OrigFootstepSoundLevel or 75 
-            end
-        end
     end 
 end
 
@@ -5566,8 +6910,8 @@ function ENT:StealthMovement()
     end
 end
 
-ENT.UseCrouchIdleAnim = true 
-
+//ENT.UseCrouchIdleAnim = true 
+//Ill fix this later.
 ENT.Play_PeekupAnim = true 
 ENT.Play_PeekupAnimChance = 4
 ENT.PeekUpAnim = "crouch_peek_up_cmb_b"
@@ -5579,9 +6923,10 @@ function ENT:Idle_CoverPeekUp()
     if self.VJ_IsBeingControlled then return end
     if not self:IsOnGround() then return end
     if self:IsMoving() then return end
-    if self:IsBusy() or self:IsVJAnimationLockState() then return end
+    if self:IsBusy() or self:IsVJAnimationLockState() or self.Flinching then return end
     if self:GetNPCState() ~= NPC_STATE_IDLE then return end
     if CurTime() < self.NextPeekUpT then return end
+
     local delayT = mRand(5, 30)
 
     local anim = self.PeekUpAnim
@@ -5609,6 +6954,19 @@ function ENT:Idle_CoverPeekUp()
     end
 
     if not self.Idle_CoverActs[activity] then
+        self._PeekEnteredCoverT = 0
+        return
+    end
+
+    if self._PeekEnteredCoverT == 0 then
+        self._PeekEnteredCoverT = CurTime()
+        if self.RANDOMS_DEBUG then
+            print("[PeekUp] Entered cover, starting delay...")
+        end
+        return
+    end
+
+    if CurTime() < (self._PeekEnteredCoverT + (self.PeekUpDelay or 1)) then
         return
     end
 
@@ -5631,9 +6989,10 @@ end
 
 
 function ENT:TranslateActivity(act)
-    local ene = self:GetEnemy()
+    local ene = self:GetEnemy() 
+    local moveFireConv = GetConVar("vj_stalker_crouch_move_firing"):GetInt()
     if self.IsCrouchFiring and self.Weapon_CanMoveFire and IsValid(ene) then
-        if self.Weapon_CanMoveFire and IsValid(ene) and (self.EnemyData.Visible or (self.EnemyData.VisibleTime + 5) > CurTime()) and self.CurrentSchedule and self.CurrentSchedule.CanShootWhenMoving and self:CanFireWeapon(true, false) then
+        if (moveFireConv and moveFireConv == 1) and self.Weapon_CanMoveFire and IsValid(ene) and (self.EnemyData.Visible or (self.EnemyData.VisibleTime + 5) > CurTime()) and self.CurrentSchedule and self.CurrentSchedule.CanShootWhenMoving and self:CanFireWeapon(true, false) then
             self.WeaponAttackState = VJ.WEP_ATTACK_STATE_FIRE
             if act == ACT_WALK then
                 return self:TranslateActivity(act == ACT_WALK and ACT_WALK_CROUCH_AIM)
@@ -5777,10 +7136,7 @@ function ENT:Avoid_PlyCrosshair()
     if self.AvoidingC_Hair then return end 
 
     local crossConv = GetConVar("vj_stalker_avoid_ply_crosshair"):GetInt()
-
-    if crossConv ~= 1 then
-        return  
-    end
+    if not crossConv or crossConv ~= 1 then return end
 
     local ai_Conv = GetConVar("ai_ignoreplayers"):GetBool()
     if ai_Conv == 1 or VJ_CVAR_IGNOREPLAYERS then return end 
@@ -5789,13 +7145,11 @@ function ENT:Avoid_PlyCrosshair()
 
     local busy = self:IsVJAnimationLockState() or self:IsBusy("Activities") or self.CurrentlyHealSelf or self.IsHumanDodging or self.Flinching
     local curT = CurTime()
-    local bScheds = self:IsCurrentSchedule(30) or self:IsCurrentSchedule(27)
     
     if not self:IsOnGround() then return end 
-    if self.IsGuard or self.MovementType == VJ_MOVETYPE_STATIONARY then return end 
+    if not self:IsAbleToMoveNow() then return end 
 
     if busy or 
-        bScheds or    
         self:GetNPCState() == NPC_STATE_IDLE or   
         self:GetWeaponState() == VJ.WEP_STATE_RELOADING or
         (self.Avoid_C_HairNextT and self.Avoid_C_HairNextT > curT) then
@@ -5827,7 +7181,6 @@ function ENT:Avoid_PlyCrosshair()
 
             if trace.Entity == self and dist >= minDist then
                 self:ClearSchedule()
-                self:StopMoving()
                 self:RemoveAllGestures()
 
                 if self.RANDOMS_DEBUG then 
@@ -5865,19 +7218,8 @@ function ENT:GestureSignalAnimHelper()
 
     local gesChance = self.Avoid_C_HairGesChance or 3 
 
-    animTbl = self.Avoid_C_HairGesTbl
-    if not animTbl or #animTbl == 0 then return end  
 
-    local gesAnim; 
-    
-    if anim ~= false and anim ~= "" then 
-        if istable(anim) then 
-            gesAnim = table.Random(anim)
-        elseif isstring(anim) then 
-            gesAnim = anim 
-        end 
-    end 
-
+    local gesAnim = self:GetRandomValidValue(self.Avoid_C_HairGesTbl)
     if not gesAnim then return end
 
     local sigAnims = {2146, 2147, 2148, 2149, 2150, 2151, 2152}
@@ -5896,7 +7238,7 @@ function ENT:CanFireQuickFlare()
     if conv:GetInt() ~= 1 then return false end
 
     if self.IsFiringQuickFlare then return false end 
-    if self:IsBusy() or self.VJ_IsBeingControlled or self:IsVJAnimationLockState() then return false end
+    if self:IsBusy() or self.VJ_IsBeingControlled or self:IsVJAnimationLockState() or self.Flinching or self.PauseAttacks then return false end
     if self:GetWeaponState() == VJ.WEP_STATE_RELOADING then return false end 
     
     local enemy = self:GetEnemy()
@@ -5912,7 +7254,7 @@ function ENT:CanFireQuickFlare()
         return false 
     end
 
-    if self.Flinching or self.IsHoldingSecondaryWeapon then return false end
+    if self.IsHoldingSecondaryWeapon then return false end
     if self.WeaponAttackState == VJ.WEP_ATTACK_STATE_FIRE_STAND or self.DoingWeaponAttack then return false end
     
     if wep.IsMeleeWeapon or wep.HoldType == "pistol" or wep.HoldType == "revolver" or wep.HoldType == "rpg" then return false end
@@ -5959,17 +7301,9 @@ function ENT:FireQuickFlare()
     end
 
     self.IsFiringQuickFlare = true
-    local fireAnim;
-
-    if self.AnimTbl_WeaponAttackSecondary and self.AnimTbl_WeaponAttackSecondary ~= false then
-        if istable(self.AnimTbl_WeaponAttackSecondary) then 
-            fireAnim = table.Random(self.AnimTbl_WeaponAttackSecondary)
-        elseif isstring(self.AnimTbl_WeaponAttackSecondary) and self.AnimTbl_WeaponAttackSecondary ~= "" then 
-            fireAnim = self.AnimTbl_WeaponAttackSecondary
-        end 
-    end 
-    
+    local fireAnim = self:GetRandomValidValue(self.AnimTbl_WeaponAttackSecondary)
     if not fireAnim then return end 
+
     local seq = self:LookupSequence(fireAnim)
     if not seq or seq < 0 then return end 
 
@@ -6038,36 +7372,35 @@ end
 function ENT:Handle_PlySpotAnim(ent)
         if self.SpotFr_PlyAnim then 
         if VJ_CVAR_IGNOREPLAYERS then return end
+        local friendlyConVar = GetConVar(tostring(self.FriendlyConvar)):GetInt()
+        if not friendlyConVar or friendlyConVar ~= 1 then return end
+
         if self.IsFollowing or self.FollowingPlayer then return end 
         if self.VJ_IsBeingControlled then return end 
 
-        local friendlyConVar = GetConVar(tostring(self.FriendlyConvar)):GetInt()
-        if not friendlyConVar or friendlyConVar ~= 1 then return end
         if self:GetNPCState() ~= NPC_STATE_IDLE then return end 
 
         local cT = CurTime()
         if cT < (self.SpotFr_PlyAnimNextT or 0) then return end
 
         local ene = self:GetEnemy()
-        local busy = self:IsBusy() or self:IsVJAnimationLockState() 
+        local busy = self:IsBusy() or self:IsVJAnimationLockState() or self.Flinching
         local disp = self:Disposition(ent)
-
-        local tbl = self.SpotFr_PlyAnim_SeqTbl
-        if not istable(tbl) or #tbl == 0 then return end
 
         if ent:IsPlayer() and disp == D_LI and self:Visible(ent) then 
             if self:GetWeaponState() == VJ.WEP_STATE_RELOADING or self.WeaponAttackState == VJ.WEP_ATTACK_STATE_FIRE_STAND or self.Medic_Status or IsValid(ene) or busy or not self:IsOnGround() then
                 return 
             end
             
-            local animChance = tonumber(self.SpotFr_PlyAnim_Chance) or 10 
-            local seqSpotAnim = self.SpotFr_PlyAnim_SeqTbl[mRng(1, #self.SpotFr_PlyAnim_SeqTbl)]
             local playedAnim = false
             local eneIdleCheck = not IsValid(ene) and (not ent:IsNPC() or not IsValid(ent:GetEnemy()))
             local rngDel = mRand(0.15, 0.65)
 
-            if self:GetNPCState() == NPC_STATE_COMBAT then return end 
-            if mRng(1, animChance) == 1  then
+            local state = self:GetNPCState()
+            if state == NPC_STATE_COMBAT or state == NPC_STATE_ALERT then return end 
+
+            local animChance = tonumber(self.SpotFr_PlyAnim_Chance) or 10 
+            if mRng(1, animChance) == 1 then
                 self:RemoveAllGestures()
                 timer.Simple(rngDel, function()
                     if IsValid(self) then
@@ -6075,9 +7408,11 @@ function ENT:Handle_PlySpotAnim(ent)
 
                         local seq = self:GetSequence()
                         local activity = self:GetSequenceActivity(seq)
-                        if self.Idle_CoverActs[activity] then return end
-
+                        if self.Idle_CoverActs[activity] then return end -- Stop annoying bug where if idly crouched, we stand up to greet player and snap back to crouching.
+ 
+                        local seqSpotAnim = self:GetRandomValidValue(self.SpotFr_PlyAnim_SeqTbl)
                         local aT = self:SequenceDuration(self:LookupSequence(seqSpotAnim)) or 1 
+
                         if seqSpotAnim then
                             self:StopMoving()
                             self:SetTarget(ent)
@@ -6129,8 +7464,9 @@ end
 
 function ENT:React_ToPlyFollow(state, entity)
     if not self.FollowPly_Reaction then return end
-    if self:Health() <= 0 then return end
+    if self:Health() <= 0 or not self:Alive() then return end
     if self.VJ_IsBeingControlled then return end 
+    if not (state == "Start" or state == "Stop") then return end    
     local busy = self.Flinching or self:IsBusy() or self:IsVJAnimationLockState() 
     local ene = self:GetEnemy()
     
@@ -6138,40 +7474,31 @@ function ENT:React_ToPlyFollow(state, entity)
         return  
     end
 
-    local tbl = self.FollowPly_ReactTbl
-    if not istable(tbl) or #tbl == 0 then return end
-
     if not IsValid(self) or not IsValid(entity) or not self:Visible(entity) or 
        (entity:IsPlayer() and self:Disposition(entity) ~= D_LI) then
         return 
     end
 
-    local reactAnim = self.FollowPly_ReactTbl[mRng(1, #self.FollowPly_ReactTbl)]
-    local delay = mRand(0.65, 3)
+    local reactAnim = self:GetRandomValidValue(self.FollowPly_ReactTbl)
+    if not reactAnim then return end 
+
     local curT = CurTime()
     local chance = self.FollowPly_ReactChance or 2 
-
     if mRng(1, chance) == 1 and curT > (self.FollowPly_ReactNextT or 0) then
-        if state == "Start" or state == "Stop" then
-            if reactAnim then     
-                self:RemoveAllGestures()
-                timer.Simple(delay, function()
-                    if IsValid(self) then
-                        if busy then return end 
-                        self:PlayAnim("vjges_" .. reactAnim, false)
-                        if self.RANDOMS_DEBUG then 
-                            print("Playing " .. state .. " response anim!")
-                        end 
-                        self.FollowPly_ReactNextT = CurTime() + mRand(1, 5)
-                    end
-                end)
+        self:RemoveAllGestures()
+        local delay = mRand(0.65, 3)
+        timer.Simple(delay, function()
+            if not IsValid(self) or busy then return false end 
+            self:PlayAnim("vjges_" .. reactAnim, false)
+            if self.RANDOMS_DEBUG then 
+                print("Playing " .. state .. " response anim!")
             end 
-        end
+            self.FollowPly_ReactNextT = CurTime() + mRand(1, 5)
+        end) 
     end 
 end 
 ---------------------------------------------------------------------------------------------------------------------------------------------
 ENT.Fidget_AnimTbl = {"fidget_scratch_face","fidget_wipe_hand","fidget_wipe_face","fidget_stretch_neck","fidget_stretch_back","fidget_roll_shoulders","hg_turnr","hg_turnl","hg_turn_r","hg_turn_l"}
-
 function ENT:Idle_FidgetAnim()
     if self.PlayFidgetAnims then
         if self.VJ_IsBeingControlled or IsValid(self:GetEnemy()) then return end
@@ -6179,7 +7506,7 @@ function ENT:Idle_FidgetAnim()
         local npcState = self:GetNPCState()
         if npcState ~= NPC_STATE_IDLE then return end
 
-        if self:IsVJAnimationLockState() or self:IsBusy() or not self:IsOnGround() or self.CurrentSchedule or self.PlayingFidgetAnim then
+        if self:IsVJAnimationLockState() or self:IsBusy() or not self:IsOnGround() or self.CurrentSchedule or self.PlayingFidgetAnim or self.Flinching then
             return
         end
 
@@ -6193,17 +7520,6 @@ function ENT:Idle_FidgetAnim()
             end
 
             self:RemoveAllGestures()
-
-            local animSelected = nil
-            if self.Fidget_AnimTbl and self.Fidget_AnimTbl ~= false then
-                if istable(self.Fidget_AnimTbl) then
-                    animSelected = table.Random(self.Fidget_AnimTbl)
-                elseif isstring(self.Fidget_AnimTbl) and self.Fidget_AnimTbl ~= "" then
-                    animSelected = self.Fidget_AnimTbl
-                end
-            end
-
-            if not animSelected then return end 
             
             self.PlayingFidgetAnim = true
             timer.Simple(mRand(0.25, 1), function()
@@ -6218,24 +7534,27 @@ function ENT:Idle_FidgetAnim()
                     return
                 end
 
-                if animSelected then 
-                    local seq = self:LookupSequence(animSelected)
-                    if seq and seq > 0 then 
-                        self:PlayAnim("vjges_" .. animSelected, false)
-                        local fidgetTime = self:SequenceDuration(seq)
-                        local c = CurTime()
-                        self.FidgetAnimNextT = c + mRand(5, 35) + fidgetTime
-                        self.Dialogue_AnimNextT = c + mRand(5, 10)
-                        timer.Simple(fidgetTime + 0.1, function()
-                            if not IsValid(self) then return end
-                            self.PlayingFidgetAnim = false
-                            if IsValid(self:GetEnemy()) then
-                                self:RemoveAllGestures()
-                            end
-                        end)
-                    else
-                        self.PlayingFidgetAnim = false 
-                    end
+                local animSelected = self:GetRandomValidValue(self.Fidget_AnimTbl)
+                if not animSelected then return end 
+
+                local seq = self:LookupSequence(animSelected)
+                local fidgetTime = self:SequenceDuration(seq)
+
+                if seq and seq > 0 then 
+                    self:PlayAnim("vjges_" .. animSelected, false)
+                    local c = CurTime()
+                    self.FidgetAnimNextT = c + mRand(5, 35) + fidgetTime
+                    self.Dialogue_AnimNextT = c + mRand(5, 10)
+
+                    timer.Simple(fidgetTime + 0.1, function()
+                        if not IsValid(self) then return end
+                        self.PlayingFidgetAnim = false
+                        if IsValid(self:GetEnemy()) or (npcState == NPC_STATE_ALERT or npcState == NPC_STATE_COMBAT) then
+                            self:RemoveAllGestures()
+                        end
+                    end)
+                else
+                    self.PlayingFidgetAnim = false 
                 end
             end)
         end
@@ -6247,37 +7566,34 @@ function ENT:OnIdleDialogue(ent, status, statusData)
 end 
 
 function ENT:Idle_TalkAnims(npc, state)
+    if not self.Dialogue_Anim then return end 
+    if not (state == "Speak" or state == "Answer") then return end 
     if self.VJ_IsBeingControlled then return end 
     local nSt = self:GetNPCState()
     if nSt ~= NPC_STATE_IDLE then return end 
     
-    if self:IsVJAnimationLockState() or self:IsBusy() or not IsValid(self) or not IsValid(npc) then 
+    if self:IsVJAnimationLockState() or self:IsBusy("Activities") or not IsValid(self) or not IsValid(npc) then 
         return 
     end
 
+    local dialogueAnim = self:GetRandomValidValue(self.Dialogue_AnimTbl)
+    if not dialogueAnim then return end 
+
     local curT = CurTime()
     local chance = tonumber(self.Dialogue_Anim_Chance) or 2 
-    local delay = mRand(0.15, 1.25)
-    local dialogueAnim = nil
-    if self.Dialogue_AnimTbl and self.Dialogue_AnimTbl ~= false then
-        if istable(self.Dialogue_AnimTbl) then
-            dialogueAnim = table.Random(self.Dialogue_AnimTbl)
-        elseif isstring(self.Dialogue_AnimTbl) and self.Dialogue_AnimTbl ~= "" then
-            dialogueAnim = self.Dialogue_AnimTbl
-        end
-    end
-    if not dialogueAnim then return end 
-    if (state == "Speak" or state == "Answer") and mRng(1, chance) == 1 and self.Dialogue_Anim and curT > (self.Dialogue_AnimNextT or 0) then 
+    if mRng(1, chance) == 1 and curT > (self.Dialogue_AnimNextT or 0) then 
         if dialogueAnim then 
+            local delay = mRand(0.15, 1.25)
             self:RemoveAllGestures()
             timer.Simple(delay, function()
                 if IsValid(self) then 
                     self:PlayAnim("vjges_" .. dialogueAnim)
+                    if self.RANDOMS_DEBUG then print("[Idle Dialogue]: We are playing the gesture animation - " .. tostring(dialogueAnim)) end
+                    local dT = mRand(5, 10)
+                    self.FidgetAnimNextT = curT + dT + 2
+                    self.Dialogue_AnimNextT = curT + dT
                 end
             end)
-            local dT = mRand(5, 10)
-            self.FidgetAnimNextT = curT + dT + 2
-            self.Dialogue_AnimNextT = curT + dT
         end 
     end 
 end 
@@ -6287,23 +7603,28 @@ function ENT:OnInvestigate(ent)
 end
 
 function ENT:GestureAnimOnInvest()
-    if not IsValid(self) or IsValid(self:GetEnemy()) or self.VJ_IsBeingControlled or self:GetNPCState() ~= NPC_STATE_IDLE then 
+    if not self.Investigate_HasAnimReact then return end 
+    if self.VJ_IsBeingControlled or self:GetNPCState() ~= NPC_STATE_IDLE or not self:IsOnGround() then 
         return  
     end
 
-    local curT = CurTime()
+    local busy = self:IsBusy() or self:IsVJAnimationLockState() or self.Flinching
+    if busy then return end 
+
     local ene = self:GetEnemy()
+    if IsValid(ene) then return end 
+
+    local curT = CurTime()
     local chance = self.Investigate_AnimReactChance or 3
-    local busy = self:IsBusy() or self:IsVJAnimationLockState() 
-    if curT > self.Investigate_NextAnimT and mRng(1, chance) == 1 and not busy and self.Investigate_HasAnimReact and not IsValid(ene) then
+
+    if curT > self.Investigate_NextAnimT and mRng(1, chance) == 1 then
         self:RemoveAllGestures()
         timer.Simple(mRand(0.2,1), function()
             if IsValid(self) then
-                local investAnim = VJ.PICK(self.Investigare_AnimReactTbl)
-                if investAnim then
-                    self:PlayAnim("vjges_" .. investAnim, false)
-                    print("Investigate Anim")
-                end
+                local investAnim = self:GetRandomValidValue(self.Investigare_AnimReactTbl)
+                if not investAnim then return end 
+                self:PlayAnim("vjges_" .. investAnim, false)
+                print("Investigate Anim")
                 self.Investigate_NextAnimT = curT + mRand(5, 10)
             end
         end)
@@ -6317,7 +7638,7 @@ function ENT:Idle_FindLoot()
     if not cvar or cvar:GetInt() ~= 1 then return end
     if not IsValid(self) or self.VJ_IsBeingControlled then return end
     if self:GetNPCState() ~= NPC_STATE_IDLE then return end
-    if self.IsGuard or self.MovementType == VJ_MOVETYPE_STATIONARY then return end
+    if not self:IsAbleToMoveNow() then return end
     if not IsValid(self:GetActiveWeapon()) then return end
     
     local curTime = CurTime()
@@ -6368,13 +7689,17 @@ function ENT:Idle_FindLoot()
         local dist = self:GetPos():Distance(lootPos)
 
         if dist <= mRng(20, 50) then
-            local pickUpAnim = VJ.PICK(self.PlyPickUpAnim)
-            if pickUpAnim then
-                local animDur = self:SequenceDuration(pickUpAnim)
-                self:RemoveAllGestures()
-                self:PlayAnim("vjseq_" .. pickUpAnim, true, animDur, false)
-                self:SetState(VJ_STATE_ONLY_ANIMATION_NOATTACK, animDur)
-            end
+            local pickUpAnim =  self:GetRandomValidValue(self.PlyPickUpAnim)
+            if not pickUpAnim then return end 
+
+            local seq = self:LookupSequence(pickUpAnim)
+            if seq < 0 then return end 
+
+            local animDur = self:SequenceDuration(seq) or 1 
+            self:RemoveAllGestures()
+
+            self:PlayAnim("vjseq_" .. pickUpAnim, true, animDur, false)
+            self:SetState(VJ_STATE_ONLY_ANIMATION_CONSTANT, animDur)
 
             VJ.EmitSound(self, "items/itempickup.wav", 70, mRng(85, 105))
             table.insert(self.LootInventory, {class = self.LootTarget:GetClass(), pos = self.LootTarget:GetPos(), time = curTime})
@@ -6386,7 +7711,7 @@ function ENT:Idle_FindLoot()
         else
             if not self:IsMoving() then
                 self:SetLastPosition(lootPos)
-                self:SCHEDULE_GOTO_POSITION(VJ.PICK({"TASK_RUN_PATH", "TASK_WALK_PATH"}))
+                self:Handle_ScheduledForceMove("Both", "LastPos", "Both", "Both", false)
             end
             
             self.LootStuckTimer = self.LootStuckTimer or curTime + 15
@@ -6439,15 +7764,16 @@ ENT.Find_MedEnts_Dist = 3500
 ENT.Find_MedEntsNextT = 0
 
 function ENT:HumanFindMedicalEnt()
-    if not IsValid(self) or not self.Find_MedEnts or self.VJ_IsBeingControlled then return false end
+    if not self.Find_MedEnts then return end 
+    if not IsValid(self) or self.VJ_IsBeingControlled then return false end
 
     local curTime = CurTime()
     if curTime < (self.Find_MedEntsNextT or 0) or curTime < (self.TakingCoverT or 0) then return false end
-    if self.IsGuard or self:IsOnFire() or self.MovementType == VJ_MOVETYPE_STATIONARY then return false end
+    if not self:IsAbleToMoveNow() then return false end 
+    if self:IsOnFire() then return false end
     if self.CurrentlyHealSelf or self.FollowingPlayer or not self:IsOnGround() then return false end
-    if self:IsVJAnimationLockState() then return end 
-    local busy = self.IsFollowing or self.Medic_Status or self.Flinching or self:IsBusy()
 
+    local busy = self:IsVJAnimationLockState() or self.IsFollowing or self.Medic_Status or self.Flinching or self:IsBusy()
     if busy then return false end
 
     local enemy = self:GetEnemy()
@@ -6480,9 +7806,7 @@ function ENT:HumanFindMedicalEnt()
             self:ClearSchedule()
             self:SetLastPosition(select(2, VJ.GetNearestPositions(self, v)))
             self:SetTarget(v)
-            self:SCHEDULE_GOTO_POSITION(VJ.PICK({"TASK_RUN_PATH", "TASK_WALK_PATH"}), function(x)
-                x.CanShootWhenMoving = true
-            end)
+            self:Handle_ScheduledForceMove("Both", "LastPos", "Both", "Both", false)
             break
         end
     end
@@ -6491,27 +7815,30 @@ function ENT:HumanFindMedicalEnt()
 
     local dist = VJ.GetNearestDistance(self, medEnt, true)
     if dist > mRand(20, 60) then return false end
-    if self:IsBusy("Activities") then return false end
+    if self:IsBusy("Activities") or busy then return false end
     self:StopMoving()
     self:ClearSchedule()
+    self:RemoveAllGestures()
 
-    if istable(self.PlyPickUpAnim) then
-        local pickUpAnim = table.Random(self.PlyPickUpAnim)
-        local seq = self:LookupSequence(pickUpAnim)
-        local animT = self:SequenceDuration(seq)
+    local anim = self:GetRandomValidValue(self.PlyPickUpAnim)
+    if not anim then return end 
 
-        if animT and animT > 0 then
-            self:RemoveAllGestures()
-            self:PlayAnim("vjseq_" .. pickUpAnim, true, animT, false)
-            self:SetState(VJ_STATE_ONLY_ANIMATION_NOATTACK, animT)
-        end
-    end
+    local seq = self:LookupSequence(anim)
+    if not seq or seq < 0 then return end 
+
+    local animT = self:SequenceDuration(seq) or 1 
+    self:PlayAnim("vjseq_" .. anim, true, animT, false)
+    self:SetState(VJ_STATE_ONLY_ANIMATION_NOATTACK, animT)
+
     VJ.EmitSound(self, "items/smallmedkit1.wav", rngSnd, rngSnd)
     VJ.EmitSound(self, "items/itempickup.wav", rngSnd, rngSnd)
+
     self:SetHealth(math_Clamp(myHealth + mRng(15, 50), 0, maxHealth))
+    
     if IsValid(medEnt) then
         medEnt:Remove()
     end
+
     self.MedicalPickupTarget = nil
     self.Find_MedEntsNextT = curTime + mRand(3, 5)
     return true
@@ -6526,7 +7853,7 @@ ENT.PickupWeapon_Timeout = 4
 function ENT:CanPickUpWeapon()
     if not self.Find_WepEnt then return end 
     if self.VJ_IsBeingControlled then return end
-    if self.IsGuard or self.MovementType == VJ_MOVETYPE_STATIONARY then return end 
+    if not self:IsAbleToMoveNow() then return end 
     if not self:IsOnGround() then return end 
 
     local cT = CurTime()
@@ -6593,14 +7920,8 @@ function ENT:CanPickUpWeapon()
     if VJ.GetNearestDistance(self, targetWep, true) > mRand(10,50) then return end
     if self:IsBusy("Activities") then return end
 
-    local anim;
-    if self.PlyPickUpAnim and self.PlyPickUpAnim ~= "" then
-        if istable(self.PlyPickUpAnim) then 
-            anim = table.Random(self.PlyPickUpAnim)
-        elseif isstring(self.PlyPickUpAnim) then
-            anim = self.PlyPickUpAnim
-        end
-    end
+    local anim = self:GetRandomValidValue(self.PlyPickUpAnim)
+    if not anim then return end 
 
     local seq = self:LookupSequence(anim)
     if not seq or seq < 0 then return end 
@@ -6608,8 +7929,6 @@ function ENT:CanPickUpWeapon()
     local animT = self:SequenceDuration(seq) or 1 
 
     local rngSnd = mRng(85,105)
-    local snd = table.Random(self.DrawNewWeaponSound)
-
     local newWepClass = targetWep:GetClass()
 
     self.PendingPickupWeapon = targetWep
@@ -6628,11 +7947,16 @@ function ENT:CanPickUpWeapon()
     self.PickupWeapon_StartT = nil
     self.Find_WepEntNextT = cT + mRand(1,5)
 
-    if snd then VJ.EmitSound(self, snd, 70, rngSnd) end
+    local snd = self:GetRandomValidValue(self.DrawNewWeaponSound)
+    if snd then 
+        VJ.EmitSound(self, snd, 70, rngSnd) 
+    end
     return true
 end
 ---------------------------------------------------------------------------------------------------------------------------------------------
--- Add tolerance or smthing for 45 degeess.
+-- Add acknowledgement for duo doors, where kicking one open will apply to both. 
+-- Add kicking doors OPEN instead of just breaking them? 
+-- Ignore doors already opened? 
 
 ENT.PostBreakDoor_Reaction = true
 ENT.PostBreakDoor_Anim = {"gesture_signal_takecover","gesture_signal_forward","gesture_signal_group","gesture_signal_halt"}
@@ -6640,6 +7964,10 @@ ENT.PostBreakDoor_Chance = 2
 ENT.PostBreakDoor_NextT = 0 
 ENT.AlliesReact_Breach = true 
 ENT.AlliesReact_BreachNextT = 0
+ENT.Break_DoorDistance = 70
+
+ENT.DoorBreak_HitSoundTbl = {"general_sds/doorbreak/doorbust1.wav", "general_sds/doorbreak/doorbust2.wav","ambient/materials/door_hit1.wav"}
+ENT.DoorBreak_WoodSoundTbl = {"physics/wood/wood_crate_break1.wav","physics/wood/wood_crate_break2.wav","physics/wood/wood_crate_break3.wav","physics/wood/wood_crate_break4.wav","physics/wood/wood_crate_break5.wav", "physics/wood/wood_furniture_break1.wav","physics/wood/wood_furniture_break2.wav"}
 function ENT:KickDoorDown()
     if not self.AllowedToKickDownDoors then return end 
 
@@ -6668,17 +7996,49 @@ function ENT:KickDoorDown()
     
     if curT > self.NextBreakDownDoorT then
         if not IsValid(self.BreakDoor) then
-            for _, v in pairs(ents.FindInSphere(self:GetPos(), 100)) do
-                if v:GetClass() == "func_door_rotating" and v:Visible(self) then
-                    if v:GetInternalVariable("m_bLocked") or (eneVisAlert) then
-                        self.BreakDoor = v
-                    end
-                elseif v:GetClass() == "prop_door_rotating" and v:Visible(self) then
-                    local anim = string.lower(v:GetSequenceName(v:GetSequence()))
-                    if (string.find(anim, "idle") or string.find(anim, "locked")) and 
-                       (v:GetInternalVariable("m_bLocked") or (eneVisAlert)) then
-                        self.BreakDoor = v
-                        break
+
+            local maxDistance = self.Break_DoorDistance or 100
+
+            local startPos = self:WorldSpaceCenter()
+            local endPos = startPos + self:GetForward() * maxDistance
+
+            local trace = util.TraceHull({
+                start = startPos,
+                endpos = endPos,
+                mins = Vector(-8, -8, -8),
+                maxs = Vector(8, 8, 8),
+                filter = self
+            })
+
+            local hitEnt = trace.Entity
+            local ignoreLockedConv = GetConVar("vj_stalker_kickdoor_ignlocked") 
+            if IsValid(hitEnt) and self:Visible(hitEnt) then
+                local cls = hitEnt:GetClass()
+                if cls == "prop_door_rotating" or cls == "func_door_rotating" then
+                    local dir = (hitEnt:GetPos() - self:GetPos()):GetNormalized()
+                    local dot = self:GetForward():Dot(dir)
+
+                    if dot >= 0.65 then
+                        local isLocked = hitEnt:GetInternalVariable("m_bLocked")
+                        local allowIdleLocked = ignoreLockedConv and ignoreLockedConv:GetInt() == 1
+                        if cls == "func_door_rotating" then
+                            if eneVisAlert then
+                                self.BreakDoor = hitEnt
+                            elseif isLocked and allowIdleLocked then
+                                self.BreakDoor = hitEnt
+                            end
+                        elseif cls == "prop_door_rotating" then
+                            local anim = string.lower(hitEnt:GetSequenceName(hitEnt:GetSequence()))
+                            local validAnim = string.find(anim, "idle") or string.find(anim, "locked")
+
+                            if validAnim then
+                                if eneVisAlert then
+                                    self.BreakDoor = hitEnt
+                                elseif isLocked and allowIdleLocked then
+                                    self.BreakDoor = hitEnt
+                                end
+                            end
+                        end
                     end
                 end
             end
@@ -6716,7 +8076,7 @@ function ENT:KickDoorDown()
                     end
                 
                     local enemy = self:GetEnemy()
-                    if IsValid(enemy) and self:Visible(enemy) and self:GetPos():DistToSqr(enemy:GetPos()) <= (800 * 800) then
+                    if IsValid(enemy) and self:Visible(enemy) and self:GetPos():DistToSqr(enemy:GetPos()) <= (150 * 150) then
                         door.IsBeingKicked = nil
                         self.BreakDoor = NULL
                         return
@@ -6731,43 +8091,35 @@ function ENT:KickDoorDown()
                         self.BreakDoor = NULL
                         return
                     end
+                    
+                    local kickAnim = self:GetRandomValidValue(self.KickDownDoorAnims)
+                    if not kickAnim then return end 
+
+                    local seq = self:LookupSequence(kickAnim)
+                    local kickT = self:SequenceDuration(seq) or 1 
+
+                    local teleSnd = self:GetRandomValidValue(self.SoundTbl_BeforeMeleeAttack)
+                    self:PlayAnim("vjseq_" .. kickAnim, true, kickT, false)
+                    self:SetState(VJ_STATE_ONLY_ANIMATION, kickT)
+
+                    if teleSnd and mRng(1, 2) == 1 then 
+                        VJ.EmitSound(self, teleSnd, rngVol, rngSnd)
+                    end 
 
                     local rngSnd = mRng(85, 105)
-                    local rngVol = mRng(60, 75)
-                    VJ.EmitSound(self, table.Random({"npc/metropolice/gear" .. mRng(1, 6) .. ".wav"}), rngVol, rngSnd)
+                    local rngVol = mRng(75, 85)
 
-                    local kickAnim = table.Random(self.KickDownDoorAnims)
-                    local seq = self:LookupSequence(kickAnim)
-
-                    if seq and seq > 0 then
-                        local kickT = self:SequenceDuration(seq) or 1 
-                        local teleSnd = table.Random({self.SoundTbl_Suppressing, self.SoundTbl_BeforeMeleeAttack})
-                        if kickAnim then 
-                            self:PlayAnim("vjseq_" .. kickAnim, true, kickT, false)
-                            self:SetState(VJ_STATE_ONLY_ANIMATION, kickT)
-                            if teleSnd and mRng(1, 2) == 1 then 
-                                VJ.EmitSound(self, teleSnd, rngVol, rngSnd)
-                            end 
-                        end 
-                    end 
+                    local metroGear = self:GetRandomValidValue(self.FootstepSet_MetroPolice)
                     
-             
-                    local doorBreak = table.Random({"general_sds/doorbreak/doorbust1", "general_sds/doorbreak/doorbust2","ambient/materials/door_hit1.wav"})
-                    local woodBreak = table.Random({"physics/wood/wood_crate_break" .. mRng(1, 5) .. ".wav"})
-                    local furnBreak = table.Random({"physics/wood/wood_furniture_break" .. mRng(1, 2) .. ".wav"})
-                    local door = self.BreakDoor
-                
+                    if metroGear then
+                        VJ.EmitSound(self, metroGear, rngVol, rngSnd)
+                    end 
+
+                    local door = self.BreakDoor                
                     if IsValid(door) and door:GetClass() == "prop_door_rotating" then
 
                         door.HasBeenDestroyed = true
 
-                        VJ.EmitSound(self, doorBreak .. ".wav", rngVol, rngSnd)
-                        VJ.EmitSound(door, woodBreak, rngVol, rngSnd)
-
-                        if mRng(1, 2) == 1 then 
-                            VJ.EmitSound(door, furnBreak, rngVol, rngSnd)
-                        end
-                        
                         local dAng = door:GetAngles()
                         local dPos = door:GetPos() 
 
@@ -6786,128 +8138,35 @@ function ENT:KickDoorDown()
                         end 
                         
                         local brokenDoorProp = ents.Create("prop_physics")
+                        if not IsValid(brokenDoorProp) then return end 
 						brokenDoorProp:PhysicsInit(SOLID_VPHYSICS)
 						brokenDoorProp:SetMoveType(MOVETYPE_VPHYSICS)
-						brokenDoorProp:SetCollisionGroup(COLLISION_GROUP_WEAPON)
-
+                        brokenDoorProp:SetCollisionGroup(COLLISION_GROUP_DEBRIS)
+                        brokenDoorProp:SetSolid(SOLID_NONE)
                         brokenDoorProp:SetModel(door:GetModel())
-                        brokenDoorProp:SetPos(dPos + VectorRand(-15, 15) * Vector(1, 1, 0) + Vector(0, 0, mRand(5, 10)))
+                        brokenDoorProp:SetPos(door:GetPos())
                         brokenDoorProp:SetAngles(door:GetAngles())
                         brokenDoorProp:SetModelScale(0.95)
                         brokenDoorProp:Spawn()
                         brokenDoorProp:Activate()
                         brokenDoorProp:SetSkin(door:GetSkin())
-                
-                        local phys = brokenDoorProp:GetPhysicsObject()
-                        if IsValid(phys) then
-                            local dir = (door:GetPos() - self:GetPos()):GetNormalized()
-                            local force = dir * 15000 + Vector(0, 0, 250)
-                            timer.Simple(0.05, function()
-                                if IsValid(phys) then
-                                    phys:ApplyForceCenter(force)
-                                end
-                            end)
-                        end
+                        brokenDoorProp:GetPhysicsObject():ApplyForceCenter(self:GetForward() * mRng(10000, 20000))
+
+                        local doorHit = self:GetRandomValidValue(self.DoorBreak_HitSoundTbl)
+                        local woodBreak = self:GetRandomValidValue(self.DoorBreak_WoodSoundTbl)
+                        if doorHit then 
+                            VJ.EmitSound(door, doorHit, rngVol, rngSnd)
+                        end 
+                        if woodBreak and mRng(1, 2) == 1 then 
+                            VJ.EmitSound(door, woodBreak, rngVol, rngSnd)
+                        end 
 
                         self.NextBreakDownDoorT = curT + mRand(4.5, 10)
                         door:Remove()
+                        SafeRemoveEntityDelayed(brokenDoorProp, mRand(10, 25))
 
-
-                        if self.AlliesReact_Breach then
-                            print("[DoorBreach] ally reaction block entered")
-
-                            for _, ally in ipairs(ents.FindInSphere(self:GetPos(), 1000)) do
-                                if not ally.IsVJBaseSNPC then continue end 
-                                if not IsValid(ally) then continue end
-                                if ally == self then continue end
-                                if not ally:IsNPC() then continue end
-                                if CurTime() < self.AlliesReact_BreachNextT then continue end 
-
-                                local disp = ally:Disposition(self)
-                                if disp ~= D_LI and disp ~= D_NU then
-                                    continue
-                                end
-
-                                if mRng(1, 2) ~= 1 then
-                                    continue
-                                end
-
-                                if ally.IsGuard or ally.MovementType == VJ_MOVETYPE_STATIONARY then
-                                    continue
-                                end
-
-                                if ally:IsBusy() or ally:IsMoving() or not ally:Alive() or ally:IsVJAnimationLockState() then
-                                    continue
-                                end
-
-                                local allyEnemy = ally:GetEnemy()
-                                if IsValid(allyEnemy) and mRng(1, 2) == 1 then
-                                    continue
-                                end
-
-                                local sched = ally.GetCurrentSchedule and ally:GetCurrentSchedule() or nil 
-                                if sched == SCHED_TAKE_COVER_FROM_ENEMY or sched == SCHED_HIDE_AND_RELOAD or sched == SCHED_TAKE_COVER_FROM_ORIGIN then
-                                    continue
-                                end
-
-                                ally:ClearSchedule()
-                                ally:SetLastPosition(ally:GetPos() + VectorRand() * 750)
-                                ally:SetSchedule(SCHED_TAKE_COVER_FROM_ENEMY)
-                                ally.AlliesReact_BreachNextT = CurTime() + mRand(1, 10)
-                            end
-                        end
-
-                        if self.PostBreakDoor_Reaction then 
-                            if mRng(1, self.PostBreakDoor_Chance or 2) == 1 then 
-                                timer.Simple(math.Rand(1.5, 2), function()
-                                    if not IsValid(self) then return end
-                                    if self:IsBusy() or self:IsMoving() or not self:IsOnGround() then return end
-                                    if CurTime() <= self.PostBreakDoor_NextT then return end
-
-                                    local enemy = self:GetEnemy()
-                                    if IsValid(enemy) and self:Visible(enemy) then return end
-
-                                    local allyConv = GetConVar("vj_stalker_kickdoor_req_allies")
-                                    if allyConv and allyConv:GetInt() == 1 then
-                                        if not self:Allies_Check(1500) then return end
-                                    end
-
-                                    local curAct = self:GetActivity()
-                                    if curAct == ACT_IDLE_AIM_AGITATED or curAct == ACT_RANGE_ATTACK1 or curAct == ACT_MELEE_ATTACK1 then
-                                        return
-                                    end
-
-                                    self:ClearSchedule()
-
-                                    local anim = self.PostBreakDoor_Anim
-                                    if not anim then return end
-
-                                    local flinchAnim
-                                    if istable(anim) then
-                                        flinchAnim = table.Random(anim)
-                                    elseif isstring(anim) then
-                                        flinchAnim = anim
-                                    end
-
-                                    if not flinchAnim then return end
-
-                                    local blockedGestures = {2152, 2147, 2148, 2149}
-                                    for _, act in ipairs(blockedGestures) do
-                                        if self:IsPlayingGesture(act) then return end
-                                    end
-
-                                    local seq = self:LookupSequence(flinchAnim)
-                                    if not seq or seq <= 0 then return end
-
-                                    local layer = self:AddGestureSequence(seq, true)
-                                    if layer then
-                                        self:SetLayerPlaybackRate(layer, math.Rand(0.65, 1))
-                                    end
-
-                                    self.PostBreakDoor_NextT = CurTime() + math.Rand(1, 10)
-                                end)
-                            end 
-                        end 
+                        self:Allies_ReactToDoorBreaching()
+                        self:DoorBreacher_PostReaction()
                     end
                 end)
             end
@@ -6915,6 +8174,109 @@ function ENT:KickDoorDown()
     end
     if not IsValid(self.BreakDoor) then
         self:SetState()
+    end
+end
+
+function ENT:DoorBreacher_PostReaction()
+    if self.PostBreakDoor_Reaction then
+        local chance = self.PostBreakDoor_Chance or 2  
+        if mRng(1,  chance) == 1 then
+            timer.Simple(mRand(1.5, 2), function()
+                if not IsValid(self) then return end
+
+                local busy = self:IsBusy() or self:IsVJAnimationLockState()
+                if busy or self:IsMoving() or not self:IsOnGround() then
+                    return
+                end
+
+                if CurTime() <= self.PostBreakDoor_NextT then
+                    return
+                end
+
+                local enemy = self:GetEnemy()
+                if IsValid(enemy) and self:Visible(enemy) then
+                    return
+                end
+
+                local allyConv = GetConVar("vj_stalker_kickdoor_req_allies")
+                if allyConv and allyConv:GetInt() == 1 then
+                    if not self:Allies_Check(1500) then
+                        return
+                    end
+                end
+
+                local curAct = self:GetActivity()
+                if curAct == ACT_IDLE_AIM_AGITATED or curAct == ACT_RANGE_ATTACK1 or curAct == ACT_MELEE_ATTACK1 then
+                    return
+                end
+
+                local flinchAnim = self:GetRandomValidValue(self.PostBreakDoor_Anim)
+                if not flinchAnim then return end
+
+                local blockedGestures = { 2152, 2147, 2148, 2149}
+
+                for _, act in ipairs(blockedGestures) do
+                    if self:IsPlayingGesture(act) then
+                        return
+                    end
+                end
+
+                local seq = self:LookupSequence(flinchAnim)
+                if not seq or seq <= 0 then
+                    return
+                end
+
+                local layer = self:AddGestureSequence(seq, true)
+                if layer then
+                    self:SetLayerPlaybackRate(layer, mRand(0.65, 1))
+                end
+
+                self.PostBreakDoor_NextT = CurTime() + mRand(1, 10)
+            end)
+        end
+    end
+end
+
+function ENT:Allies_ReactToDoorBreaching()
+    if self.AlliesReact_Breach then
+        if self.RANDOMS_DEBUG then print("[DoorBreach] ally reaction block entered") end
+
+        local curT = CurTime()
+        local selfPos = self:GetPos()
+
+        for _, ally in ipairs(ents.FindInSphere(selfPos, 1000)) do
+            if selfPos:DistToSqr(ally:GetPos()) > 1000000 then continue end
+            if not ally.IsVJBaseSNPC then continue end
+            if not IsValid(ally) then continue end
+            if ally == self then continue end
+            if not ally:IsNPC() then continue end
+            if curT < self.AlliesReact_BreachNextT then continue end
+
+            local disp = ally:Disposition(self)
+            if disp ~= D_LI and disp ~= D_NU then
+                continue
+            end
+
+            if mRng(1, 2) ~= 1 then
+                continue
+            end
+
+            if not ally:IsAbleToMoveNow() then
+                continue
+            end
+
+            if ally:IsBusy() or ally:IsMoving() or not ally:Alive() or ally:IsVJAnimationLockState() then
+                continue
+            end
+
+            local allyEnemy = ally:GetEnemy()
+            if IsValid(allyEnemy) and mRng(1, 2) == 1 then
+                continue
+            end
+
+            ally:Handle_ScheduledForceMove(true, "Origin", true, "Run", "Rng")
+            ally.AlliesReact_BreachNextT = curT + mRand(1, 10)
+        end
     end
 end
 ---------------------------------------------------------------------------------------------------------------------------------------------
@@ -6942,12 +8304,13 @@ ENT.IncapAnimSets = {
 }
 
 function ENT:SetIncapAnims()
+    if not self.CanBecomeIncapicitated then return end 
     if self.IncapAnimsInitialized then return end
 
     timer.Simple(0.1, function()
         if not IsValid(self) or self.IncapAnimsInitialized then return end
 
-        local animSet = self.IncapAnimSets[mRng(1, #self.IncapAnimSets)]
+        local animSet = self.IncapAnimSets[mRng(1, #self.IncapAnimSets)] //self:GetRandomValidValue(self.IncapAnimSets)
         if not animSet then return end
         self.BecomeIncappedAnim       = animSet.incAnim
         self.IncapicitatedIdleAnim   = animSet.incIdle 
@@ -6970,20 +8333,20 @@ function ENT:CheckToBecomeIncapacitated()
         return  
     end 
 
-    local busy =  self:IsVJAnimationLockState()  or self:IsBusy()
+    local busy =  self:IsVJAnimationLockState() or self:IsBusy() or self.Flinching 
     if self.IncapCounter >= self.IncapAmount or self.NeverBecomeIncappedAgain then
         if self.RANDOMS_DEBUG then print("Cannot be incapacitated anymore.") end 
         return 
     end
 
-    if busy or self.Flinching or self.Medic_Status or not self:IsOnGround() or self:IsOnFire() or self.PlayingAttackAnimation or self:IsMoving() or self:GetWeaponState() == VJ.WEP_STATE_RELOADING then 
+    if busy or self.Medic_Status or not self:IsOnGround() or self:IsOnFire() or self.PlayingAttackAnimation or self:IsMoving() or self:GetWeaponState() == VJ.WEP_STATE_RELOADING then 
         return  
     end 
 
     local lowHp = mRand(0.2,0.33)
     local hp = self:Health()
 
-    if hp < (self:GetMaxHealth() * lowHp) and IsValid(self) and not busy then
+    if hp < (self:GetMaxHealth() * lowHp) and not busy then
         self:StopMoving()
         self:ClearSchedule()
         self:PlayIncapAnimIntro()
@@ -6993,8 +8356,6 @@ function ENT:CheckToBecomeIncapacitated()
 end
 
 function ENT:PlayIncapAnimIntro()
-    local busy =  self:IsVJAnimationLockState()  or self:IsBusy()
-
     if self.PlayingIncapAnim or self.NowIdleIncap then return end 
 
     if not self.IncapAnimsInitialized or not self.BecomeIncappedAnim then
@@ -7019,7 +8380,13 @@ function ENT:PlayIncapAnimIntro()
         if self.RANDOMS_DEBUG then print("Reached maximum incap limit. Cannot become incapacitated again.") end 
     end
     
-    local becomeIncapSeq = self:LookupSequence(self.BecomeIncappedAnim)
+    local busy =  self:IsVJAnimationLockState()  or self:IsBusy()
+    if busy then return end 
+
+    local anim = self:GetRandomValidValue(self.BecomeIncappedAnim)
+    if not anim then return end 
+
+    local becomeIncapSeq = self:LookupSequence(anim)
     if becomeIncapSeq == -1 then
         if self.RANDOMS_DEBUG then print("Invalid BecomeIncappedAnim sequence: " .. self.BecomeIncappedAnim) end 
         self.IsCurrentlyIncapacitated = false
@@ -7027,19 +8394,22 @@ function ENT:PlayIncapAnimIntro()
         return
     end
 
-    if busy then return end 
-    local anim = self.BecomeIncappedAnim or ""
-    local animT = VJ.AnimDuration(self, anim) or 2 
+    local animT = self:SequenceDuration(becomeIncapSeq)
     local playedAnim = self:PlayAnim("vjseq_" .. anim, true, animT, false)
 
     if playedAnim then
-        self:SetState(VJ_STATE_ONLY_ANIMATION_NOATTACK, animT + 0.01)
+        self:SetState(VJ_STATE_ONLY_ANIMATION_CONSTANT, animT + 0.01)
         self.PlayingIncapAnim = true 
         if self.RANDOMS_DEBUG then print("Playing animation for " .. animT .. " seconds.") end 
         self:RemoveAllGestures()
-        self:PlaySoundSystem("Speech", self.SoundTbl_Pain)
 
-        timer.Simple(VJ.AnimDuration(self, self.BecomeIncappedAnim), function()
+        local pain = self:GetRandomValidValue(self.SoundTbl_Pain)
+        if pain then
+            self:PlaySoundSystem("Speech", pain)
+            self.NextCryForAidSoundT = CurTime() + mRand(2, 6)
+        end 
+
+        timer.Simple(animT, function()
             if IsValid(self) then
                 self.PlayingIncapAnim = false 
                 if self.RANDOMS_DEBUG then print("Animation finished. Now entering incapacitated idle state.") end 
@@ -7058,24 +8428,30 @@ end
 
 function ENT:LoopIncapIdleAnim(incapIdleDur)
     if not IsValid(self) or not self.NowIdleIncap or self.PlayingIncapAnim or not self.IsCurrentlyIncapacitated then return end
-    local anim = self.IncapicitatedIdleAnim
+    
+    local anim = self:GetRandomValidValue(self.IncapicitatedIdleAnim)
+    if not anim then return end
 
-    if anim then 
-        self:SetIncapVars()
-        self:PlayAnim("vjseq_" .. self.IncapicitatedIdleAnim, true,  VJ.AnimDuration(self, self.IncapicitatedIdleAnim), false)
-        self:SetState(VJ_STATE_ONLY_ANIMATION, incapIdleDur)
-        timer.Simple(incapIdleDur, function()
-            if IsValid(self) then
-                self:LoopIncapIdleAnim(incapIdleDur) 
-            end
-        end)
-    end 
+    local seq = self:LookupSequence(anim)
+    if not seq or seq < 0 then return end 
+
+    local dur = self:SequenceDuration(seq) or 1 
+    self:SetIncapVars()
+    self:PlayAnim("vjseq_" .. anim, true, dur, false)
+    self:SetState(VJ_STATE_ONLY_ANIMATION_CONSTANT, dur)
+
+    timer.Simple(dur, function()
+        if IsValid(self) then
+            self:LoopIncapIdleAnim(dur) 
+        end
+    end) 
 end
 
 function ENT:CheckToRecoverFromIncap()
+    if not self.IsCurrentlyIncapacitated then return end 
     local hp = self:Health()
     local maxHp = self:GetMaxHealth()
-    if self.IsCurrentlyIncapacitated and self.NowIdleIncap and hp > (maxHp* 0.5) then
+    if self.NowIdleIncap and hp > (maxHp* 0.5) then
         self.NowIdleIncap = false
         timer.Remove("IdleLoopTimer_" .. self:EntIndex())
         self:PlayRecoverFromIncapAnim()
@@ -7085,27 +8461,34 @@ end
 function ENT:PlayRecoverFromIncapAnim()
     if not self.IsCurrentlyIncapacitated or self.PlayingRecoverAnim then return end
 
-    local recoverSeq = self:LookupSequence(self.RecoverFromIncapAnim)
+    local recoverAnim = self:GetRandomValidValue(self.RecoverFromIncapAnim)
+    if not recoverAnim then return false end 
+
+    local recoverSeq = self:LookupSequence(recoverAnim)
     if recoverSeq == -1 then
         if self.RANDOMS_DEBUG then print("Invalid RecoverFromIncapAnim sequence: " .. self.RecoverFromIncapAnim) end 
         return
     end
     
-    local recoverAnim = self.RecoverFromIncapAnim
-    local recoverDur = VJ.AnimDuration(self, recoverAnim) or 1 
+    local recoverDur = self:SequenceDuration(recoverSeq) or 1 
     local playedAnim = self:PlayAnim("vjseq_" .. recoverAnim, true, recoverDur, false)
 
     if playedAnim then
+        self.PlayingRecoverAnim = true
+        self:SetState(VJ_STATE_ONLY_ANIMATION_NOATTACK, recoverDur)
         if self.CurrentHasCryForAidSound then 
             self.CurrentHasCryForAidSound:Stop() 
         end
-        self.IsCurrentlyIncapacitated = false
-        self.PlayingRecoverAnim = true
-        self:SetState(VJ_STATE_ONLY_ANIMATION_NOATTACK, recoverDur)
-        self:RemoveAllGestures()
-        self:PlaySoundSystem("Speech", self.SoundTbl_MedicReceiveHeal)
 
-        timer.Simple(recoverDur, function()
+        self:RemoveAllGestures()
+
+        local thanks = self:GetRandomValidValue(self.SoundTbl_MedicReceiveHeal)
+        if thanks then
+            self:PlaySoundSystem("Speech", thanks)
+        end 
+
+        self.IsCurrentlyIncapacitated = false
+        timer.Simple(recoverDur - 0.1, function()
             if IsValid(self) then
                 self:SetState()
                 self:ResetIncapVars()
@@ -7213,7 +8596,7 @@ function ENT:PlaceCombatFlare()
     if not self.CanDeployFlareInCombat then return end 
 
     local cT = CurTime()
-    if not IsValid(self) or self.VJ_IsBeingControlled or  self:IsVJAnimationLockState()  then 
+    if not IsValid(self) or self.VJ_IsBeingControlled then 
         return  
     end 
     
@@ -7225,8 +8608,12 @@ function ENT:PlaceCombatFlare()
         return 
     end
 
+    if self:IsVJAnimationLockState() or self:IsBusy() or self.Flinching then 
+        return 
+    end 
+
     local enemy = self:GetEnemy()
-    if not IsValid(enemy) or not self:IsOnGround() or self:WaterLevel() > 0 or self:IsMoving() or self:IsBusy() or self:GetWeaponState() == VJ.WEP_STATE_RELOADING then
+    if not IsValid(enemy) or not self:IsOnGround() or self:WaterLevel() > 0 or self:IsMoving() or self:GetWeaponState() == VJ.WEP_STATE_RELOADING then
         self.CombatFlareDeployT = cT + mRand(1, 5)
         return 
     end 
@@ -7264,14 +8651,27 @@ function ENT:PlaceCombatFlare()
             end
         end
     end
+    //Just to prevent multiple SNPCs in a vicinity from placing flares
+    local nearbyAllies = self:Allies_Check(3500)
+    if nearbyAllies and #nearbyAllies > 0 then
+        for _, ally in ipairs(nearbyAllies) do
+            if IsValid(ally) and ally ~= self then
+                if ally.IsCurrentlyDeployingAFlare then
+                    if self.RANDOMS_DEBUG then print("Skipping flare placement - ally already deploying flare:", tostring(ally)) end
+                    self.CombatFlareDeployT = CurTime() + mRand(60, 120)
+                    return
+                end
+            end
+        end
+    end
 
-    local deployChance = self.DeployCombatFlareChance
     local distanceToEnemy = self:GetPos():Distance(enemy:GetPos())
     if (distanceToEnemy < 2500 and enemy:Visible(self)) or self:IsBusy() then 
         self.CombatFlareDeployT = cT + mRand(1, 5)
         return 
     end
 
+    local deployChance = self.DeployCombatFlareChance
     if not self.FlareDeployAttemptCheck then
         self.FlareDeployAttemptCheck = true
         if mRng(1, deployChance) ~= 1 then 
@@ -7282,21 +8682,16 @@ function ENT:PlaceCombatFlare()
 
     self.IsCurrentlyDeployingAFlare = true
 
-    local anim;
-    if self.PlaceFlareAnimation and self.PlaceFlareAnimation ~= "" then 
-        if istable(self.PlaceFlareAnimation) then 
-            anim = table.Random(self.PlaceFlareAnimation) 
-        elseif isstring(self.PlaceFlareAnimation) then 
-            anim = self.PlaceFlareAnimation 
-        end 
-    end 
+    local anim = self:GetRandomValidValue(self.PlaceFlareAnimation)
     if not anim then return end 
+    
     local seq = self:LookupSequence(anim)
     if not seq or seq < 0 then return end 
 
     local aT = self:SequenceDuration(seq) or 1 
-    local spwnDel =mRand(0.45, 0.65)
+    local spwnDel = mRand(0.45, 0.65)
     self:PlayAnim("vjseq_" .. anim, true, aT, false)
+
     timer.Simple(spwnDel, function()
         if not IsValid(self) then return end
 
@@ -7318,30 +8713,21 @@ function ENT:PlaceCombatFlare()
         flare:Fire("Launch", "1")
     end)
     
-    local move = "TASK_RUN_PATH"
-    local delT = mRand(1, 5)
-    timer.Simple(aT, function()
-        if IsValid(self) then
-            self.IsCurrentlyDeployingAFlare = false
-            if mRng(1, 2) == 1 then
-                timer.Simple(mRand(0.5, 1.25), function()
-                    if IsValid(self) and IsValid(self:GetEnemy()) and self.RetreatAfterDeployFlare then
-                        self:StopMoving()
-                        self:SCHEDULE_COVER_ENEMY(move, function(x)
-                            x.CanShootWhenMoving = true
-                            x.TurnData = {Type = VJ.FACE_ENEMY}
-                        end)
-                        self.NextDoAnyAttackT = cT + delT
-                    end
-                end)
-            end
-        end
-    end)
-
     self.NextFireQuickFlareT = cT + mRand(25, 45)
     self.CombatFlareDeployT = cT + mRand(350, 650)
+    self.IsCurrentlyDeployingAFlare = false
+
+    if not self.RetreatAfterDeployFlare then return end 
+    local delT = mRand(1, 5)
+    if self:IsAbleToMoveNow() then 
+        timer.Simple(aT, function()
+            if not IsValid(self) then return false end 
+            self:Handle_ScheduledForceMove(false, "Enemy", "Both", "Run", true)
+        end)
+    end 
 end
 ---------------------------------------------------------------------------------------------------------------------------------------------
+-- SHould  come back to this one later. 
 ENT.Distress_SigAnim = true 
 ENT.Distress_Sig_Chance = 2 
 ENT.Distress_SigNextT = 0 
@@ -7351,7 +8737,7 @@ function ENT:DistressOnCloseProximity()
     if self.VJ_IsBeingControlled then return end
     if not self:IsOnGround() then return end 
     if self:IsOnFire() then return end 
-    if self.IsGuard or self.MovementType == VJ_MOVETYPE_STATIONARY then return end
+    if not self:IsAbleToMoveNow() then return end
 
     local ene = self:GetEnemy()
     local curT1 = CurTime()
@@ -7365,9 +8751,8 @@ function ENT:DistressOnCloseProximity()
     local allyDetectRange = self.Panic_DetectAllyRange or 1500
     local nearbyAllies = self:Allies_Check(allyDetectRange) or {}
     local allyCount = #nearbyAllies
+
     local isAlone = self.IsCurrentlyAlone or false
-    local gesAnim = "vjges_" .. VJ.PICK(self.DetectDangerReactAnim)
-    local sigChance = self.Distress_Sig_Chance or 3
     local signalRange = tonumber(self.Distress_SigRange) or 2500
     local nearbySignalAllies = self:Allies_Check(signalRange) or {}
     local chance = self.Panic_FleeEneChance or 3 
@@ -7378,11 +8763,6 @@ function ENT:DistressOnCloseProximity()
 
     local shouldPanic = true
     local panicCooldown = mRand(5, 35) -- Default
-
-    if mRng(1, chance) ~= 1 then 
-        self.NextPanicOnCloseProxT = curT1 + mRand(5, 15)
-        return 
-    end
 
     if allyCount >= self.Panic_AllySuppressCount then
         print("Too many allies nearby (" .. allyCount .. " >= " .. self.Panic_AllySuppressCount .. "). Suppressing panic.")
@@ -7397,7 +8777,13 @@ function ENT:DistressOnCloseProximity()
         end
     elseif isAlone then
         print("SNPC is alone. Panic is likely.")
-        panicCooldown = mRand(5, 10)
+        chance = math.max(1, math_floor(chance / 2))
+        panicCooldown = mRand(3, 10)
+    end
+
+    if mRng(1, chance) ~= 1 then 
+        self.NextPanicOnCloseProxT = curT1 + mRand(5, 15)
+        return 
     end
 
     if not shouldPanic then return false end
@@ -7411,24 +8797,21 @@ function ENT:DistressOnCloseProximity()
         self:PlaySoundSystem("CallForHelp")
     end 
 
-    if self.Distress_SigAnim and #nearbySignalAllies > 0 and curT > (self.Distress_SigNextT or 0) then
-        if mRng(1, sigChance) == 1 then
-            if gesAnim then 
-                self:PlayAnim(gesAnim, true)
-            end 
-            self.Distress_SigNextT = curT + mRand(10, 20) 
-            print("Playing distress signal animation due to nearby allies.")
-        end
-    end
+    if self.Distress_SigAnim then 
+        local gesAnim = self:GetRandomValidValue(self.DetectDangerReactAnim)
+        if gesAnim then 
+            if #nearbySignalAllies > 0 and curT > (self.Distress_SigNextT or 0) then
+                local sigChance = self.Distress_Sig_Chance or 3
+                if mRng(1, sigChance) == 1 then
+                    self:PlayAnim("vjges_" .. gesAnim, true)
+                    self.Distress_SigNextT = curT + mRand(10, 20) 
+                    print("Playing distress signal animation due to nearby allies.")
+                end
+            end
+        end 
+    end 
 
-    self:ClearSchedule()
-    self:StopMoving()
-    local move = "TASK_RUN_PATH"
-    self:SCHEDULE_COVER_ORIGIN(move, function(x)
-        x.CanShootWhenMoving = true
-        x.TurnData = {Type = VJ.FACE_ENEMY}
-    end)
-
+    self:Handle_ScheduledForceMove(false, "Both", "Both", "Run", true)
     print("Panic behavior activated! Next panic delay: " .. panicCooldown .. " seconds")
 end
 ---------------------------------------------------------------------------------------------------------------------------------------------
@@ -7480,6 +8863,7 @@ function ENT:CheckFlashlightReaction()
     end
 end
 
+-- Come back to this one later as well
 function ENT:PlayFlashlightReaction()
     if not self:IsOnGround() or self:IsMoving() then return end
     local mini = mRand(0.025, 1.125)
@@ -7616,7 +9000,7 @@ function ENT:ResetLean()
     self.CurrentLeanAngle   = ZERO_ANGLE
     self.LeanOriginPos      = nil
     self.LastStateChange    = cT
-    self.LeanCooldownUntil  = cT + math.Rand(2.5, 6.5)
+    self.LeanCooldownUntil  = cT + mRand(2.5, 6.5)
 
     self:ForceBoneReset()
     for i = 1, 3 do
@@ -7773,7 +9157,7 @@ function ENT:CustomLean()
         self.TargetLeanAngle  = newAngle
         self.LeanOriginPos    = Vector(pos.x, pos.y, pos.z)
         self.LastStateChange  = cT
-        self.NextLeanTime     = cT + math.Rand(2, 6)
+        self.NextLeanTime     = cT + mRand(2, 6)
 
         self:SetTurnTarget("Enemy")
         self:StopMoving()
@@ -8077,13 +9461,12 @@ function ENT:Alter_WeaponFireStats()
 end
 ---------------------------------------------------------------------------------------------------------------------------------------------
 function ENT:SeekOutMedic()
-    if not IsValid(self) then return end
     if not self.CanSeekOutMedic then return end 
-    if self.IsGuard or self.MovementType == VJ_MOVETYPE_STATIONARY then return end 
+    if not self:IsAbleToMoveNow() then return end 
     if self.IsMedic then return end 
     if not self:IsOnGround() then return end 
     if not self:Alive() then return end 
-
+    if self:IsVJAnimationLockState() or self:IsBusy("Activities") or self.Flinching then return end 
     if self.VJ_IsBeingControlled or self:IsOnFire() then
         return 
     end
@@ -8091,7 +9474,7 @@ function ENT:SeekOutMedic()
     local cT = CurTime()
     local ene = self:GetEnemy()
 
-    if IsValid(ene) or self:IsBusy() or cT < (self.NextMedicSeekT or 0) then
+    if IsValid(ene) or cT < (self.NextMedicSeekT or 0) then
         return 
     end
 
@@ -8137,21 +9520,15 @@ function ENT:SeekOutMedic()
         self.CurrentMedicTarget = nearestMedic
         self.NextMedicSeekT = cT + cool
 
-        if nearestDistSqr > noMoveDistSqr and nearestDistSqr > stopDistSqr then
+        if nearestDistSqr > noMoveDistSqr and nearestDistSqr > stopDistSqr and self:IsAbleToMoveNow()  then
             self:SetTurnTarget(nearestMedic)
-            self:ClearSchedule()
-            self:StopMoving()
+            
             local randFnInt = mRng or mRng
             local offsetX = (randFnInt(-60, 60))
             local offsetY = (randFnInt(-60, 60))
             local targetPos = nearestMedic:GetPos() + nearestMedic:GetForward() * offsetX + nearestMedic:GetRight() * offsetY
-            local move = table.Random({"TASK_RUN_PATH", "TASK_WALK_PATH"})
             self:SetLastPosition(targetPos)
-            self:SCHEDULE_GOTO_POSITION(move, function(x)
-                x.CanBeInterrupted = true
-                x.CanShootWhenMoving = true
-                x.TurnData = {Type = VJ.FACE_ENEMY}
-            end)
+            self:Handle_ScheduledForceMove("Both", "LastPos", "Both", "Both", "Rng")
         end
     else
         self.CurrentMedicTarget = nil
@@ -8160,86 +9537,114 @@ function ENT:SeekOutMedic()
 end
 ---------------------------------------------------------------------------------------------------------------------------------------------
 ENT.PlyFlash_Aware = true
-ENT.PlyFlash_CntctDist = 500
-ENT.PlyFlash_AlrAlerted = false 
+ENT.PlyFlash_CntctDist = 650 
 ENT.PlyFlash_CheckInterval = 0.35
 ENT.PlyFlash_NextCheck = 0
-function ENT:PlyFlash_IdleAlert()
-    if not self.PlyFlash_Aware or not IsValid(self) then return end
+ENT.PlyFlash_HpDetect_Range = 850
+ENT.PlyFlash_NextMoveT = 0 
+function ENT:PlyFlash_AlertHostile(ply)
+    if not IsValid(ply) then return end
+    local disp = self:Disposition(ply)
+    if disp == D_LI then 
+        if self.RANDOMS_DEBUG then print("Flashlight hit, but ply is Friendly. Ignoring.") end
+        return 
+    end
 
+    local plyPos = ply:GetPos()
+    local grenDelay = math.Rand(0.5, 2)
+    if self.RANDOMS_DEBUG then print("Flashlight Direct Hit! Engaging: ", ply:GetName()) end 
+    self.NextDoAnyAttackT = CurTime() + grenDelay 
+    self.PlyFlash_AlrAlerted = true
+    if self:GetNPCState() ~= NPC_STATE_COMBAT then
+        self:SetNPCState(NPC_STATE_ALERT)
+    end
+    self:ClearSchedule()
+    self:SetEnemy(ply, true)
+    self:UpdateEnemyMemory(ply, plyPos)
+    self:ForceSetEnemy(ply, plyPos)
+    timer.Simple(5, function() 
+        if IsValid(self) then self.PlyFlash_AlrAlerted = false end 
+    end)
+end
+
+function ENT:PlyFlash_IdleAlert()
+    if not self.PlyFlash_Aware then return end
     local conv = GetConVar("vj_stalker_ply_flashlight_alert"):GetInt()
     if conv ~= 1 then return end 
-
     if VJ_CVAR_IGNOREPLAYERS then return end 
-
     if self.VJ_IsBeingControlled then return end 
 
     local curT = CurTime()
+    if curT < (self.PlyFlash_NextCheck or 0) then return end
+    self.PlyFlash_NextCheck = curT + (self.PlyFlash_CheckInterval or 0.25) 
 
-    if self.PlyFlash_NextCheck and curT < (self.PlyFlash_NextCheck or 0) then return end
-    self.PlyFlash_NextCheck = curT + (self.PlyFlash_CheckInterval or 0.35)
-
-    local npcState = self:GetNPCState()
-    local ene = self:GetEnemy()
-    if not IsValid(self) or IsValid(ene) or npcState == NPC_STATE_COMBAT or self:IsBusy("Activities") or (npcState ~= NPC_STATE_IDLE and not self.PlyFlash_AlrAlerted) then
-        return
-    end
+    local enemy = self:GetEnemy()
+    if IsValid(enemy) or self:GetNPCState() == NPC_STATE_COMBAT or self:IsBusy() then return end
 
     local plyAll = player.GetAll()
-    local plyFlshDist = tonumber(self.PlyFlash_CntctDist) or 800 
-    local traceFunc = util.TraceLine
+    local maxDist = tonumber(self.PlyFlash_CntctDist) or 1000
+    local plyFlshDistSqr = maxDist ^ 2 
+    local targetPos = self:WorldSpaceCenter()
+
     for _, ply in ipairs(plyAll) do
         if IsValid(ply) and ply:Alive() and ply:FlashlightIsOn() then
-            local plyEyePos = ply:GetShootPos() or ply:EyePos()
+            local plyEyePos = ply:GetShootPos()
+            if plyEyePos:DistToSqr(targetPos) > plyFlshDistSqr then continue end
+
             local plyAimVec = ply:GetAimVector()
-            local targetPos = self:WorldSpaceCenter()
-            local dirToNPC = (targetPos - plyEyePos):GetNormalized()
-
-            local dist = plyEyePos:Distance(targetPos)
-            if dist > plyFlshDist then continue end
-
             local dirToNPC = (targetPos - plyEyePos):GetNormalized()
             local dot = plyAimVec:Dot(dirToNPC)
 
-            if dot > 0.86 then 
-            local tr = util.TraceHull({
-                start = plyEyePos,
-                endpos = targetPos,
-                mins = Vector(-10, -10, -10),
-                maxs = Vector(10, 10, 10),
-                filter = {self, ply},
-                mask = MASK_VISIBLE
-            })
+            local disp = self:Disposition(ply)
+            if self.RANDOMS_DEBUG then
+                debugoverlay.Line(plyEyePos, targetPos, 0.3, Color(255, 255, 0), true)
+                debugoverlay.Text(targetPos, "Dot: " .. math.Round(dot, 2) .. " Disp: " .. disp, 0.3)
+            end
 
-            if tr.Entity == self or (not tr.Hit and tr.Fraction > 0.9) then
-                    if self.PlyFlash_Aware then
-                        local disp = self:Disposition(ply) 
-                        if (disp ~= D_LI and disp ~= D_NU and disp ~= D_FR) and IsValid(ply) then 
-                            local grenDelay = 2
-                            if self:GetEnemy() ~= ply then 
-                                print("Player flashlight detected!, ply hostile: ", ply:GetName())
-                                self:ClearSchedule()
-                                self:SetEnemy(ply, true)
-                                local plyPos = ply:GetPos()
-                                self:UpdateEnemyMemory(ply, plyPos)
-                                self:ForceSetEnemy(ply, plyPos)
-                                if self:GetNPCState() ~= NPC_STATE_COMBAT then
-                                    self:SetNPCState(NPC_STATE_ALERT)
-                                end
-                                self.EnemyData.Target = ply 
-                                self:StopMoving()
-                                self.PlyFlash_AlrAlerted = true
-                                self.self.NextDoAnyAttackT = CurTime() + grenDelay 
-                                timer.Simple(10, function() 
-                                    if IsValid(self) then 
-                                        self.PlyFlash_AlrAlerted = false 
-                                    end 
-                                end)
-                                return true
-                            end
-                        end
-                    end
+            if dot > 0.86 then 
+                local tr = util.TraceHull({
+                    start = plyEyePos,
+                    endpos = targetPos,
+                    mins = Vector(-10, -10, -10),
+                    maxs = Vector(10, 10, 10),
+                    filter = {self, ply},
+                    mask = MASK_VISIBLE
+                })
+             
+                if tr.Entity == self or (not tr.Hit and tr.Fraction > 0.9) then
+                    if self.RANDOMS_DEBUG then debugoverlay.Sphere(targetPos, 15, 0.3, Color(255, 0, 0), true) end
+                    self:PlyFlash_AlertHostile(ply)
+                    return true
                 end 
+            end
+
+            local trPly = ply:GetEyeTrace()
+            local hitPos = trPly.HitPos
+            if hitPos:DistToSqr(targetPos) < (self.PlyFlash_HpDetect_Range or 700 ^ 2) then 
+                local trSee = util.TraceLine({
+                    start = self:GetShootPos(),
+                    endpos = hitPos,
+                    filter = self
+                })
+                if trSee.Fraction > 0.9 then
+                    self:SetNPCState(NPC_STATE_ALERT)
+                    if curT > self.PlyFlash_NextMoveT and self:IsAbleToMoveNow() then
+                        local moveGoal = hitPos
+                        if math.random(1, 2) == 1 then
+                            moveGoal = plyEyePos
+                        end
+                        if self.RANDOMS_DEBUG then 
+                            debugoverlay.Sphere(hitPos, 10, 0.3, Color(0, 255, 255), true)
+                        end
+                        self:SetLastPosition(moveGoal)
+                        self:Handle_ScheduledForceMove("Both", "LastPos", "Both", "Both", "Rng")
+                        self.PlyFlash_NextMoveT = curT + 5
+                    end
+                    if disp == D_HT or disp == D_FR then
+                        self:UpdateEnemyMemory(ply, plyEyePos)
+                    end
+                    return true
+                end
             end
         end
     end 
@@ -8346,11 +9751,203 @@ function ENT:Marine_TurnGestures()
     self._lastYaw = currentYaw
 end
 ---------------------------------------------------------------------------------------------------------------------------------------------
+
+/*EO.StateFunctions.ASSAULT = function(ent, enemy)
+
+    local dist = ent:GetPos():Distance(enemy:GetPos())
+
+    ent:SetSchedule(
+        dist > 600
+        and SCHED_CHASE_ENEMY
+        or SCHED_ESTABLISH_LINE_OF_FIRE
+    )
+
+    ent.NextSched = CurTime() + 3
+end*/
+
+//function ENT:Find_LOF()
+
+    //fix snappy angles
+ENT.Suppress_EnePos = true
+ENT.Suppression_Time = 0
+ENT.Suppression_NextT = 0
+ENT.Suppression_StopDist = 100
+ENT.Suppression_Chance = 1
+ENT.Suppression_DelayT = 0
+ENT.Suppression_ReadyToRoll = false
+
+ENT.SuppressBurst_Min = 0.5
+ENT.SuppressBurst_Max = 1.5
+ENT.SuppressBurstPause_Min = 0.15
+ENT.SuppressBurstPause_Max = 0.7
+ENT.SuppressBurst_EndT = 0
+ENT.SuppressBurst_PauseT = 0
+
+function ENT:SuppressEnemyPosition()
+    if not self.Suppress_EnePos then return end
+
+    local curT = CurTime()
+
+    local function ResetSuppression(applyDelay)
+        self.LastKnownEnemyPos = nil
+        self.Suppression_ReadyToRoll = false
+        self.SuppressionEndTime = 0 
+
+        -- Haven't properly tested out if this fixes snappiness. 
+        if IsValid(self:GetEnemy()) then 
+            self:SetTurnTarget("Enemy")
+        else 
+            self:SetTurnTarget(nil)
+        end 
+
+        if applyDelay then
+            self.Suppression_DelayT = curT + mRng(2, 5)
+        end
+    end
+
+    if self.VJ_IsBeingControlled then return end
+    if self:IsVJAnimationLockState() or self.Flinching then return end
+    if self:WaterLevel() > 2 then return end
+    if self.PauseAttacks then return end
+    if not self:CanFireWeapon(true, false) then return end
+    if self:GetWeaponState() == VJ.WEP_STATE_RELOADING then return end
+    if curT < (self.AnimLockTime or 0) then return end
+
+    local supDebug = self.RANDOMS_DEBUG
+    local enemy = self:GetEnemy()
+    local canSeeEnemy = false
+
+    if not IsValid(enemy) or (enemy:Health() <= 0 and not enemy.IsVJBaseBullseye) then
+        if self.LastKnownEnemyPos then
+            ResetSuppression(false)
+        end
+        return 
+    end
+
+    if IsValid(enemy) then
+        local disp = self:Disposition(enemy)
+
+        local isBullseye = enemy.IsVJBaseBullseye
+
+        local isAlive =
+            (enemy:IsPlayer() and enemy:Alive()) or
+            ((enemy:IsNPC() or enemy:IsNextBot()) and (enemy:Health() > 0 or enemy:Alive() or not enemy.Dead)) or 
+            isBullseye
+
+        if isAlive and (disp == D_HT or disp == D_FR) then
+            canSeeEnemy = self:Visible(enemy)
+        else
+            ResetSuppression(false)
+            return
+        end
+    end
+
+    if canSeeEnemy then
+        local offset = VectorRand() * math.random(-75, 100)
+        self.LastKnownEnemyPos = enemy:GetPos() + enemy:OBBCenter() + offset
+        self.SuppressionEndTime = curT + (self.Suppression_Time or 3)
+        self.Suppression_ReadyToRoll = true
+        return
+    end
+
+    local suppressionActive = self.LastKnownEnemyPos and curT < (self.SuppressionEndTime or 0)
+    if suppressionActive then
+        if IsValid(enemy) and self:Visible(enemy) then
+            ResetSuppression(true)
+            return
+        end
+
+        if self.Suppression_ReadyToRoll then
+            self.Suppression_ReadyToRoll = false
+            local chance = self.Suppression_Chance or 3
+            if curT < (self.Suppression_DelayT or 0)
+            or mRng(1, chance) ~= 1 then
+                if supDebug then
+                    print("Suppression roll failed or on cooldown.")
+                end
+                ResetSuppression(true)
+                return
+            end
+            self.SuppressBurst_EndT = curT + mRand(self.SuppressBurst_Min or 0.3, self.SuppressBurst_Max or 1.2)
+        end
+
+        local dist = self:GetPos():DistToSqr(self.LastKnownEnemyPos)
+        if self:IsMoving() and dist > 40000 then
+            return
+        end
+
+        local shootPos = self:GetShootPos()
+        local tr = util.TraceLine({
+            start = shootPos,
+            endpos = self.LastKnownEnemyPos,
+            filter = {self, self:GetActiveWeapon()}
+        })
+
+        if tr.HitWorld then
+            if supDebug then
+                print("World blocking suppression point.")
+            end
+            ResetSuppression(false)
+            return
+        end
+
+        local stopDist = self.Suppression_StopDist or 100
+        if self:GetPos():DistToSqr(self.LastKnownEnemyPos) < (stopDist * stopDist) then
+            ResetSuppression(false)
+            return
+        end
+
+        local wep = self:GetActiveWeapon()
+        if not IsValid(wep) then return end
+        if wep.IsMeleeWeapon then return end
+        if wep:Clip1() <= 0 then return end
+
+        if self:GetWeaponState() == VJ.WEP_STATE_RELOADING then
+            return
+        end
+
+        local holdType = wep.HoldType or ""
+
+        if holdType == "pistol" or holdType == "revolver" or holdType == "rpg" then return end
+
+        local dir = (self.LastKnownEnemyPos - shootPos):GetNormalized()
+        local targetAng = dir:Angle()
+
+        self:SetIdealYawAndUpdate(targetAng.y)
+        local localAng = self:WorldToLocalAngles(targetAng)
+        if self:LookupPoseParameter("aim_yaw") ~= -1 then
+            self:SetPoseParameter("aim_yaw", localAng.y)
+            self:SetPoseParameter("aim_pitch", localAng.p)
+        end
+        
+        if curT > (self.SuppressBurst_EndT or 0) then
+            if curT > (self.SuppressBurst_PauseT or 0) then
+
+                self.SuppressBurst_EndT = curT + mRand(self.SuppressBurst_Min or 0.3, self.SuppressBurst_Max or 1.2)
+                self.SuppressBurst_PauseT = curT + mRand(self.SuppressBurstPause_Min or 0.2, self.SuppressBurstPause_Max or 0.8)
+            end
+            return
+        end
+
+        if curT > (self.Suppression_NextT or 0) then
+            if wep.NPC_PrimaryAttack then
+                wep:NPC_PrimaryAttack()
+            else
+                wep:PrimaryAttack()
+            end
+            self.Suppression_NextT = curT + (wep.NPC_NextPrimaryFire or 0.1)
+        end
+    else
+        ResetSuppression(false)
+    end
+end
+---------------------------------------------------------------------------------------------------------------------------------------------
 function ENT:OnThink()
     self:Marine_TurnGestures()
 end
 
 function ENT:OnThinkActive()
+    self:SuppressEnemyPosition()
     self:Idle_CoverPeekUp()
     self:Override_DefWepPcfx()
     self:Handle_WeaponTracerConv()
@@ -8406,6 +10003,7 @@ function ENT:HumanCanHealSelf()
     local healConv = GetConVar("vj_stalker_heal_self"):GetInt()
     if healConv ~= 1 then return end 
 
+    if self.IsCurrentlyIncapacitated then return end 
     if self.VJ_IsBeingControlled then return end
 
     local curT = CurTime()
@@ -8428,7 +10026,7 @@ function ENT:HumanCanHealSelf()
         return false
     end
 
-    if self.IsMedic and self.Medic_CheckDistance <= 1 and self.Medic_PrioritizeAlly then
+    if self.Medic_PrioritizeAlly and self.IsMedic and self.Medic_CheckDistance <= 1 then
         local checkDist = tonumber(self.Medic_CheckDistance) or 2500
         local allies = self:Allies_Check(checkDist)
         local alHpPrior = self.Medic_AllyHpPrior
@@ -8442,38 +10040,27 @@ function ENT:HumanCanHealSelf()
         end
     end
 
-    if busy or self.Flinching or moving or not ground or
+    if busy or moving or not ground or
        self:IsOnFire() or self.Medic_Status or self:Health() >= maxHp * 0.99 then
         return false
     end
 
-    local coverDelay = 0
-    local move = "TASK_RUN_PATH"
-    if enemyValid and self.FindCov_PriorSH then
-        self:SCHEDULE_COVER_ENEMY(move, function(x)
-            x.CanShootWhenMoving = true
-            x.TurnData = {Type = VJ.FACE_ENEMY}
-        end)
-        coverDelay = mRand(1.5, 3.5) 
-    elseif mRng(1, 2) == 1 then
-        self:SCHEDULE_COVER_ORIGIN(move, function(x)
-            x.CanShootWhenMoving = true
-            x.TurnData = {Type = VJ.FACE_ENEMY}
-        end)
-        coverDelay = mRand(1, 2.5)
-    end
+    if self.FindCov_PriorSH then 
+        if self:IsAbleToMoveNow() then 
+            self:Handle_ScheduledForceMove(true , "Origin", true, "Run", "Rng")
+        end 
+    end 
 
     self.CurrentlyHealSelf = true
-    local initiateDelay = (self.HealSelfDelay or mRand(1, 5)) + coverDelay
-
-    if not self:Alive() then return end 
+    if not self:Alive() then return end
+    local initiateDelay = (self.HealSelfDelay or mRand(1, 5))  
     timer.Simple(initiateDelay, function()
         if not IsValid(self) then return end
 
         local curT2 = CurTime()
         local ground2 = self:IsOnGround()
         local moving2 = self:IsMoving()
-        local busy2 =  self:IsVJAnimationLockState()  or self:IsBusy() or self:GetWeaponState() == VJ.WEP_STATE_RELOADING
+        local busy2 =  self:IsVJAnimationLockState() or self:IsBusy() or self:GetWeaponState() == VJ.WEP_STATE_RELOADING
         local enemy2 = self:GetEnemy()
         local enemyVisible2 = IsValid(enemy2) and self:Visible(enemy2)
         local enemyTooClose = enemyVisible2 and self:GetPos():DistToSqr(enemy2:GetPos()) <= (1520 * 1520)
@@ -8488,42 +10075,33 @@ function ENT:HumanCanHealSelf()
         self:RemoveAllGestures()
         VJ.STOPSOUND(self.CurrentIdleSound)
 
-        local anim 
-
-        if self.HealSelf_AnimTbl then
-            if isstring(self.HealSelf_AnimTbl) then
-                anim = self.HealSelf_AnimTbl
-            elseif istable(self.HealSelf_AnimTbl) and #self.HealSelf_AnimTbl > 0 then
-                anim = table.Random(self.HealSelf_AnimTbl)
-            end
-        end
-
+        local anim = self:GetRandomValidValue(self.HealSelf_AnimTbl)
         if not anim then return end
+
         local seq = self:LookupSequence(anim)
         if seq <= 0 then return end
 
-        local animT = self:SequenceDuration(seq) or 1
-        local rngSnd = mRng(75, 105)
-        local halfAnim = animT / 2
+        local animT = self:SequenceDuration(seq) + 0.1  or 1
+        self:PlayAnim("vjseq_" .. anim, true, animT, false)
+        self:SetState(VJ_STATE_ONLY_ANIMATION_CONSTANT, animT) 
 
-        if anim then 
-            self:PlayAnim("vjseq_" .. anim, true, animT, false)
-            self:SetState(VJ_STATE_ONLY_ANIMATION_CONSTANT, animT)
-        end 
-
-        timer.Simple(halfAnim, function()
+        timer.Simple(animT, function()
             if not IsValid(self) then return end
             if not moving2 and ground2 then
                 local healAmount = self.Medic_HealAmount or 30
-                local chance = self.SelfHeal_FailChance or 15
-                if mRng(1, chance) == 1 and self.SelfHeal_Fail then
-                    healAmount = maxHp * 0.25
-                end
+                if self.SelfHeal_Fail then 
+                    local chance = self.SelfHeal_FailChance or 15
+                    if mRng(1, chance) == 1 then
+                        healAmount = maxHp * 0.25
+                    end
+                end 
                 local newHealth = math_Clamp(self:Health() + healAmount, 0, maxHp)
                 self:SetHealth(newHealth)
                 self:OnMedicBehavior("OnHeal")
+                local rngSnd = mRng(75, 105)
                 VJ.EmitSound(self, "items/smallmedkit1.wav", 75, rngSnd)
                 self:RemoveAllDecals()
+
                 if mRng(1, 2) == 1 then
                     self:PlaySoundSystem("Speech", self.SoundTbl_Pain)
                 end
@@ -8536,15 +10114,13 @@ function ENT:HumanCanHealSelf()
 end
 
 function ENT:BeforeHumanCanHealSelf()
-    local propRemoveT = 0.85
-    if not IsValid(self) or not self.CurrentlyHealSelf then return end
+    if not self.CurrentlyHealSelf then return end
 
     local validAttachmentName = nil
     local attachmentData = nil
 
     for _, attName in ipairs(self.SelfHeal_HandAtt) do
         local attachmentIndex = self:LookupAttachment(attName)
-        print("Checking:", attName, "Index:", attachmentIndex) 
         if attachmentIndex and attachmentIndex > 0 then
             validAttachmentName = attName
             attachmentData = self:GetAttachment(attachmentIndex)
@@ -8552,12 +10128,17 @@ function ENT:BeforeHumanCanHealSelf()
         end
     end
 
-    if not validAttachmentName and isstring(self.Medic_SpawnPropOnHealAttachment) and self.Medic_SpawnPropOnHealAttachment ~= "" then
-        local medAttIndex = self:LookupAttachment(self.Medic_SpawnPropOnHealAttachment)
-        print("Checking Medic_SpawnPropOnHealAttachment:", self.Medic_SpawnPropOnHealAttachment, "Index:", medAttIndex) 
-        if medAttIndex and medAttIndex > 0 then
-            validAttachmentName = self.Medic_SpawnPropOnHealAttachment
-            attachmentData = self:GetAttachment(medAttIndex)
+    if not validAttachmentName then
+        local fallbackAtt = self.Medic_SpawnPropOnHealAttachment
+        if isstring(fallbackAtt) and fallbackAtt ~= "" then
+            local id = self:LookupAttachment(fallbackAtt)
+            if self.RANDOMS_DEBUG then
+                print("Checking fallback attachment:", fallbackAtt, "Index:", id)
+            end
+            if id and id > 0 then
+                validAttachmentName = fallbackAtt
+                attachmentData = self:GetAttachment(id)
+            end
         end
     end
 
@@ -8565,22 +10146,21 @@ function ENT:BeforeHumanCanHealSelf()
         return
     end
 
-    if not self.CurrentlyHealSelf then
-        return
-    end
-
-    local healItem = ents.Create("prop_vj_animatable")
-    healItem:SetModel("models/healthvial.mdl")
-    healItem:SetPos(attachmentData.Pos)
-    healItem:SetAngles(attachmentData.Ang)
-    healItem:SetParent(self)
-    healItem:Fire("SetParentAttachment", validAttachmentName)
+    local propRemoveT = 0.85 
+    local healItem = ents.Create("prop_dynamic")
+    if not IsValid(healItem) then return end 
+    healItem:SetModel("models/healthvial.mdl") 
+    healItem:SetPos(attachmentData.Pos) 
+    healItem:SetAngles(attachmentData.Ang) 
+    healItem:SetParent(self) 
     healItem:Spawn()
-    healItem:SetCollisionGroup(COLLISION_GROUP_IN_VEHICLE)
-    healItem:SetSolid(SOLID_NONE)
-    healItem:SetRenderMode(RENDERMODE_TRANSALPHA)
+    healItem:Activate()
+    healItem:Fire("SetParentAttachment", validAttachmentName)
+    healItem:SetCollisionGroup(COLLISION_GROUP_IN_VEHICLE) 
+    healItem:SetSolid(SOLID_NONE) 
+    healItem:SetRenderMode(RENDERMODE_TRANSALPHA) 
+    SafeRemoveEntityDelayed(healItem, propRemoveT) 
     self:DeleteOnRemove(healItem)
-    SafeRemoveEntityDelayed(healItem, propRemoveT)
 
     timer.Simple(propRemoveT, function()
         if IsValid(self) then
@@ -8590,6 +10170,7 @@ function ENT:BeforeHumanCanHealSelf()
             dropVial:SetAngles(attachmentData.Ang)
             dropVial:Spawn()
             dropVial:SetCollisionGroup(COLLISION_GROUP_INTERACTIVE)
+            SafeRemoveEntityDelayed(dropVial, 5)
         end
     end)
 end
@@ -8634,11 +10215,11 @@ function ENT:InEneLineOfSight(ene, viewDotThreshold)
     if ene.IsPlayer and ene:IsPlayer() then
         eneEyePos = ene:EyePos()
     else
-        eneEyePos = (ene.EyePos and ene:EyePos()) or (ene.GetPos and (ene:GetPos() + (ene.OBBCenter and ene:OBBCenter() or Vector(0,0,48)))) or ene:GetPos()
+        eneEyePos = (ene.EyePos and ene:EyePos()) or (ene.GetPos and (ene:GetPos() + ( ne:OBBCenter() or Vector(0,0,48)))) or ene:GetPos()
     end
 
-    local eneForward = (ene.IsPlayer and ene:IsPlayer()) and (ene:EyeAngles():Forward()) or ((ene.GetForward and ene:GetForward()) or Vector(0,0,1))
-    local myEyePos = (self.EyePos and self:EyePos()) or (self.GetPos and (self:GetPos() + (self.OBBCenter and self:OBBCenter() or Vector(0,0,36)))) or self:GetPos()
+    local eneForward = (ene.IsPlayer and ene:IsPlayer()) and (ene:EyeAngles():Forward()) or ((ene:GetForward()) or Vector(0,0,1))
+    local myEyePos = (self.EyePos and self:EyePos()) or (self.GetPos and (self:GetPos() + (self:OBBCenter() or Vector(0,0,36)))) or self:GetPos()
     local toSelf = (myEyePos - eneEyePos)
 
     if toSelf:IsZero() then
@@ -8659,27 +10240,32 @@ end
 function ENT:HumanEvadeAbility()
     if not self.CombatEvade then return end
     local conv = GetConVar("vj_stalker_dodging"):GetInt()
-    if conv ~= 1 or not IsValid(self) or self.VJ_IsBeingControlled then 
-        return  
-    end 
+    if not conv or conv ~= 1 then return end 
+    if self.VJ_IsBeingControlled then return end 
+    if self.IsEvadingDanger or self.IsHumanDodging then return end 
 
-    local minEneDist = self.Dodge_EneMin_Dist or 700
-    local maxEneDist = self.Dodge_EneMax_Dist or 6000 
-    local busy = self:IsBusy() or  self:IsVJAnimationLockState() 
-    local ene = self:GetEnemy()
     local right, forward, up = self:GetRight(), self:GetForward(), self:GetUp()
-    local rollFrwdMax = self.Dodge_RollF_MxDist or 1250
+
     local rngSnd = mRng(85, 105)
 
-    if busy or self.IsGuard or self:Health() < (self:GetMaxHealth() * mRand(0.2,0.33)) or not IsValid(ene) or self.CurrentlyLeaning then
+     local ene = self:GetEnemy()
+    if not IsValid(ene) then return false end 
+
+    local busy = self:IsBusy() or  self:IsVJAnimationLockState() 
+    if busy then return false end 
+
+
+    if self.IsGuard or self:Health() < (self:GetMaxHealth() * mRand(0.2,0.33)) or self.CurrentlyLeaning then
         return false
     end
     
     if not self:InEneLineOfSight(enemy, 0.7) then
-        if self.RANDOMS_DEBUG then print("Not in ene sight, no need to dodge") end
+        //if self.RANDOMS_DEBUG then print("Not in ene sight, no need to dodge") end
         return false
     end
 
+    local minEneDist = self.Dodge_EneMin_Dist or 700
+    local maxEneDist = self.Dodge_EneMax_Dist or 6000 
     local distToEnemy = self:GetPos():Distance(ene:GetPos())
     if distToEnemy <= minEneDist or distToEnemy >= maxEneDist then return end
 
@@ -8687,13 +10273,13 @@ function ENT:HumanEvadeAbility()
     local inCover = self:DoCoverTrace(pos, eneEyePos, false, {SetLastHiddenTime = true})
     if inCover then return end
     local cT = CurTime()
-    if IsValid(ene) and not cT < self.TakingCoverT and self:Visible(ene) and not self.Flinching and self.WeaponAttackState == VJ.WEP_ATTACK_STATE_FIRE_STAND and cT > self.Dodge_NextT and not self:IsMoving() and self:IsOnGround() and not self.IsHumanDodging and not self.IsEvadingDanger and not busy then
+    if IsValid(ene) and not cT < self.TakingCoverT and self:Visible(ene) and not self.Flinching and self.WeaponAttackState == VJ.WEP_ATTACK_STATE_FIRE_STAND and cT > self.Dodge_NextT and not self:IsMoving() and self:IsOnGround() and not busy then
         self:StopAttacks(true)
         self.IsHumanDodging = true
         self.Dodge_NextT = cT + mRand(5, 35)
 
         local DodgeDirection2 = self.CombatRoll and mRng(1, 3) or mRng(4, 7)
-        print("Dodge type chosen: " .. DodgeDirection2 .. " | CombatRoll: " .. tostring(self.CombatRoll))
+        if self.RANDOMS_DEBUG then print("Dodge type chosen: " .. DodgeDirection2 .. " | CombatRoll: " .. tostring(self.CombatRoll)) end 
 
         local DodgeAnim, DodgeVel = "", Vector(0,0,0)
         local DupDodgeAnim = "leanwall_Left_B_exit" 
@@ -8710,39 +10296,44 @@ function ENT:HumanEvadeAbility()
         elseif DodgeDirection2 == 6 then dir = -right
         elseif DodgeDirection2 == 7 then dir = -forward end
 
+        local posi = self:GetPos()
         local tr = util.TraceHull({
-            start = self:GetPos(),
-            endpos = self:GetPos() + dir * mRng(200, 300),
+            start = posi,
+            endpos = posi + dir * mRng(200, 300),
             mins = self:OBBMins(),
             maxs = self:OBBMaxs(),
             filter = self
         })
 
+        local rngUp = mRand(60, 95)
         if not tr.Hit then
             -- Unique combat rolls
+            local sharedFrce = mRand(700, 1050)
+            local rollFrwdMax = self.Dodge_RollF_MxDist or 1250
             if DodgeDirection2 == 1 and distToEnemy > rollFrwdMax then
                 DodgeAnim = "roll_forward"
-                DodgeVel = (forward * mRand(700, 1050)) + up * mRand(60, 80)
+                DodgeVel = (forward * sharedFrce) + up * rngUp
             elseif DodgeDirection2 == 2 then
                 DodgeAnim = "roll_right"
-                DodgeVel = (right * mRand(700, 1050)) + up * mRand(60, 80)
+                DodgeVel = (right * sharedFrce) + up * rngUp
             elseif DodgeDirection2 == 3 then
                 DodgeAnim = "roll_left"
-                DodgeVel = (right * mRand(-700, -1050)) + up * mRand(60, 80)
+                DodgeVel = (right * -sharedFrce) + up * rngUp
 
             -- Default dodge anims 
+            local sharedFrce2 = mRand(-350, -1000)
             elseif DodgeDirection2 == 4 and not meleeWeapon then
                 DodgeAnim = DupDodgeAnim
-                DodgeVel = (right * mRand(-500, -900)) + up * mRand(60, 80)
+                DodgeVel = (right * dodge) + up * rngUp
             elseif DodgeDirection2 == 5 and not meleeWeapon then
                 DodgeAnim = DupDodgeAnim
-                DodgeVel = (forward * mRand(-500, -900)) + up * mRand(80, 70)
+                DodgeVel = (forward * dodge) + up * rngUp
             elseif DodgeDirection2 == 6 and not meleeWeapon then
                 DodgeAnim = DupDodgeAnim
-                DodgeVel = (right * mRand(-500, -800)) + up * mRand(80, 70)
+                DodgeVel = (right * dodge) + up * rngUp
             elseif DodgeDirection2 == 7 and not meleeWeapon then
                 DodgeAnim = DupDodgeAnim
-                DodgeVel = (forward * mRand(-300, -650)) + up * mRand(80, 70) + right * mRand(-500, 500)
+                DodgeVel = (forward * (math_floor(dodge / 2))) + up * rngUp + right * mRand(-500, 500)
             end
 
             local seq = self:LookupSequence(DodgeAnim)
@@ -8752,7 +10343,22 @@ function ENT:HumanEvadeAbility()
 
             self:PlayAnim("vjseq_" .. DodgeAnim, true, dodgeAnimDuration, false)
             self:SetVelocity(DodgeVel)
-            VJ.EmitSound(self, self.SoundTbl_SNPCRoll, 70, rngSnd)
+
+            local rollSound = self.SoundTbl_SNPCRoll
+
+            if rollSound and #rollSound > 0 then
+                local snd;
+
+                if istable(rollSound) then
+                    snd = table.Random(rollSound)
+                else
+                    snd = rollSound
+                end
+
+                if snd then
+                    VJ.EmitSound(self, snd, 70, rngSnd)
+                end
+            end
         else
             self.IsHumanDodging = false
             self.Dodge_NextT = cT
@@ -8767,6 +10373,7 @@ function ENT:HumanEvadeAbility()
     end
 end
 
+//BUG: SNPCS RARELY EVER DODGE OR DON'T USE THE ELSE BLOCK. 
 ENT.Evade_IncDanger  = true 
 ENT.IsEvadingDanger = false 
 ENT.DangerousEnt_Tbl = {
@@ -8781,29 +10388,28 @@ ENT.DodgeAnim_Right = "Roll_Right"
 ENT.DodgeAnim_Left = "Roll_Left"
 ENT.EvadeDanger_NextT = 0 
 ENT.EvadeDanger_Chance = 2 
+ENT.EvadeDanger_MaxDist = 1000 
+ENT.EvadeDanger_MinDist = 250
 function ENT:Dodge_DangerousEnt()
-    if not IsValid(self) then return end
     if not self.Evade_IncDanger then return end 
+    if not IsValid(self) then return end
 
     local cvar = GetConVar("vj_stalker_passively_dodge_incom_danger")
     if not cvar or cvar:GetInt() ~= 1 then return end
-    if self.VJ_IsBeingControlled then return end
 
-    local state = self:GetState()
-    if self:IsBusy() or  self:IsVJAnimationLockState()  then
-        return
-    end
+    if self.VJ_IsBeingControlled then return end
+    if not self:IsOnGround() then return end
 
     if self.IsHumanDodging or self.IsCurrentlyPlayingBurnAnim then
         return
     end
 
+    local busy = self:IsBusy() or  self:IsVJAnimationLockState() or self.Flinching
+    if busy then return end 
+
     local cT = CurTime()
     if cT < (self.EvadeDanger_NextT or 0) then return end
 
-    if not self:IsOnGround() or self:IsBusy("Activities") then return end
-
-    local dodgeRange = mRng(825, 1245)
     local requiresVis = GetConVar("vj_stalker_dent_dodge_requires_visibility"):GetInt() == 1
 
     local function IsInFieldOfView(ent)
@@ -8820,12 +10426,17 @@ function ENT:Dodge_DangerousEnt()
         if animVar == false then return nil end
         if isstring(animVar) then return animVar end
         if istable(animVar) and #animVar > 0 then
-            return animVar[mRand(1, #animVar)]
+            return animVar[mRng(1, #animVar)]
         end
         return nil
     end
 
-    for _, dangerEnt in ipairs(ents.FindInSphere(self:GetPos() + self:OBBCenter(), dodgeRange)) do
+    local max = self.EvadeDanger_MaxDist or 1200 
+    local min = self.EvadeDanger_MinDist or 300 
+    local dodgeRange = math.min(min, mRng(min, max))
+    local findPos = self:GetPos() + self:OBBCenter()
+
+    for _, dangerEnt in ipairs(ents.FindInSphere(findPos, dodgeRange)) do
         if not IsValid(dangerEnt) then continue end
         if dangerEnt:GetOwner() == self then continue end
         if not table.HasValue(self.DangerousEnt_Tbl, dangerEnt:GetClass()) then continue end
@@ -8881,11 +10492,8 @@ function ENT:Dodge_DangerousEnt()
             end)
 
         else
-            if self.IsGuard or self.MovementType == VJ_MOVETYPE_STATIONARY then return end 
-            local sched = self:GetCurrentSchedule()
-            if sched ~= SCHED_RUN_FROM_ENEMY and sched ~= SCHED_TAKE_COVER_FROM_ENEMY then
-                self:SetSchedule(SCHED_RUN_FROM_ENEMY)
-            end
+            if not self:IsAbleToMoveNow() then return end 
+            self:Handle_ScheduledForceMove(true , "Origin", true, "Run", "Rng")
             self.EvadeDanger_NextT = cT + mRand(2, 4)
             self.IsEvadingDanger = false
         end
@@ -8914,30 +10522,28 @@ end
 function ENT:Taunt_AnimHandle(ent, inflictor, wasLast)
     if not self.TauntKill_OnEne then return end 
     if self.VJ_IsBeingControlled then return end 
-    if not self.TauntKill_Conv then return end 
-
-    local selfWep = self:GetActiveWeapon()
-    if not selfWep then return end 
-
+    
     local cvTauntKill = tostring(self.TauntKill_Conv)
     local conv = GetConVar(cvTauntKill)
-    if conv and conv:GetInt() == 0 then return end
+    if conv and conv:GetInt() ~= 1 then return end
+
+    local selfWep = self:GetActiveWeapon()
+    if not IsValid(selfWep) then return end 
 
     if not IsValid(inflictor) or inflictor ~= self then return end 
-    if not self:IsOnGround() then return end 
-    if self:IsMoving() then return end 
-    if self:IsBusy("Activities") then return end
+    if not self:IsOnGround() or self:IsMoving() then return end 
+    if self:IsBusy("Activities") or self.Flinching or self:IsVJAnimationLockState() then return end
 
     local cT = CurTime()
     if cT < self.TauntKill_NextT then return end
 
     local enemy = self:GetEnemy()
     if IsValid(enemy) then
-        local distSqr = self:GetPos():DistToSqr(enemy:GetPos())
         if enemy:Health() <= 0 or not enemy:Alive() then
             enemy = nil
         end
     end
+
     //No taunting if we got an enemy
     if IsValid(enemy) then
         local canSeeEnemy = self:Visible(enemy)
@@ -8945,49 +10551,58 @@ function ENT:Taunt_AnimHandle(ent, inflictor, wasLast)
         local hasEnemyWeapon = IsValid(enemy:GetActiveWeapon())
 
         if canSeeEnemy and hasEnemyWeapon then return end
-        if not canSeeEnemy and distSqr >= (1500 * 1500) then return end
-        if distSqr < (1250 * 1250) then return end
+
+        local max = self.TauntKill_MaxDist or 2500 
+        if not canSeeEnemy and distSqr >= (max * max) then return end
+
+        local min = self.TauntKill_MinDist or 1500
+        if distSqr < (min * min) then return end
     end
 
-    if mRng(1, self.TauntKill_Chance or 3) ~= 1 then return end
+    local chance = self.TauntKill_Chance or 3
+    if mRng(1, chance) ~= 1 then return end
 
     local delay = mRand(0.25, 1)
 
-    local seqTbl = self.TauntKill_SeqAnimTbl
-    local gesTbl = self.TauntKill_GesAnimTbl
-    if not istable(seqTbl) or #seqTbl == 0 then return end
-    if not istable(gesTbl) or #gesTbl == 0 then return end
-
-    local anim = seqTbl[mRng(1, #seqTbl)]
-    local seq = self:LookupSequence(anim)
+    local seqTbl = self:GetRandomValidValue(self.TauntKill_SeqAnimTbl)
+    local gesTbl = self:GetRandomValidValue(self.TauntKill_GesAnimTbl)
 
     local doSequence = false
     local at = 0
 
+    local doSequence = seqTbl and gesTbl and mRng(1,2) == 1
+    if seqTbl and not gesTbl then
+        doSequence = true
+    elseif gesTbl and not seqTbl then
+        doSequence = false
+    end
+
+    local seq = seqTbl and self:LookupSequence(seqTbl) or -1
     if seq and seq > 0 then 
-        doSequence = mRng(1, 2) == 1
-        at = self:SequenceDuration(seq)
+        at = self:SequenceDuration(seq) or 1 
     end 
 
     timer.Simple(delay, function()
         if not IsValid(self) then return end
         if self:IsBusy() then return end
         self:RemoveAllGestures()
-        if doSequence then
-            self:PlayAnim("vjseq_" .. anim, true, at, false)
-            self.TauntKill_NextT = CurTime() + at + mRand(2, 4)
+
+        local c = CurTime()
+        if doSequence and seqTbl then
+            self:PlayAnim("vjseq_" .. seqTbl, true, at, false)
+            self.TauntKill_NextT = c + at + mRand(2, 4)
         else
-            local anim2 = gesTbl[mRng(1, #gesTbl)]
-            if not anim2 then return end 
-            self:PlayAnim("vjges_" .. anim2)
-            self.TauntKill_NextT = CurTime() + mRand(5, 10)
-        end
+            if gesTbl then 
+                self:PlayAnim("vjges_" .. gesTbl)
+                self.TauntKill_NextT = c + mRand(5, 10)
+            end
+        end 
     end)
 end
 ---------------------------------------------------------------------------------------------------------------------------------------------
 function ENT:RadioChatterSoundCode(CustomTbl)
     if not self.HasSounds or not self.HasRadioChatDialogue then return end
-    if self.Dead then
+    if not self:Alive() then
         if GetConVar("vj_stalker_radio_death_cancel"):GetInt() == 1 then
             if self.CurrentRadioChatSound then 
                 self.CurrentRadioChatSound:Stop() 
@@ -9005,9 +10620,9 @@ function ENT:RadioChatterSoundCode(CustomTbl)
         if randsound == 1 and VJ.PICK(soundtbl) != false then
             if self.CurrentRadioChatSound then self.CurrentRadioChatSound:Stop() end
             self.IdleSoundBlockTime = cT + mRand(1, 5) 
-            self.CurrentRadioChatSound = VJ.CreateSound(self, soundtbl, self.BackGround_RadioLevel, self:GetSoundPitch(self.BackGround_RadioPitch1, self.BackGround_RadioPitch2))
+            self.CurrentRadioChatSound = VJ.CreateSound(self, soundtbl, self.BackGround_RadioLevel or 70, self:GetSoundPitch(self.BackGround_RadioPitch1 or 75, self.BackGround_RadioPitch2 or 100))
         end
-        self.NextRadioDialogueT = cT + mRand(self.NextSoundTime_RadioDialogue1, self.NextSoundTime_RadioDialogue2)
+        self.NextRadioDialogueT = cT + mRand(self.NextSoundTime_RadioDialogue1 or 15, self.NextSoundTime_RadioDialogue2 or 25)
     end
 end
 ---------------------------------------------------------------------------------------------------------------------------------------------
@@ -9033,9 +10648,9 @@ function ENT:CryForAidSoundCode(CustomTbl)
             
             VJ.STOPSOUND(self.CurrentIdleSound)
             self.IdleSoundBlockTime = curT + mRand(1, 3)
-            self.CurrentHasCryForAidSound = VJ.CreateSound(self, soundtbl, self.CryForAidSoundLevel, self:GetSoundPitch(self.CryForAidSoundPitch1, self.CryForAidSoundPitch2))
+            self.CurrentHasCryForAidSound = VJ.CreateSound(self, soundtbl, self.CryForAidSoundLevel or 70, self:GetSoundPitch(self.CryForAidSoundPitch1 or 75, self.CryForAidSoundPitch2 or 100))
             
-            self.NextCryForAidSoundT = curT + mRand(self.CryForAid_NextT1, self.CryForAid_NextT2)
+            self.NextCryForAidSoundT = curT + mRand(self.CryForAid_NextT1 or 5, self.CryForAid_NextT2 or 10)
         end
     end
 end
@@ -9053,12 +10668,60 @@ end
 ---------------------------------------------------------------------------------------------------------------------------------------------
 function ENT:OnAllyKilled(ent)
     self:FleeOnAllyDeath_Context()
+    self:AllyDieNearbyDebuff(ent)
+end
+
+ENT.Ally_DieDb = true 
+ENT.Ally_DieDb_MxDist = 2500 
+ENT.Ally_DieDbChance = 4
+ENT.Ally_DieDbNextT = 0 
+ENT.Ally_DieDb_DelAtt = true 
+ENT.Ally_DieDb_DelAttChance = 3 
+function ENT:AllyDieNearbyDebuff(ally)
+    if not self.Ally_DieDb then return end 
+
+    local conv = GetConVar("vj_stalker_ally_death_debuff"):GetInt()
+    if not conv or conv ~= 1 then return end 
+
+    if not IsValid(ally) then return end 
+
+    local dist = self:GetPos():Distance(ally:GetPos())
+    local maxDist = self.Ally_DieDb_MxDist or 2000
+    
+    if dist > maxDist then return end 
+    if self.RANDOMS_DEBUG then print("[Ally killed Debuff] our friendly who died was " .. ally:GetClass()) end 
+
+    local chance = self.Ally_DieDbChance or 3 
+    if not IsValid(self:GetEnemy()) then 
+        chance = math.min(1, math_floor(chance / 2))
+    end 
+
+    if mRng(1, chance) ~= 1 then return end 
+
+    if CurTime() < self.Ally_DieDbNextT then return end 
+    
+    local cmnDel = mRand(2, 6)
+    local c = CurTime()
+
+    self.TakingCoverT = c + math.min(1, math_floor(cmnDel / 2))
+    self.NextChaseTime = c + cmnDel
+    self.Ally_DieDbNextT = c + cmnDel
+
+    local delayConv = GetConVar("vj_stalker_ally_death_delay_attack"):GetInt()
+    if not self.Ally_DieDb_DelAtt then return end 
+    if not delayConv or delayConv ~= 1 then return end 
+    if mRng(1, self.Ally_DieDb_DelAttChance or 3) ~= 1 then return end 
+    self.NextDoAnyAttackT = c + mRand(0.25, 2)
 end
 
 function ENT:FleeOnAllyDeath_Context()
     if not self.Flee_OnAllyDeath then return end 
+
+    local conv = GetConVar("vj_stalker_ally_death_flee"):GetInt()
+    if not conv or conv ~= 1 then return end 
+
     if self.VJ_IsBeingControlled then return end 
-    if self.IsGuard or self.MovementType == VJ_MOVETYPE_STATIONARY then return end 
+    if not self:IsAbleToMoveNow() then return end 
     if not self:IsOnGround() then return end 
 
     local deFlg = self.RANDOMS_DEBUG
@@ -9076,20 +10739,14 @@ function ENT:FleeOnAllyDeath_Context()
 
     if isAlertedOrHasEnemy then
         panicChance = cmbChance
-        if deFlg then 
-            print("Alert/Combat panic chance: 1 in " .. cmbChance)
-        end 
+        if deFlg then print("Alert/Combat panic chance: 1 in " .. cmbChance) end 
     else
         panicChance = idleChance
-        if deFlg then 
-            print("Idle panic chance: 1 in " .. idleChance)
-        end 
+        if deFlg then print("Idle panic chance: 1 in " .. idleChance) end 
     end
     
     if mRng(1, panicChance) == 1 and not self.IsPanicked and curT > (self.PanicCooldownT or 0) then 
-        if deFlg then 
-            print("Panic triggered! (Chance was 1 in " .. panicChance .. ")")
-        end 
+        if deFlg then print("Panic triggered! (Chance was 1 in " .. panicChance .. ")") end 
         self.IsPanicked = true
         if mRng(1, 2) == 1 then 
             self:PlaySoundSystem(panicVoice)
@@ -9097,9 +10754,7 @@ function ENT:FleeOnAllyDeath_Context()
         self:StartFlee(isAlertedOrHasEnemy)
         self.PanicCooldownT = curT + mRand(5, 15)
     else
-        if deFlg then 
-            print("Panic not triggered. (Chance was 1 in " .. panicChance .. ")")
-        end 
+        if deFlg then  print("Panic not triggered. (Chance was 1 in " .. panicChance .. ")") end 
     end
 end 
 
@@ -9110,8 +10765,9 @@ function ENT:StartFlee(inCombat)
 
     local curT = CurTime()
     local checkDist = mRand(250, 925)
-    local move = "TASK_RUN_PATH" or "TASK_WALK_PATH"
+    local move = "TASK_RUN_PATH"
     if self.IsPanicked and not self:IsBusy("Activities") then
+
         self.IsPanicked = false
         self:ClearSchedule()
         self:StopMoving()
@@ -9153,149 +10809,64 @@ function ENT:StartFlee(inCombat)
                         end)
                     end
                 end
-                self.NextDoAnyAttackT = curT + mRand(0.5, 2.5)
+                local delayConv = GetConVar("vj_stalker_ally_death_delay_attack"):GetInt()
+                if delayConv and delayConv == 1 then 
+                    self.NextDoAnyAttackT = curT + mRand(0.5, 2.5)
+                end 
             end
         end)
     end
 end
 ---------------------------------------------------------------------------------------------------------------------------------------------
-ENT.FootSteps = {
-    [MAT_ANTLION] = {"physics/flesh/flesh_impact_hard1.wav","physics/flesh/flesh_impact_hard2.wav","physics/flesh/flesh_impact_hard3.wav","physics/flesh/flesh_impact_hard4.wav","physics/flesh/flesh_impact_hard5.wav","physics/flesh/flesh_impact_hard6.wav"},
-    [MAT_BLOODYFLESH] = {"physics/flesh/flesh_impact_hard1.wav","physics/flesh/flesh_impact_hard2.wav","physics/flesh/flesh_impact_hard3.wav","physics/flesh/flesh_impact_hard4.wav","physics/flesh/flesh_impact_hard5.wav","physics/flesh/flesh_impact_hard6.wav"},
-    [MAT_CONCRETE] = {"npc/footsteps/hardboot_generic1.wav","npc/footsteps/hardboot_generic2.wav","npc/footsteps/hardboot_generic3.wav","npc/footsteps/hardboot_generic4.wav","npc/footsteps/hardboot_generic5.wav","npc/footsteps/hardboot_generic6.wav"},
-    [MAT_DIRT] = {"general_sds/eft_footsteps/soil_run_01.ogg","general_sds/eft_footsteps/soil_run_02.ogg","general_sds/eft_footsteps/soil_run_03.ogg","general_sds/eft_footsteps/soil_run_04.ogg","general_sds/eft_footsteps/soil_run_05.ogg","general_sds/eft_footsteps/soil_run_06.ogg","general_sds/eft_footsteps/soil_run_07.ogg","general_sds/eft_footsteps/soil_run_08.ogg"},
-    [MAT_FLESH] = {"physics/flesh/flesh_impact_hard1.wav","physics/flesh/flesh_impact_hard2.wav","physics/flesh/flesh_impact_hard3.wav","physics/flesh/flesh_impact_hard4.wav","physics/flesh/flesh_impact_hard5.wav","physics/flesh/flesh_impact_hard6.wav"},
-    [MAT_GRATE] = {"general_sds/eft_footsteps/walk_proflist_01.ogg","general_sds/eft_footsteps/walk_proflist_02.ogg","general_sds/eft_footsteps/walk_proflist_03.ogg","general_sds/eft_footsteps/walk_proflist_04.ogg","general_sds/eft_footsteps/walk_proflist_05.ogg","general_sds/eft_footsteps/walk_proflist_06.ogg","general_sds/eft_footsteps/walk_proflist_07.ogg","general_sds/eft_footsteps/walk_proflist_08.ogg","general_sds/eft_footsteps/walk_proflist_09.ogg","general_sds/eft_footsteps/walk_proflist_10.ogg"},
-    [MAT_ALIENFLESH] = {"physics/flesh/flesh_impact_hard1.wav","physics/flesh/flesh_impact_hard2.wav","physics/flesh/flesh_impact_hard3.wav","physics/flesh/flesh_impact_hard4.wav","physics/flesh/flesh_impact_hard5.wav","physics/flesh/flesh_impact_hard6.wav"},
-    [74] = {"player/footsteps/sand1.wav","player/footsteps/sand2.wav","player/footsteps/sand3.wav","player/footsteps/sand4.wav"}, -- This is snow.
-    [MAT_PLASTIC] = {"physics/plaster/drywall_footstep1.wav","physics/plaster/drywall_footstep2.wav","physics/plaster/drywall_footstep3.wav","physics/plaster/drywall_footstep4.wav"},
-    [MAT_METAL] = {"general_sds/eft_footsteps/sprint_metal1.ogg","general_sds/eft_footsteps/sprint_metal2.ogg","general_sds/eft_footsteps/sprint_metal3.ogg","general_sds/eft_footsteps/sprint_metal4.ogg","general_sds/eft_footsteps/sprint_metal5.ogg","general_sds/eft_footsteps/sprint_metal6.ogg"},
-    [MAT_SAND] = {"player/footsteps/sand1.wav","player/footsteps/sand2.wav","player/footsteps/sand3.wav","player/footsteps/sand4.wav"},
-    [MAT_FOLIAGE] = {"general_sds/eft_footsteps/sprint2_grasslow_01.ogg","general_sds/eft_footsteps/sprint2_grasslow_02.ogg","general_sds/eft_footsteps/sprint2_grasslow_03.ogg","general_sds/eft_footsteps/sprint2_grasslow_04.ogg","general_sds/eft_footsteps/sprint2_grasslow_05.ogg","general_sds/eft_footsteps/sprint2_grasslow_06.ogg","general_sds/eft_footsteps/sprint2_grasslow_07.ogg","general_sds/eft_footsteps/sprint2_grasslow_08.ogg"},
-    [MAT_COMPUTER] = {"physics/plaster/drywall_footstep1.wav","physics/plaster/drywall_footstep2.wav","physics/plaster/drywall_footstep3.wav","physics/plaster/drywall_footstep4.wav"},
-    [MAT_SLOSH] = {"general_sds/eft_footsteps/walk_puddle_01.ogg","general_sds/eft_footsteps/walk_puddle_02.ogg","general_sds/eft_footsteps/walk_puddle_03.ogg","general_sds/eft_footsteps/walk_puddle_04.ogg","general_sds/eft_footsteps/walk_puddle_05.ogg","general_sds/eft_footsteps/walk_puddle_06.ogg","general_sds/eft_footsteps/walk_puddle_07.ogg","general_sds/eft_footsteps/walk_puddle_08.ogg","general_sds/eft_footsteps/walk_puddle_09.ogg"},
-    [MAT_TILE] = {"general_sds/eft_footsteps/tile1.wav","general_sds/eft_footsteps/tile2.wav","general_sds/eft_footsteps/tile3.wav","general_sds/eft_footsteps/tile4.wav","general_sds/eft_footsteps/tile5.wav","general_sds/eft_footsteps/tile6.wav","general_sds/eft_footsteps/tile7.wav","general_sds/eft_footsteps/tile8.wav","general_sds/eft_footsteps/tile9.wav","general_sds/eft_footsteps/tile10.wav","general_sds/eft_footsteps/tile11.wav"},
-    [85] = {"general_sds/eft_footsteps/sprint2_grasslow_01.ogg","general_sds/eft_footsteps/sprint2_grasslow_02.ogg","general_sds/eft_footsteps/sprint2_grasslow_03.ogg","general_sds/eft_footsteps/sprint2_grasslow_04.ogg","general_sds/eft_footsteps/sprint2_grasslow_05.ogg","general_sds/eft_footsteps/sprint2_grasslow_06.ogg","general_sds/eft_footsteps/sprint2_grasslow_07.ogg","general_sds/eft_footsteps/sprint2_grasslow_08.ogg"}, -- Grass.
-    [MAT_VENT] = {"general_sds/eft_footsteps/walk_proflist_01.ogg","general_sds/eft_footsteps/walk_proflist_02.ogg","general_sds/eft_footsteps/walk_proflist_03.ogg","general_sds/eft_footsteps/walk_proflist_04.ogg","general_sds/eft_footsteps/walk_proflist_05.ogg","general_sds/eft_footsteps/walk_proflist_06.ogg","general_sds/eft_footsteps/walk_proflist_07.ogg","general_sds/eft_footsteps/walk_proflist_08.ogg","general_sds/eft_footsteps/walk_proflist_09.ogg","general_sds/eft_footsteps/walk_proflist_10.ogg"},
-    [MAT_WOOD] = {"general_sds/eft_footsteps/sprint_wood_01.ogg","general_sds/eft_footsteps/sprint_wood_02.ogg","general_sds/eft_footsteps/sprint_wood_03.ogg","general_sds/eft_footsteps/sprint_wood_04.ogg","general_sds/eft_footsteps/sprint_wood_05.ogg","general_sds/eft_footsteps/sprint_wood_06.ogg","general_sds/eft_footsteps/sprint_wood_07.ogg","general_sds/eft_footsteps/sprint_wood_08.ogg","general_sds/eft_footsteps/sprint_wood_09.ogg","general_sds/eft_footsteps/sprint_wood_10.ogg","general_sds/eft_footsteps/sprint_wood_11.ogg","general_sds/eft_footsteps/sprint_wood_12.ogg","general_sds/eft_footsteps/sprint_wood_13.ogg"},
-    [MAT_GLASS] = {"general_sds/eft_footsteps/sprint_glass_01.ogg","general_sds/eft_footsteps/sprint_glass_02.ogg","general_sds/eft_footsteps/sprint_glass_03.ogg","general_sds/eft_footsteps/sprint_glass_04.ogg","general_sds/eft_footsteps/sprint_glass_05.ogg","general_sds/eft_footsteps/sprint_glass_06.ogg","general_sds/eft_footsteps/sprint_glass_07.ogg","general_sds/eft_footsteps/sprint_glass_08.ogg","general_sds/eft_footsteps/sprint_glass_09.ogg","general_sds/eft_footsteps/sprint_glass_10.ogg"}
-}
----------------------------------------------------------------------------------------------------------------------------------------------
-	-- ====== Sound File Paths ====== --
--- Leave blank if you don't want any sounds to play
-ENT.OnFirePain = {"st_brutal_deaths/brutal_scream/rus_screams_fire/scream_157.wav","st_brutal_deaths/brutal_scream/rus_screams_fire/scream_158.wav","st_brutal_deaths/brutal_scream/rus_screams_fire/scream_159.wav","st_brutal_deaths/brutal_scream/rus_screams_fire/scream_160.wav","st_brutal_deaths/brutal_scream/rus_screams_fire/scream_161.wav","st_brutal_deaths/brutal_scream/rus_screams_fire/scream_162.wav","st_brutal_deaths/brutal_scream/rus_screams_fire/scream_163.wav","st_brutal_deaths/brutal_scream/rus_screams_fire/506.wav"}
-
-//General universal sounds
-ENT.GoreOrGibSounds                  = {"general_sds/gibs_gore/gutexplosion-1.wav", "general_sds/gibs_gore/gutexplosion-2.wav", "general_sds/gibs_gore/gutexplosion-3.wav", "general_sds/gibs_gore/fullbodygib-1.wav", "general_sds/gibs_gore/fullbodygib-2.wav", "general_sds/gibs_gore/fullbodygib-3.wav"} -- need to change path soon 
-ENT.SoundTbl_MeleeAttackExtra        = {"npc/zombie/claw_strike1.wav","npc/zombie/claw_strike2.wav","npc/zombie/claw_strike3.wav"}
-ENT.SoundTbl_MeleeAttackMiss         = {"npc/zombie/claw_miss1.wav","npc/zombie/claw_miss2.wav"}
-ENT.SoundTbl_MeleeAttack             = {"npc/zombie/claw_strike1.wav","npc/zombie/claw_strike2.wav","npc/zombie/claw_strike3.wav"}
-ENT.SoundTbl_SNPCRoll                = {"general_sds/evade_roll/roll_2.wav","general_sds/evade_roll/roll_1.mp3"}
-ENT.SoundTbl_GibDeath                = {"snpc/npc/hgrunt_young/hg_gibdeath01.wav","snpc/npc/hgrunt_young/hg_gibdeath02.wav","snpc/npc/hgrunt_young/hg_gibdeath03.wav","snpc/npc/hgrunt_young/hg_gibdeath04.wav","snpc/npc/hgrunt_young/hg_gibdeath05.wav","snpc/npc/hgrunt_young/hg_gibdeath06.wav","snpc/npc/hgrunt_young/hg_gibdeath07.wav","snpc/npc/hgrunt_young/hg_gibdeath08.wav","snpc/npc/hgrunt_young/hg_gibdeath09.wav","snpc/npc/hgrunt_young/hg_gibdeath10.wav","snpc/npc/hgrunt_young/hg_gibdeath11.wav","snpc/npc/hgrunt/hg_gibdeath01.wav","snpc/npc/hgrunt/hg_gibdeath02.wav","snpc/npc/hgrunt/hg_gibdeath03.wav","snpc/npc/hgrunt/hg_gibdeath04.wav","snpc/npc/hgrunt/hg_gibdeath05.wav","snpc/npc/hgrunt/hg_gibdeath06.wav","snpc/npc/hgrunt/hg_gibdeath07.wav","snpc/npc/hgrunt/hg_gibdeath08.wav","snpc/npc/hgrunt/hg_gibdeath09.wav","snpc/npc/hgrunt/hg_gibdeath10.wav","snpc/npc/hgrunt/hg_gibdeath11.wav"}
-ENT.SoundTbl_Impact                  = {"snpc/wrhf/impact/flesh_impact_bullet1.wav","snpc/wrhf/impact/flesh_impact_bullet2.wav","snpc/wrhf/impact/flesh_impact_bullet3.wav","snpc/wrhf/impact/flesh_impact_bullet4.wav","snpc/wrhf/impact/flesh_impact_bullet5.wav"}
-ENT.SoundTbl_ExtraArmorImpacts       = {"general_sds/hit_or_impact/helm_hs_impact/headshot_helmet_" .. mRng(1, 16) .. ".wav","general_sds/hit_or_impact/helm_hs_impact/headshot_helmet_style1_" .. mRng(1, 14) .. ".wav","general_sds/hit_or_impact/kevlar_armor/armor_hit.wav","general_sds/hit_or_impact/kevlar_armor/kevlar_hit1.wav","general_sds/hit_or_impact/kevlar_armor/kevlar_hit2.wav"}
-ENT.SoundTbl_OnHeadshot              = {"general_sds/hit_or_impact/headshot/ex_headshots/headshot_flesh_" .. mRng(1, 38) .. ".wav", "general_sds/hit_or_impact/headshot/headshot_1.wav","general_sds/hit_or_impact/headshot/headshot_2.wav","general_sds/hit_or_impact/headshot/headshot_3.wav","snpc/general_sds/hit_or_impact/headshot/headshot_4.wav","general_sds/hit_or_impact/headshot/headshot_5.wav","general_sds/hit_or_impact/headshot/headshot_6.wav","general_sds/hit_or_impact/headshot/headshot_7.wav","general_sds/hit_or_impact/headshot/headshot_8.wav","general_sds/hit_or_impact/headshot/headshot_9.wav","general_sds/hit_or_impact/headshot/headshot_10.wav","general_sds/hit_or_impact/headshot/headshot_11.wav","general_sds/hit_or_impact/headshot/headshot_12.wav","general_sds/hit_or_impact/headshot/headshot_13.wav","general_sds/hit_or_impact/headshot/headshot_14.wav","general_sds/hit_or_impact/headshot/headshot_15.wav"}
-ENT.DrawNewWeaponSound               = {"vj_base/weapons/draw_rifle.wav","vj_base/weapons/draw_pistol.wav"}
-ENT.WaterSplashSounds                = {"player/footsteps/wade1.wav", "player/footsteps/wade2.wav","player/footsteps/wade3.wav", "player/footsteps/wade4.wav", "player/footsteps/wade5.wav", "player/footsteps/wade6.wav","player/footsteps/wade7.wav", "player/footsteps/wade8.wav", "ambient/water/water_splash1.wav", "ambient/water/water_splash2.wav", "ambient/water/water_splash3.wav"}
-ENT.JumpGruntTbl                     = {"general_sds/jump_land_grunts/jump_01.wav","general_sds/jump_land_grunts/jump_02.wav","general_sds/jump_land_grunts/jump_03.wav","general_sds/jump_land_grunts/jump_04.wav","general_sds/jump_land_grunts/jump_05.wav","general_sds/jump_land_grunts/jump_06.wav"}
-ENT.JumpLandGruntTbl                 = {"general_sds/jump_land_grunts/land_01.wav","general_sds/jump_land_grunts/land_02.wav","general_sds/jump_land_grunts/land_03.wav","general_sds/jump_land_grunts/land_04.wav"}
-ENT.EquipmentClanging_Tbl            = {"general_sds/toolbelt_sounds/toolbelt_01.wav","general_sds/toolbelt_sounds/toolbelt_02.wav","general_sds/toolbelt_sounds/toolbelt_03.wav","general_sds/toolbelt_sounds/toolbelt_04.wav","general_sds/toolbelt_sounds/toolbelt_05.wav","general_sds/toolbelt_sounds/toolbelt_06.wav"}
-ENT.ClothingRustling_Tbl             = {"general_sds/eft_gear_rustling/tac_gear_" .. mRng(1, 40) .. ".ogg"}
-ENT.SoundTbl_BeforeMeleeAttack       = {"general_sds/melee/melee1.wav","general_sds/melee/melee2.wav","general_sds/melee/melee3.wav","general_sds/melee/melee4.wav","general_sds/melee/melee5.wav","general_sds/melee/melee6.wav","general_sds/melee/melee7wav","general_sds/melee/melee8.wav","general_sds/melee/melee9.wav","general_sds/melee/melee10.wav","general_sds/melee/melee11.wav","general_sds/melee/melee12.wav","general_sds/melee/melee13.wav","general_sds/melee/melee4.wav","general_sds/melee/melee15.wav","general_sds/melee/melee16.wav"}
-ENT.Rein_Armor_Richochet_Tbl         = {"general_sds/richochet/ric1.wav","general_sds/richochet/ric2.wav","general_sds/richochet/ric3.wav","general_sds/richochet/ric4.wav","general_sds/richochet/ric5.wav"}
-ENT.SoundTbl_BackgroundRadioDialogue = {"st_faction_sounds/mil_fac_radio_chat/mil_rnd_radio_1.ogg","st_faction_sounds/mil_fac_radio_chat/mil_rnd_radio_2.ogg","st_faction_sounds/mil_fac_radio_chat/mil_rnd_radio_3.ogg","st_faction_sounds/mil_fac_radio_chat/mil_rnd_radio_4.ogg","st_faction_sounds/mil_fac_radio_chat/mil_rnd_radio_5.ogg","st_faction_sounds/mil_fac_radio_chat/mil_rnd_radio_6.ogg","st_faction_sounds/mil_fac_radio_chat/mil_rnd_radio_7.ogg","st_faction_sounds/mil_fac_radio_chat/mil_rnd_radio_8.ogg","st_faction_sounds/mil_fac_radio_chat/radio1.wav","st_faction_sounds/mil_fac_radio_chat/radio2.wav","st_faction_sounds/mil_fac_radio_chat/radio3.wav","st_faction_sounds/mil_fac_radio_chat/radio4.wav","st_faction_sounds/mil_fac_radio_chat/radio5.wav","st_faction_sounds/mil_fac_radio_chat/radio6.wav","st_faction_sounds/mil_fac_radio_chat/radio7.wav","st_faction_sounds/mil_fac_radio_chat/radio8.wav","st_faction_sounds/mil_fac_radio_chat/radio9.wav"}
-ENT.Footstep_Sneaking                = {"npc/zombie/foot1.wav","npc/zombie/foot2.wav","npc/zombie/foot3.wav"}
-
-
-//Faction specific dialogue, will improve soon.
-ENT.SoundTbl_Investigate = {"st_faction_sounds/stalker_vo/general_base_dialogue/hear_1.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/hear_2.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/hear_3.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/hear_4.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/hear_5.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/hear_6.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/hear_7.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/hear_8.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/hear_9.ogg"}
-
-ENT.SoundTbl_DangerSight = {"general_sds/ext_reactions/hide_" .. mRng(1, 8) .. ".mp3"}
-
-ENT.SoundTbl_MedicReceiveHeal = {"general_sds/ext_reactions/thanks_" .. mRng(1, 6) .. ".mp3","st_faction_sounds/stalker_vo/general_base_dialogue/thanx_1.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/thanx_2.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/thanx_3.ogg","general_spetsnaz_snds/gotmedic1.mp3","general_spetsnaz_snds/gotmedic2.mp3","general_spetsnaz_snds/gotmedic3.mp3","general_spetsnaz_snds/gotmedic4.mp3","general_spetsnaz_snds/gotmedic5.mp3","general_spetsnaz_snds/gotmedic6.mp3","general_spetsnaz_snds/gotmedic7.mp3"}
-
-ENT.SoundTbl_MedicBeforeHeal = {"st_faction_sounds/stalker_vo/general_base_dialogue/medkit_1.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/medkit_2.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/medkit_3.ogg","general_spetsnaz_snds/health01.wav","general_spetsnaz_snds/health02.wav","general_spetsnaz_snds/health03.wav","general_spetsnaz_snds/health04.wav","general_spetsnaz_snds/health05.wav","general_spetsnaz_snds/heal1.mp3","general_spetsnaz_snds/heal2.mp3","general_spetsnaz_snds/heal3.mp3","general_spetsnaz_snds/heal4.mp3","general_spetsnaz_snds/heal5.mp3","general_spetsnaz_snds/heal6.mp3","general_spetsnaz_snds/heal7.mp3","general_spetsnaz_snds/heal8.mp3","general_spetsnaz_snds/heal9.mp3","general_spetsnaz_snds/heal10.mp3"}
-
-ENT.SoundTbl_Breath = {"st_faction_sounds/stalker_vo/general_base_dialogue/breath_1.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/breath_2.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/breath_3.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/breath_4.ogg"}
-
-ENT.SoundTbl_Idle = {"st_faction_sounds/stalker_vo/general_base_dialogue/idle_1.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/idle_2.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/idle_3.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/idle_4.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/idle_5.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/idle_6.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/idle_7.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/idle_8.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/idle_9.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/idle_10.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/idle_11.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/idle_12.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/idle_13.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/idle_14.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/idle_15.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/idle_16.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/idle_17.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/idle_18.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/idle_19.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/idle_20.ogg","general_spetsnaz_snds/free1.wav","general_spetsnaz_snds/free2.wav","general_spetsnaz_snds/free3.wav","general_spetsnaz_snds/free4.wav","general_spetsnaz_snds/free5.wav","general_spetsnaz_snds/free6.wav","general_spetsnaz_snds/free7.wav","general_spetsnaz_snds/free8.wav","general_spetsnaz_snds/free9.wav","general_spetsnaz_snds/free10.wav","general_spetsnaz_snds/free11.wav","general_spetsnaz_snds/free12.wav","general_spetsnaz_snds/free13.wav","general_spetsnaz_snds/free14.wav","general_spetsnaz_snds/free15.wav","general_spetsnaz_snds/free16.wav","general_spetsnaz_snds/free17.wav","general_spetsnaz_snds/free18.wav","general_spetsnaz_snds/free19.wav","general_spetsnaz_snds/free20.wav","general_spetsnaz_snds/free21.wav","general_spetsnaz_snds/free22.wav","general_spetsnaz_snds/free23.wav","general_spetsnaz_snds/free24.wav","general_spetsnaz_snds/free25.wav","general_spetsnaz_snds/free26.wav","general_spetsnaz_snds/free27.wav","general_spetsnaz_snds/free28.wav","general_spetsnaz_snds/free29.wav","general_spetsnaz_snds/free30.wav","general_spetsnaz_snds/idledraft1.wav","general_spetsnaz_snds/idledraft2.wav","general_spetsnaz_snds/idledraft3.wav","general_spetsnaz_snds/idledraft4.wav","general_spetsnaz_snds/idledraft5.wav","general_spetsnaz_snds/idleburp.wav","general_spetsnaz_snds/idlewhistle.wav","st_faction_sounds/stalker_vo/mil_specific_dialogue/idle_1.ogg","st_faction_sounds/stalker_vo/mil_specific_dialogue/idle_2.ogg","st_faction_sounds/stalker_vo/mil_specific_dialogue/idle_3.ogg","st_faction_sounds/stalker_vo/mil_specific_dialogue/idle_4.ogg","st_faction_sounds/stalker_vo/mil_specific_dialogue/idle_5.ogg","st_faction_sounds/stalker_vo/mil_specific_dialogue/idle_6.ogg","st_faction_sounds/stalker_vo/mil_specific_dialogue/idle_7.ogg","st_faction_sounds/stalker_vo/mil_specific_dialogue/idle_8.ogg","st_faction_sounds/stalker_vo/mil_specific_dialogue/idle_9.ogg","st_faction_sounds/stalker_vo/mil_specific_dialogue/idle_10.ogg","st_faction_sounds/stalker_vo/mil_specific_dialogue/idle_11.ogg","st_faction_sounds/stalker_vo/mil_specific_dialogue/idle_12.ogg","st_faction_sounds/stalker_vo/mil_specific_dialogue/idle_13.ogg","st_faction_sounds/stalker_vo/mil_specific_dialogue/idle_14.ogg","st_faction_sounds/stalker_vo/mil_specific_dialogue/idle_15.ogg","st_faction_sounds/stalker_vo/mil_specific_dialogue/idle_16.ogg","st_faction_sounds/stalker_vo/mil_specific_dialogue/idle_17.ogg","st_faction_sounds/stalker_vo/mil_specific_dialogue/idle_18.ogg","st_faction_sounds/stalker_vo/mil_specific_dialogue/idle_19.ogg","st_faction_sounds/stalker_vo/mil_specific_dialogue/idle_20.ogg","st_faction_sounds/stalker_vo/mil_specific_dialogue/idle_21.ogg","st_faction_sounds/stalker_vo/mil_specific_dialogue/idle_22.ogg","st_faction_sounds/stalker_vo/mil_specific_dialogue/idle_23.ogg","st_faction_sounds/stalker_vo/mil_specific_dialogue/idle_24.ogg","st_faction_sounds/stalker_vo/mil_specific_dialogue/idle_25.ogg","st_faction_sounds/stalker_vo/mil_specific_dialogue/idle_26.ogg","st_faction_sounds/stalker_vo/mil_specific_dialogue/idle_27.ogg","st_faction_sounds/stalker_vo/mil_specific_dialogue/idle_28.ogg","st_faction_sounds/stalker_vo/mil_specific_dialogue/idle_29.ogg","st_faction_sounds/stalker_vo/mil_specific_dialogue/idle_30.ogg","general_spetsnaz_snds/chat1.mp3","general_spetsnaz_snds/chat2.mp3","general_spetsnaz_snds/chat3.mp3","general_spetsnaz_snds/chat4.mp3","general_spetsnaz_snds/chat5.mp3","general_spetsnaz_snds/chat6.mp3","general_spetsnaz_snds/chat7.mp3","general_spetsnaz_snds/chat8.mp3","general_spetsnaz_snds/chat9.mp3","general_spetsnaz_snds/chat10.mp3","general_spetsnaz_snds/chat11.mp3","general_spetsnaz_snds/chat12.mp3","general_spetsnaz_snds/chat13.mp3","general_spetsnaz_snds/chat14.mp3","general_spetsnaz_snds/chat15.mp3","general_spetsnaz_snds/chat16.mp3","general_spetsnaz_snds/chat17.mp3","general_spetsnaz_snds/chat18.mp3","general_spetsnaz_snds/chat19.mp3"}
-
-ENT.SoundTbl_Alert = {"st_faction_sounds/stalker_vo/general_base_dialogue/detour_1.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/detour_2.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/detour_3.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/detour_4.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/detour_5.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/detour_6.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/enemy_1.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/enemy_2.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/enemy_3.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/enemy_4.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/enemy_5.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/enemy_6.ogg","general_spetsnaz_snds/alert1.wav","general_spetsnaz_snds/alert2.wav","general_spetsnaz_snds/alert3.wav","general_spetsnaz_snds/alert4.wav","general_spetsnaz_snds/alert5.wav","general_spetsnaz_snds/alert6.wav","general_spetsnaz_snds/alert7.wav","general_spetsnaz_snds/alert8.wav","general_spetsnaz_snds/alert9.wav","general_spetsnaz_snds/alert1.wav","general_spetsnaz_snds/alert2.wav","general_spetsnaz_snds/alert3.wav","general_spetsnaz_snds/alert4.wav","general_spetsnaz_snds/alert5.wav","general_spetsnaz_snds/alert6.wav","general_spetsnaz_snds/alert7.wav","general_spetsnaz_snds/alert8.wav","general_spetsnaz_snds/alert9.wav","general_spetsnaz_snds/alert10.wav","general_spetsnaz_snds/alert11.wav","st_faction_sounds/stalker_vo/general_base_dialogue/panic_1.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/panic_2.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/panic_3.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/panic_4.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/panic_5.ogg","general_spetsnaz_snds/VO_RU_Grunt_ContactCall_01A_DimitryRozental.ogg","general_spetsnaz_snds/VO_RU_Grunt_ContactCall_02A_DimitryRozental.ogg","general_spetsnaz_snds/VO_RU_Grunt_ContactCall_03A_DimitryRozental.ogg","general_spetsnaz_snds/VO_RU_Grunt_ContactCall_04A_DimitryRozental.ogg","general_spetsnaz_snds/VO_RU_Grunt_ContactCall_05A_DimitryRozental.ogg","general_spetsnaz_snds/VO_RU_Grunt_ContactCall_06A_DimitryRozental.ogg","general_spetsnaz_snds/VO_RU_Grunt_ContactCall_07A_DimitryRozental.ogg"}
-
-ENT.SoundTbl_CombatIdle = {"st_faction_sounds/stalker_vo/general_base_dialogue/attack_7.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/attack_8.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/attack_9.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/attack_10.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/attack_11.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/attack_12.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/attack_13.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/attack_14.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/cover_fire_1.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/cover_fire_2.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/cover_fire_3.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/cover_fire_4.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/cover_fire_5.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/cover_fire_6.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/cover_fire_7.ogg","general_spetsnaz_snds/attack1.wav","general_spetsnaz_snds/attack2.wav","general_spetsnaz_snds/attack3.wav","general_spetsnaz_snds/attack4.wav","general_spetsnaz_snds/attack5.wav","general_spetsnaz_snds/attack6.wav","general_spetsnaz_snds/attack7.wav","general_spetsnaz_snds/attack8.wav","general_spetsnaz_snds/attack9.wav","general_spetsnaz_snds/attack10.wav","general_spetsnaz_snds/attack11.wav","general_spetsnaz_snds/attack12.wav","general_spetsnaz_snds/attack13.wav","general_spetsnaz_snds/attack14.wav","general_spetsnaz_snds/attack15.wav","general_spetsnaz_snds/attack16.wav","general_spetsnaz_snds/attack1.wav","general_spetsnaz_snds/attack2.wav","general_spetsnaz_snds/attack3.wav","general_spetsnaz_snds/attack4.wav","general_spetsnaz_snds/attack5.wav","general_spetsnaz_snds/attack6.wav","general_spetsnaz_snds/attack7.wav","russian/attack1.wav","russian/attack2.wav","russian/attack3.wav","russian/attack4.wav","russian/attack5.wav","russian/attack6.wav","russian/attack7.wav","russian/attack8.wav","russian/attack9.wav","russian/attack10.wav","russian/attack11.wav","russian/attack12.wav","general_spetsnaz_snds/combat1.mp3","general_spetsnaz_snds/combat2.mp3","general_spetsnaz_snds/combat3.mp3","general_spetsnaz_snds/combat4.mp3","general_spetsnaz_snds/combat5.mp3","general_spetsnaz_snds/combat6.mp3","general_spetsnaz_snds/combat7.mp3","general_spetsnaz_snds/combat8.mp3","general_spetsnaz_snds/combat9.mp3","general_spetsnaz_snds/combat10.mp3","general_spetsnaz_snds/combat11.mp3","general_spetsnaz_snds/combat12.mp3","general_spetsnaz_snds/combat13.mp3","general_spetsnaz_snds/combat14.mp3","general_spetsnaz_snds/combat15.mp3","general_spetsnaz_snds/combat16.mp3","general_spetsnaz_snds/combat17.mp3","general_spetsnaz_snds/combat18.mp3","general_spetsnaz_snds/combat19.mp3","general_spetsnaz_snds/combat20.mp3"}
-
-ENT.SoundTbl_Suppressing = {"st_faction_sounds/stalker_vo/general_base_dialogue/cover_fire_8.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/cover_fire_9.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/cover_fire_10.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/cover_fire_11.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/cover_fire_12.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/cover_fire_13.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/cover_fire_14.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/cover_fire_1.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/cover_fire_2.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/cover_fire_3.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/cover_fire_4.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/cover_fire_5.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/cover_fire_6.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/cover_fire_7.ogg","general_spetsnaz_snds/pursuing1.wav","general_spetsnaz_snds/pursuing2.wav","general_spetsnaz_snds/pursuing3.wav","general_spetsnaz_snds/pursuing4.wav","general_spetsnaz_snds/pursuing5.wav","general_spetsnaz_snds/pursuing6.wav", "general_spetsnaz_snds/suppressing1.wav","general_spetsnaz_snds/suppressing2.wav","general_spetsnaz_snds/suppressing3.wav","general_spetsnaz_snds/suppressing4.wav","general_spetsnaz_snds/suppressing5.wav","general_spetsnaz_snds/suppressing6.wav","general_spetsnaz_snds/suppressing7.wav","general_spetsnaz_snds/suppressing8.wav","general_spetsnaz_snds/suppressing9.wav","general_spetsnaz_snds/suppressing10.wav","general_spetsnaz_snds/suppressing11.wav","general_spetsnaz_snds/suppressing12.wav","general_spetsnaz_snds/suppressing1.wav","general_spetsnaz_snds/suppressing2.wav","general_spetsnaz_snds/suppressing3.wav","general_spetsnaz_snds/suppressing4.wav","general_spetsnaz_snds/suppressing5.wav","general_spetsnaz_snds/suppressing6.wav","general_spetsnaz_snds/suppressing7.wav","general_spetsnaz_snds/suppressing8.wav","general_spetsnaz_snds/suppressing9.wav","general_spetsnaz_snds/suppressing10.wav","general_spetsnaz_snds/suppressing11.wav","general_spetsnaz_snds/suppressing12.wav","general_spetsnaz_snds/suppressing13.wav","general_spetsnaz_snds/suppressing14.wav","general_spetsnaz_snds/suppressing15.wav","general_spetsnaz_snds/suppressing16.wav","general_spetsnaz_snds/suppressing17.wav","general_spetsnaz_snds/suppressing18.wav","general_spetsnaz_snds/suppressing19.wav","general_spetsnaz_snds/suppressing20.wav"}
-
-ENT.SoundTbl_WeaponReload = {"general_spetsnaz_snds/reloading1.wav","general_spetsnaz_snds/reloading2.wav","general_spetsnaz_snds/reloading3.wav","general_spetsnaz_snds/reloading4.wav","general_spetsnaz_snds/reloading5.wav","general_spetsnaz_snds/reloading6.wav","general_spetsnaz_snds/reloading7.wav","general_spetsnaz_snds/reloading8.wav","general_spetsnaz_snds/reloading9.wav","general_spetsnaz_snds/reloading10.wav","general_spetsnaz_snds/reloading11.wav","general_spetsnaz_snds/reloading12.wav","general_spetsnaz_snds/reloading13.wav","general_spetsnaz_snds/reloading14.wav","general_spetsnaz_snds/reloading15.wav","general_spetsnaz_snds/reloading16.wav","general_spetsnaz_snds/reloading17.wav","general_spetsnaz_snds/reloading18.wav","general_spetsnaz_snds/reloading19.wav","general_spetsnaz_snds/reloading20.wav","general_spetsnaz_snds/reloading21.wav","general_spetsnaz_snds/reloading22.wav","general_spetsnaz_snds/reloading23.wav","general_spetsnaz_snds/reloading24.wav","general_spetsnaz_snds/reloading25.wav","general_spetsnaz_snds/reloading26.wav","general_spetsnaz_snds/reloading27.wav","general_spetsnaz_snds/reloading28wav","general_spetsnaz_snds/reloading29.wav","general_spetsnaz_snds/reloading1.wav","general_spetsnaz_snds/reloading2.wav","general_spetsnaz_snds/reloading3.wav","general_spetsnaz_snds/reloading4.wav","general_spetsnaz_snds/reloading5.wav","general_spetsnaz_snds/reloading6.wav","general_spetsnaz_snds/reloading7.wav","general_spetsnaz_snds/reloading8.wav"}
-
-ENT.SoundTbl_GrenadeAttack = {"general_spetsnaz_snds/fragout1.wav","general_spetsnaz_snds/fragout2.wav","general_spetsnaz_snds/fragout3.wav","general_spetsnaz_snds/fragout4.wav","general_spetsnaz_snds/fragout5.wav","general_spetsnaz_snds/fragout6.wav","general_spetsnaz_snds/fragout7.wav","general_spetsnaz_snds/fragout8.wav","general_spetsnaz_snds/fragout9.wav","general_spetsnaz_snds/fragout10.wav","general_spetsnaz_snds/fragout11.wav","general_spetsnaz_snds/fragout12.wav","general_spetsnaz_snds/fragout13.wav","general_spetsnaz_snds/fragout14.wav","general_spetsnaz_snds/fragout1.wav","general_spetsnaz_snds/fragout2.wav","general_spetsnaz_snds/fragout3.wav","general_spetsnaz_snds/fragout4.wav","general_spetsnaz_snds/fragout5.wav","general_spetsnaz_snds/fragout6.wav","general_spetsnaz_snds/fragout7.wav","general_spetsnaz_snds/fragout8.wav","general_spetsnaz_snds/fragout9.wav","general_spetsnaz_snds/fragout10.wav","general_spetsnaz_snds/fragout11.wav","general_spetsnaz_snds/fragout12.wav","general_spetsnaz_snds/fragout13.wav","general_spetsnaz_snds/fragout14.wav","general_spetsnaz_snds/fragout15.wav","general_spetsnaz_snds/fragout16.wav","st_faction_sounds/stalker_vo/general_base_dialogue/grenade_1.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/grenade_2.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/grenade_3.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/grenade_ready_1.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/grenade_ready_2.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/grenade_ready_3.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/grenade_ready_4.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/grenade_ready_5.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/grenade_ready_6.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/grenade_ready7_.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/ready_1.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/ready_2.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/ready_3.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/ready_4.ogg","general_spetsnaz_snds/VO_RU_SL_FragOut_01A_AleksandrJuriev.ogg","general_spetsnaz_snds/VO_RU_SL_FragOut_02A_AleksandrJuriev.ogg","general_spetsnaz_snds/VO_RU_SL_FragOut_03A_AleksandrJuriev.ogg","general_spetsnaz_snds/VO_RU_SL_FragOut_04A_AleksandrJuriev.ogg","general_spetsnaz_snds/VO_RU_SL_FragOut_05A_AleksandrJuriev.ogg","general_spetsnaz_snds/VO_RU_SL_FragOut_06A_AleksandrJuriev.ogg","general_spetsnaz_snds/VO_RU_SL_FragOut_07A_AleksandrJuriev.ogg"}
-
-ENT.SoundTbl_OnGrenadeSight = {"general_spetsnaz_snds/grenade1.wav","general_spetsnaz_snds/grenade2.wav","general_spetsnaz_snds/grenade3.wav","general_spetsnaz_snds/grenade4.wav","general_spetsnaz_snds/grenade5.wav","general_spetsnaz_snds/grenade6.wav","general_spetsnaz_snds/grenade7.wav","general_spetsnaz_snds/grenade8.wav","general_spetsnaz_snds/grenade9.wav","general_spetsnaz_snds/grenade10.wav","general_spetsnaz_snds/grenade11.wav","general_spetsnaz_snds/grenade12.wav","general_spetsnaz_snds/grenade13.wav","general_spetsnaz_snds/grenade14.wav","general_spetsnaz_snds/grenade15.wav","general_spetsnaz_snds/grenade16.wav","general_spetsnaz_snds/grenade17.wav","general_spetsnaz_snds/grenade18.wav","general_spetsnaz_snds/grenade19.wav","general_spetsnaz_snds/grenade20.wav","general_spetsnaz_snds/grenade21.wav","general_spetsnaz_snds/grenade22.wav","general_spetsnaz_snds/grenade23.wav","general_spetsnaz_snds/grenade24.wav","general_spetsnaz_snds/grenade25.wav","general_spetsnaz_snds/grenade26.wav","general_spetsnaz_snds/grenade27.wav","general_spetsnaz_snds/grenade28.wav","general_spetsnaz_snds/grenade29.wav","general_spetsnaz_snds/grenade30.wav","general_spetsnaz_snds/grenade31.wav","general_spetsnaz_snds/grenade32.wav","general_spetsnaz_snds/grenade33.wav","general_spetsnaz_snds/grenade34.wav"}
-
-ENT.SoundTbl_OnKilledEnemy = {"st_faction_sounds/stalker_vo/general_base_dialogue/enemy_down_1.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/enemy_down_2.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/enemy_down_3.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/enemy_down_4.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/enemy_down_5.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/enemy_down_6.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/enemy_down_7.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/enemy_down_8.ogg","general_spetsnaz_snds/kill1.wav","general_spetsnaz_snds/kill2.wav","general_spetsnaz_snds/kill3.wav","general_spetsnaz_snds/kill4.wav","general_spetsnaz_snds/kill5.wav","general_spetsnaz_snds/kill6.wav","general_spetsnaz_snds/kill7.wav","general_spetsnaz_snds/kill8.wav","general_spetsnaz_snds/kill9.wav","general_spetsnaz_snds/kill10.wav","general_spetsnaz_snds/kill1.wav","general_spetsnaz_snds/kill2.wav","general_spetsnaz_snds/kill3.wav","general_spetsnaz_snds/kill4.wav","general_spetsnaz_snds/kill5.wav","general_spetsnaz_snds/kill6.wav","general_spetsnaz_snds/kill7.wav","general_spetsnaz_snds/kill8.wav","general_spetsnaz_snds/kill9.wav","general_spetsnaz_snds/kill10.wav","st_faction_sounds/stalker_vo/general_base_dialogue/dead_enemy_1.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/dead_enemy_2.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/dead_enemy_3.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/dead_enemy_4.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/dead_enemy_5.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/dead_enemy_6.ogg"}
-
-ENT.SoundTbl_AllyDeath = {"general_spetsnaz_snds/casualty1.wav","general_spetsnaz_snds/casualty2.wav","general_spetsnaz_snds/casualty3.wav","general_spetsnaz_snds/casualty4.wav","general_spetsnaz_snds/casualty5.wav","general_spetsnaz_snds/casualty6.wav","general_spetsnaz_snds/casualty7.wav","general_spetsnaz_snds/casualty8.wav","general_spetsnaz_snds/casualty9.wav","general_spetsnaz_snds/casualty10.wav","general_spetsnaz_snds/casualty11.wav","general_spetsnaz_snds/casualty12.wav","general_spetsnaz_snds/casualty13.wav","general_spetsnaz_snds/casualty14.wav","general_spetsnaz_snds/casualty15.wav","general_spetsnaz_snds/casualty16.wav","general_spetsnaz_snds/casualty17.wav","general_spetsnaz_snds/casualty18.wav","general_spetsnaz_snds/casualty19.wav","general_spetsnaz_snds/casualty20.wav","general_spetsnaz_snds/casualty21.wav","general_spetsnaz_snds/casualty22.wav","general_spetsnaz_snds/casualty23.wav","general_spetsnaz_snds/casualty24.wav","general_spetsnaz_snds/casualty25.wav","general_spetsnaz_snds/casualty2.wav","general_spetsnaz_snds/casualty27.wav","general_spetsnaz_snds/casualty28.wav","general_spetsnaz_snds/casualty29.wav","general_spetsnaz_snds/casualty30.wav","general_spetsnaz_snds/casualty31.wav","general_spetsnaz_snds/casualty32.wav","general_spetsnaz_snds/casualty33.wav","general_spetsnaz_snds/casualty34.wav"}
-
-ENT.SoundTbl_CombatIdle = {"st_faction_sounds/stalker_vo/general_base_dialogue/cover_fire_8.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/cover_fire_9.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/cover_fire_10.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/cover_fire_11.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/cover_fire_12.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/cover_fire_13.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/cover_fire_14.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/fire_1.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/fire_2.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/fire_3.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/fire_4.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/fire_5.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/backup_1.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/backup_2.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/backup_3.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/backup_4.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/backup_5.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/attack_1.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/attack_2.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/attack_3.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/attack_4.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/attack_5.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/attack_6.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/attack_1stalker.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/attack_2stalker.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/attack_3stalker.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/attack_4stalker.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/attack_5stalker.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/attack_6stalker.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/attack_one_1.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/attack_one_2.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/attack_one_3.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/attack_one_4.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/attack_one_5.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/attack_one_1stalker.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/attack_one_2stalker.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/attack_one_3stalker.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/attack_one_4stalker.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/attack_one_5stalker.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/script_attack_1.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/script_attack_2.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/script_attack_3.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/script_attack_4.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/script_attack_5.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/script_attack_6.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/script_attack_7.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/script_attack_8.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/script_attack_9.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/script_attack_10.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/script_attack_11.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/script_attack_12.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/script_attack_13.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/script_attack_14.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/script_attack_15.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/script_attack_1stalker.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/script_attack_2stalker.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/script_attack_3stalker.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/script_attack_4stalker.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/script_attack_5stalker.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/script_attack_6stalker.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/script_attack_7stalker.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/script_attack_8stalker.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/script_attack_9stalker.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/script_attack_10stalker.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/script_attack_11stalker.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/script_attack_12stalker.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/script_attack_13stalker.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/script_attack_14stalker.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/script_attack_15stalker.ogg"}
-
-ENT.SoundTbl_LostEnemy = {"st_faction_sounds/stalker_vo/general_base_dialogue/enemy_lost_1.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/enemy_lost_2.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/enemy_lost_3.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/enemy_lost_4.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/enemy_lost_5.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/enemy_lost_6.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/enemy_lost_7.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/enemy_lost_8.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/enemy_lost_9.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/enemy_lost_10.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/enemy_lost_1stalker.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/enemy_lost_2stalker.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/enemy_lost_3stalker.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/enemy_lost_4stalker.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/enemy_lost_5stalker.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/enemy_lost_6stalker.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/enemy_lost_7stalker.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/enemy_lost_8stalker.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/enemy_lost_9stalker.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/enemy_lost_10stalker.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/search_1.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/search_3.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/search_4.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/search_5.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/search_6.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/search_7.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/search_1stalker.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/search_2stalker.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/search_3stalker.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/search_4stalker.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/search_5stalker.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/search_6stalker.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/search_7stalker.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/search_8stalker.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/search_9stalker.ogg"}
-
-ENT.SoundTbl_IdleDialogue = {"general_spetsnaz_snds/dia_1.wav","general_spetsnaz_snds/dia_2.wav","general_spetsnaz_snds/idled.mp3","general_spetsnaz_snds/idled.mp3","general_spetsnaz_snds/idled2.mp3","general_spetsnaz_snds/idled3.mp3","general_spetsnaz_snds/idled4.mp3","general_spetsnaz_snds/idled5.mp3"}
-
-ENT.SoundTbl_IdleDialogueAnswer = {"general_spetsnaz_snds/VO_RU_SL_Negative_01A_AleksandrJuriev.ogg","general_spetsnaz_snds/VO_RU_SL_Negative_02A_AleksandrJuriev.ogg","general_spetsnaz_snds/VO_RU_SL_Negative_03A_AleksandrJuriev.ogg","general_spetsnaz_snds/VO_RU_SL_Negative_04A_AleksandrJuriev.ogg","general_spetsnaz_snds/VO_RU_SL_Negative_05A_AleksandrJuriev.ogg","general_spetsnaz_snds/VO_RU_SL_Negative_06A_AleksandrJuriev.ogg","general_spetsnaz_snds/VO_RU_SL_Negative_07A_AleksandrJuriev.ogg","general_spetsnaz_snds/VO_RU_SL_Negative_08A_AleksandrJuriev.ogg","general_spetsnaz_snds/VO_RU_Grunt_Negative_01A_DimitryRozental.ogg","general_spetsnaz_snds/VO_RU_Grunt_Negative_02A_DimitryRozental.ogg","general_spetsnaz_snds/VO_RU_Grunt_Negative_03A_DimitryRozental.ogg","general_spetsnaz_snds/VO_RU_Grunt_Negative_04A_DimitryRozental.ogg","general_spetsnaz_snds/VO_RU_Grunt_Negative_05A_DimitryRozental.ogg","general_spetsnaz_snds/VO_RU_Grunt_Negative_06A_DimitryRozental.ogg","general_spetsnaz_snds/dia_1_response.wav","general_spetsnaz_snds/dia_2_response.wav","general_spetsnaz_snds/VO_RU_Grunt_Affirmative_01A_DimitryRozental.ogg","general_spetsnaz_snds/VO_RU_Grunt_Affirmative_02A_DimitryRozental.ogg","general_spetsnaz_snds/VO_RU_Grunt_Affirmative_03A_DimitryRozental.ogg","general_spetsnaz_snds/VO_RU_Grunt_Affirmative_04A_DimitryRozental.ogg","general_spetsnaz_snds/VO_RU_Grunt_Affirmative_05A_DimitryRozental.ogg","general_spetsnaz_snds/VO_RU_Grunt_Affirmative_06A_DimitryRozental.ogg","general_spetsnaz_snds/VO_RU_Grunt_Affirmative_07A_DimitryRozental.ogg","general_spetsnaz_snds/VO_RU_Grunt_Affirmative_08A_DimitryRozental.ogg","general_spetsnaz_snds/VO_RU_SL_Affirmative_01A_AleksandrJuriev.ogg","general_spetsnaz_snds/VO_RU_SL_Affirmative_02A_AleksandrJuriev.ogg","general_spetsnaz_snds/VO_RU_SL_Affirmative_03A_AleksandrJuriev.ogg","general_spetsnaz_snds/VO_RU_SL_Affirmative_04A_AleksandrJuriev.ogg","general_spetsnaz_snds/VO_RU_SL_Affirmative_05A_AleksandrJuriev.ogg","general_spetsnaz_snds/VO_RU_SL_Affirmative_06A_AleksandrJuriev.ogg","general_spetsnaz_snds/VO_RU_SL_Affirmative_07A_AleksandrJuriev.ogg","general_spetsnaz_snds/VO_RU_SL_Affirmative_08A_AleksandrJuriev.ogg"}
-
-ENT.SoundTbl_CallForHelp = {"st_faction_sounds/stalker_vo/general_base_dialogue/cover_fire_8.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/cover_fire_9.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/cover_fire_10.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/cover_fire_11.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/cover_fire_12.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/cover_fire_13.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/cover_fire_14.ogg","general_spetsnaz_snds/VO_RU_Grunt_MedicCall_01A_DimitryRozental.ogg","general_spetsnaz_snds/VO_RU_Grunt_MedicCall_02A_DimitryRozental.ogg","general_spetsnaz_snds/VO_RU_Grunt_MedicCall_03A_DimitryRozental.ogg","general_spetsnaz_snds/VO_RU_Grunt_MedicCall_04A_DimitryRozental.ogg","general_spetsnaz_snds/VO_RU_Grunt_MedicCall_05A_DimitryRozental.ogg","general_spetsnaz_snds/VO_RU_Grunt_MedicCall_06A_DimitryRozental.ogg","general_spetsnaz_snds/VO_RU_Grunt_MedicCall_07A_DimitryRozental.ogg","general_spetsnaz_snds/VO_RU_Grunt_MedicCall_08A_DimitryRozental.ogg","general_spetsnaz_snds/VO_RU_Grunt_MedicCall_09A_DimitryRozental.ogg","general_spetsnaz_snds/VO_RU_Grunt_MedicCall_10A_DimitryRozental.ogg","general_spetsnaz_snds/VO_RU_Grunt_MedicCall_11A_DimitryRozental.ogg","general_spetsnaz_snds/VO_RU_Grunt_MedicCall_12A_DimitryRozental.ogg","general_spetsnaz_snds/VO_RU_Grunt_MedicCall_13A_DimitryRozental.ogg","general_spetsnaz_snds/VO_RU_Grunt_MedicCall_14A_DimitryRozental.ogg","general_spetsnaz_snds/VO_RU_Grunt_MedicCall_15A_DimitryRozental.ogg","general_spetsnaz_snds/VO_RU_Grunt_MedicCall_16A_DimitryRozental.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/backup_1.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/backup_2.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/backup_3.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/backup_4.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/backup_5.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/backup_6.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/backup_7.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/backup_8.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/backup_9.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/backup_10.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/backup_11.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/backup_12.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/backup_13.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/backup_14.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/backup_15.ogg"}
-
-ENT.SoundTbl_OnReceiveOrder = {"general_spetsnaz_snds/VO_RU_Grunt_Affirmative_01A_DimitryRozental.ogg","general_spetsnaz_snds/VO_RU_Grunt_Affirmative_02A_DimitryRozental.ogg","general_spetsnaz_snds/VO_RU_Grunt_Affirmative_03A_DimitryRozental.ogg","general_spetsnaz_snds/VO_RU_Grunt_Affirmative_04A_DimitryRozental.ogg","general_spetsnaz_snds/VO_RU_Grunt_Affirmative_05A_DimitryRozental.ogg","general_spetsnaz_snds/VO_RU_Grunt_Affirmative_06A_DimitryRozental.ogg","general_spetsnaz_snds/VO_RU_Grunt_Affirmative_07A_DimitryRozental.ogg","general_spetsnaz_snds/VO_RU_Grunt_Affirmative_08A_DimitryRozental.ogg","general_spetsnaz_snds/VO_RU_SL_Affirmative_01A_AleksandrJuriev.ogg","general_spetsnaz_snds/VO_RU_SL_Affirmative_02A_AleksandrJuriev.ogg","general_spetsnaz_snds/VO_RU_SL_Affirmative_03A_AleksandrJuriev.ogg","general_spetsnaz_snds/VO_RU_SL_Affirmative_04A_AleksandrJuriev.ogg","general_spetsnaz_snds/VO_RU_SL_Affirmative_05A_AleksandrJuriev.ogg","general_spetsnaz_snds/VO_RU_SL_Affirmative_06A_AleksandrJuriev.ogg","general_spetsnaz_snds/VO_RU_SL_Affirmative_07A_AleksandrJuriev.ogg","general_spetsnaz_snds/VO_RU_SL_Affirmative_08A_AleksandrJuriev.ogg"}
-
-ENT.SoundTbl_BecomeEnemyToPlayer = {"st_faction_sounds/stalker_vo/general_base_dialogue/friendly_fire_1.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/friendly_fire_2.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/friendly_fire_3.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/friendly_fire_4.ogg","st_faction_sounds/stalker_vo/general_base_dialogue/friendly_fire_5.ogg","general_spetsnaz_snds/wetrustedyou01.wav","general_spetsnaz_snds/wetrustedyou02.wav","general_spetsnaz_snds/becomehos1.mp3","general_spetsnaz_snds/becomehos2.mp3","general_spetsnaz_snds/becomehos3.mp3","general_spetsnaz_snds/becomehos4.mp3"}
-
-ENT.SoundTbl_DamageByPlayer = {"general_sds/ext_reactions/fr_fire_" .. mRng(1, 18) .. ".mp3","general_spetsnaz_snds/eft_bear_friendlyfire1.wav","general_spetsnaz_snds/eft_bear_friendlyfire2.wav","general_spetsnaz_snds/eft_bear_friendlyfire3.wav","general_spetsnaz_snds/eft_bear_friendlyfire4.wav","general_spetsnaz_snds/eft_bear_friendlyfire5.wav","general_spetsnaz_snds/eft_bear_friendlyfire6.wav","general_spetsnaz_snds/eft_bear_friendlyfire7.wav","general_spetsnaz_snds/eft_bear_friendlyfire8.wav","general_spetsnaz_snds/eft_bear_friendlyfire9.wav","general_spetsnaz_snds/eft_bear_friendlyfire10.wav","general_spetsnaz_snds/eft_bear_friendlyfire11.wav","general_spetsnaz_snds/eft_bear_friendlyfire12.wav","general_spetsnaz_snds/eft_bear_friendlyfire13.wav","general_spetsnaz_snds/eft_bear_friendlyfire14.wav","general_spetsnaz_snds/eft_bear_friendlyfire15.wav","general_spetsnaz_snds/eft_bear_friendlyfire16.wav","general_spetsnaz_snds/eft_bear_friendlyfire1.wav","general_spetsnaz_snds/playerdamage1.mp3","general_spetsnaz_snds/playerdamage2.mp3","general_spetsnaz_snds/playerdamage3.mp3","general_spetsnaz_snds/playerdamage4.mp3","general_spetsnaz_snds/playerdamage5.mp3","general_spetsnaz_snds/playerdamage6.mp3"}
-
-ENT.SoundTbl_FollowPlayer = {"general_spetsnaz_snds/leadtheway01.wav","general_spetsnaz_snds/leadtheway02.wav","general_spetsnaz_snds/okimready01.wav","general_spetsnaz_snds/okimready02.wav","general_spetsnaz_snds/okimready03.wav","general_spetsnaz_snds/follow1.mp3","general_spetsnaz_snds/follow2.mp3","general_spetsnaz_snds/follow3.mp3","general_spetsnaz_snds/follow4.mp3","general_spetsnaz_snds/follow5.mp3","general_spetsnaz_snds/follow6.mp3","general_spetsnaz_snds/follow7.mp3","general_spetsnaz_snds/follow8.mp3","general_spetsnaz_snds/follow9.mp3","general_spetsnaz_snds/follow10.mp3","general_spetsnaz_snds/follow11.mp3","general_spetsnaz_snds/follow12.mp3","general_spetsnaz_snds/follow13.mp3"}
-
-ENT.SoundTbl_UnFollowPlayer = {"general_spetsnaz_snds/illstayhere01.wav","general_spetsnaz_snds/holddownspot01.wav","general_spetsnaz_snds/holddownspot02.wav","general_spetsnaz_snds/nofollow1.mp3","general_spetsnaz_snds/nofollow2.mp3","general_spetsnaz_snds/nofollow3.mp3","general_spetsnaz_snds/nofollow4.mp3","general_spetsnaz_snds/nofollow5.mp3","general_spetsnaz_snds/nofollow6.mp3","general_spetsnaz_snds/nofollow7.mp3","general_spetsnaz_snds/nofollow8.mp3"}
-
-ENT.SoundTbl_YieldToPlayer = {"general_sds/ext_reactions/sorry_" .. mRng(1, 6) .. ".mp3","general_spetsnaz_snds/sorry01.wav","general_spetsnaz_snds/sorry02.wav","general_spetsnaz_snds/excuseme01.wav","general_spetsnaz_snds/excuseme02.wav","general_spetsnaz_snds/pardonme02.wav","general_spetsnaz_snds/pardonme01.wav","general_spetsnaz_snds/bump1.mp3","general_spetsnaz_snds/bump2.mp3","general_spetsnaz_snds/bump3.mp3","general_spetsnaz_snds/bump4.mp3","general_spetsnaz_snds/bump5.mp3","general_spetsnaz_snds/bump6.mp3"}
----------------------------------------------------------------------------------------------------------------------------------------------
 -- Slightly Modified version of Darkborn's Dynamic Footstep code -- \
 function ENT:Dynamic_FeetSteps()
-    if not self.Has_DynamicFootsteps then return end 
-    local equipmentRustle = table.Random(self.EquipmentClanging_Tbl)
-    local clothingRustle = table.Random(self.ClothingRustling_Tbl)
+    if not self.HasSounds or not self.HasFootstepSounds or not self.Has_DynamicFootsteps then return end 
+    if self.CrouchMovement then return end 
+
+    local waterLvl = self:WaterLevel()
+    local onGround = self:IsOnGround()
+
+    if waterLvl > 0 and waterLvl < 3 then
+        if self.WaterSplashSounds and #self.WaterSplashSounds > 0 then
+            local waterStep = table.Random(self.WaterSplashSounds)
+            local rngP = mRng(75, 105)
+            VJ.EmitSound(self, waterStep, 75, rngP)
+        end
+    end
+
+    if not onGround then return end
+    local pos = self:GetPos()
     local rngP = mRng(75, 105)
     local chance = 3
-    local pos = self:GetPos()
-    local waterLvl = self:WaterLevel()
-    local waterStep = table.Random(self.WaterSplashSounds)
-    if not self:IsOnGround() or not self.HasSounds or not self.HasFootstepSounds then return end
 
-    if self.HasEquipmentRustle then 
-        if mRng(1, chance) == 1 and equipmentRustle then 
-            VJ.EmitSound(self, equipmentRustle, 75, rngP)
+    if self.HasEquipmentRustle and mRng(1, chance) == 1 then 
+        local tbl = self.EquipmentClanging_Tbl
+        if tbl and #tbl > 0 then
+            VJ.EmitSound(self, table.Random(tbl), 70, rngP)
         end
     end 
 
-    if self.HasClothingRustle then 
-        if mRng(1, chance) == 1 and clothingRustle then 
-            VJ.EmitSound(self, clothingRustle, 90, rngP)
+    if self.HasClothingRustle and mRng(1, chance) == 1 then 
+        local tbl = self.ClothingRustling_Tbl
+        if tbl and #tbl > 0 then
+            VJ.EmitSound(self, table.Random(tbl), 65, rngP)
         end
     end 
 
     local tr = util.TraceLine({
-        start = pos,
-        endpos = pos + Vector(0,0, -150),
-        filter = {self}
+        start = pos + Vector(0, 0, 10), 
+        endpos = pos + Vector(0, 0, -20),
+        filter = self
     })
 
-    if tr.Hit and self.FootSteps[tr.MatType] then
-        VJ.EmitSound(self, VJ.PICK(self.FootSteps[tr.MatType]), rngP ,rngP)
+    if tr.Hit then
+        local mat = tr.MatType
+        local sounds = self.FootSteps and self.FootSteps[mat]
+        if sounds and #sounds > 0 then
+            VJ.EmitSound(self, table.Random(sounds), 75, rngP)
+        end
     end
-
-    if waterLvl > 0 and waterLvl < 3 then
-        VJ.EmitSound(self, waterStep, rngP, rngP)
-    end
-end 
+end
 ---------------------------------------------------------------------------------------------------------------------------------------------
 function ENT:OnWeaponReload()
     self:Reload_Reposition()
@@ -9308,7 +10879,7 @@ function ENT:Reload_Reposition()
     if not conv or conv:GetInt() ~= 1 then return end
 
     if self.VJ_IsBeingControlled then return end
-    if self.IsGuard or self.MovementType == VJ_MOVETYPE_STATIONARY then return end 
+    if not self:IsAbleToMoveNow() then return end 
     if not self.Weapon_CanReload then return end 
 
     local ene = self:GetEnemy()
@@ -9352,7 +10923,7 @@ function ENT:Reload_Reposition()
             self.AnimTbl_WeaponReload = {gestureReloadAnim}
             self:ClearSchedule()
 
-            if (mRng and mRng(1, reposChance) == 1) or (not mRng and mRng(1, reposChance) == 1) then
+            if mRng(1, reposChance) == 1 then
                 timer.Simple(0, function()
                     if not IsValid(self) then return end
                     if (mRng and mRng(1,2) == 1) or (not mRng and mRng(1,2) == 1) then
@@ -9378,6 +10949,7 @@ function ENT:Reload_Reposition()
                                 HandleSchedStuff(x)
                             end)
                         end
+
                         local c2 = CurTime()
                         self.TakingCoverT = c2 + delT
                         self.Repos_GesReloadNextT = c2 + delT 
@@ -9708,17 +11280,10 @@ function ENT:DetermineGibType()
     return (self.Gib_Type == "Alien" and "UseAlien_") or "UseHuman_"
 end 
 
-function ENT:Spawn_Gibs()
-
-    local minimalGibs = GetConVar("vj_stalker_minimal_gib"):GetBool()
-    local maxSmallG = minimalGibs and math.ceil(self.MaxSmallGibs / 2) or self.MaxSmallGibs
-    local maxLargeG = minimalGibs and math.ceil(self.MaxLargeGibs / 2) or self.MaxLargeGibs
-
-    local gibType = self:DetermineGibType()
-
-    local gibCloudYellow    = VJ.Color2Byte(Color(math.Rand(180, 255), math.Rand(170, 220), math.Rand(10, 65)))
-    local gibCloudRed       = VJ.Color2Byte(Color(mRng(50, 200), mRng(1, 100), mRng(1, 100)))
-    local selectCol         = gibCloudRed
+function ENT:Determine_BloodColor()
+    local gibCloudYellow = VJ.Color2Byte(Color(mRand(180, 255), mRand(170, 220), mRand(10, 65)))
+    local gibCloudRed    = VJ.Color2Byte(Color(mRng(50, 255), mRng(1, 65), mRng(1, 65)))
+    local selectCol      = gibCloudRed
 
     if self.Gib_BloodColor ~= false and self.Gib_BloodColor ~= nil then 
         if self.Gib_BloodColor == "Red" then 
@@ -9726,145 +11291,166 @@ function ENT:Spawn_Gibs()
         elseif self.Gib_BloodColor == "Yellow" then 
             selectCol = gibCloudYellow
         end
-    
     end 
+    return selectCol
+end
+
+function ENT:Spawn_Gibs(dmginfo, isDissolving)
+    local minimalGibs = GetConVar("vj_stalker_minimal_gib"):GetBool()
+    local maxSmallG = minimalGibs and math.ceil(self.MaxSmallGibs / 2) or self.MaxSmallGibs
+    local maxLargeG = minimalGibs and math.ceil(self.MaxLargeGibs / 2) or self.MaxLargeGibs
+
+    local gibType  = self:DetermineGibType()
+    
+    -- If dissolving, force blood color to black (0), otherwise determine normally
+    local bloodCol = isDissolving and VJ.Color2Byte(Color(0, 0, 0)) or self:Determine_BloodColor()
+
+    local obbCenter = self:OBBCenter()
+    local basePos = self:GetPos() + obbCenter
+
+    local pcfxTbl = self.Gib_ParticleTbl
+    local hasPcfx = istable(pcfxTbl) and #pcfxTbl > 0
+    local bloodParticle = hasPcfx and table.Random(pcfxTbl) or nil
+
+    local sndTbl = self.GoreOrGibSounds
+    local gibSound = nil
+    if sndTbl then
+        gibSound = istable(sndTbl) and table.Random(sndTbl) or sndTbl
+    end
 
     if self.HasGibOnDeathEffects then
-        local gibOrigin = self:GetPos() + self:OBBCenter()
         local randOffset = Vector(mRand(-25, 25), mRand(-25, 25), mRand(5, 35))
         local randAng = Angle(mRand(-25, 25), mRand(-25, 25), mRand(-25, 25))
         local rngSnd = mRng(75, 105)
-        local gibSounds = nil
-        local pcfx = self.Gib_ParticleTbl or {}
-        
-        local snd = self.GoreOrGibSounds
-        if snd and snd ~= false then
-            if istable(snd) then
-                gibSounds = table.Random(snd) 
-            elseif isstring(snd) then
-                gibSounds = snd  
+        if hasPcfx and not isDissolving then
+            local fx = bloodParticle or table.Random(pcfxTbl)
+            if isstring(fx) and fx ~= "" then
+                ParticleEffect(fx, basePos + randOffset, randAng)
             end
         end
 
-        if istable(pcfx) and #pcfx > 0 then
-            local played = false
-            for _, fx in ipairs(pcfx) do
-                if isstring(fx) and fx ~= "" and mRng(1, 2) == 1 then
-                    ParticleEffect(fx, gibOrigin + randOffset, randAng, nil)
-                    played = true
-                end
-            end
-            if not played then
-                local fx = table.Random(pcfx)
-                if isstring(fx) and fx ~= "" then
-                    ParticleEffect(fx, gibOrigin + randOffset, randAng, nil)
-                end
-            end
+        if gibSound then
+            VJ.EmitSound(self, gibSound, rngSnd, rngSnd)
         end
-        if gibSounds and gibSounds ~= false then 
-            VJ.EmitSound(self, gibSounds, rngSnd, rngSnd)
-        end 
 
-        local bloodCloudScale   = mRng(75, 225)
+        -- Blood cloud 
         local bloodeffect = EffectData()
-        bloodeffect:SetOrigin(gibOrigin)
-        bloodeffect:SetColor(selectCol)
-        bloodeffect:SetScale(bloodCloudScale)
+        bloodeffect:SetOrigin(basePos)
+        bloodeffect:SetColor(bloodCol)
+        bloodeffect:SetScale(mRng(75, 225))
         util.Effect("VJ_Blood1", bloodeffect)
 
+        -- Blood spray
         local bloodspray = EffectData()
-        bloodspray:SetOrigin(gibOrigin)
+        bloodspray:SetOrigin(basePos)
         bloodspray:SetScale(mRng(3, 10))
         bloodspray:SetFlags(3)
-        bloodspray:SetColor(0)
-        util.Effect("bloodspray", bloodspray)
+        bloodspray:SetColor(isDissolving and 1 or 0) 
         util.Effect("bloodspray", bloodspray)
 
-        util.ScreenShake(gibOrigin, 20, 8, 1.5, 1500)
-        VJ.ApplyRadiusDamage(self, self, gibOrigin, mRand(125, 355),mRng(5, 15), bit.bor(DMG_SLASH, DMG_CLUB), true, true)
-    end 
+        util.ScreenShake(basePos, 20, 8, 1.5, 1500)
+        VJ.ApplyRadiusDamage(self, self, basePos, mRand(125, 355), mRng(5, 15), bit.bor(DMG_SLASH, DMG_CLUB), true, true)
+    end
 
     local gibs = {}
-    for i = 1, mRng(5, maxSmallG) do gibs[#gibs+1] = gibType .. "Small" end
-    for i = 1, mRng(5, maxLargeG) do gibs[#gibs+1] = gibType .. "Big" end
+    
+    for i = 1, mRng(5, maxSmallG) do
+        gibs[#gibs + 1] = gibType .. "Small"
+    end
+    for i = 1, mRng(5, maxLargeG) do
+        gibs[#gibs + 1] = gibType .. "Big"
+    end
 
-    if self.HasExtraGibVariants then  
-        if self.Gib_Type == "Human" and not minimalGibs then
-            gibs[#gibs+1] = "models/vj_base/gibs/human/heart.mdl"
-            for i = 1,mRng(1, 2) do
-                gibs[#gibs+1] = "models/vj_base/gibs/human/liver.mdl"
-                gibs[#gibs+1] = "models/vj_base/gibs/human/lung.mdl"
-            end
-            if mRng(1, 2) == 1 then
-                gibs[#gibs+1] = "models/vj_base/gibs/human/brain.mdl"
-            end
-            for i = 1,mRng(1, 2) do
-                gibs[#gibs+1] = "models/vj_base/gibs/human/eye.mdl"
-            end
-            for i = 1,mRng(3, 24) do
-                gibs[#gibs+1] = "models/gibs/hgibs_rib.mdl"
-            end
-            table.Add(gibs, {"models/gibs/hgibs.mdl","models/gibs/hgibs_scapula.mdl","models/gibs/hgibs_spine.mdl"})
-            local intestineAmount = mRng(1, 8)
-
-            for i = 1, intestineAmount do
-                self:CreateGibEntity("intestine_gib", intestineAmount, {BloodType = selectCol, Pos = gibOrigin})
-            end
+    if self.HasExtraGibVariants and self.Gib_Type == "Human" and not minimalGibs then
+        gibs[#gibs + 1] = "models/vj_base/gibs/human/heart.mdl"
+        local organCount = mRng(1, 2)
+        for i = 1, organCount do
+            table.insert(gibs, "models/vj_base/gibs/human/liver.mdl")
+            table.insert(gibs, "models/vj_base/gibs/human/lung.mdl")
         end
+        if mRng(1, 2) == 1 then gibs[#gibs + 1] = "models/vj_base/gibs/human/brain.mdl" end
+        for i = 1, mRng(1, 2) do gibs[#gibs + 1] = "models/vj_base/gibs/human/eye.mdl" end
+        for i = 1, mRng(3, 24) do gibs[#gibs + 1] = "models/gibs/hgibs_rib.mdl" end
+
+        table.Add(gibs, {"models/gibs/hgibs.mdl", "models/gibs/hgibs_scapula.mdl", "models/gibs/hgibs_spine.mdl"})
+
+        if not isDissolving then
+            local intestineAmount = mRng(1, 8)
+            for i = 1, intestineAmount do
+                local intGib = self:CreateGibEntity("intestine_gib", intestineAmount, {BloodType = bloodCol, Pos = basePos})
+            end 
+        end 
     end 
 
     local maxParticles = math.floor(#gibs / 2)
     local particlesSpawned = 0
+    local pcfxChance = tonumber(self.Gib_ParticleChance) or 5
 
     for _, gibModel in ipairs(gibs) do
-        local gibPos = self:LocalToWorld(self:OBBCenter() + Vector(mRng(-45, 45),mRng(-45, 45),mRng(10, 45)))
+        local gibPos = self:LocalToWorld(obbCenter + Vector(mRng(-45, 45), mRng(-45, 45), mRng(10, 45)))
         local gibAng = Angle(mRand(-55, 55), mRand(-55, 55), mRand(-55, 55))
-        local bloodParticle = (istable(self.Gib_ParticleTbl) and #self.Gib_ParticleTbl > 0) and table.Random(self.Gib_ParticleTbl) or nil
-        local pcfxP = PATTACH_POINT_FOLLOW
-        local pcfxChance = tonumber(self.Gib_ParticleChance) or 5 
+        local gibEnt = self:CreateGibEntity("obj_vj_gib", gibModel, { BloodType = bloodCol, Pos = gibPos, Ang = gibAng})
 
-        self:CreateGibEntity("obj_vj_gib", gibModel, {BloodType = selectCol, Pos = gibPos, Ang = gibAng}, function(gibEnt)
-            if minimalGibs or not self.Gibs_UniquePcfx then return end 
-            if particlesSpawned < maxParticles and mRng(1, pcfxChance) == 1 and isstring(bloodParticle) and bloodParticle ~= ""then
-                ParticleEffectAttach(bloodParticle, pcfxP, gibEnt, 0)
-                particlesSpawned = particlesSpawned + 1
+        if IsValid(gibEnt) then
+            if isDissolving then
+                local dissolver = self:GetOrCreateDissolver()
+                if IsValid(dissolver) then
+                    local targetName = "vj_dissolve_" .. gibEnt:EntIndex()
+                    gibEnt:SetName(targetName)
+                    dissolver:Fire("Dissolve", targetName, 0)
+                end
+            elseif not minimalGibs and self.Gibs_UniquePcfx then
+                if particlesSpawned < maxParticles and bloodParticle and mRng(1, pcfxChance) == 1 then
+                    ParticleEffectAttach(bloodParticle, PATTACH_POINT_FOLLOW, gibEnt, 0)
+                    particlesSpawned = particlesSpawned + 1
+                end
             end
-        end)
+        end
     end
 end
 
-function ENT:Custom_GibEffects()
+ENT.StalkerMain_Gib_Conv = "vj_stalker_gib"
+ENT.StalkerMain_GibDis_Conv = "vj_stalker_gibs_dissolved"
+ENT.StalkerMain_GibSnd_Conv = "vj_stalker_gib_death_sounds"
+function ENT:Custom_GibEffects(dmginfo)
     if not IsValid(self) then return end 
-    local conv = GetConVar("vj_stalker_gib"):GetInt()
-    if conv ~= 1 then return end
+
+    local convStr = self.StalkerMain_Gib_Conv
+    local conv = GetConVar(convStr):GetInt()
+    if not conv or conv ~= 1 then return end
 
     local gibChance = tonumber(self.ChanceToGib) or 3  
     if self.IsHeavilyArmored then 
-        gibChance = gibChance * 3
+        gibChance = math_floor(gibChance * 3)
     end 
 
-    if mRng(1, gibChance) == 1 then
+    local dmgT = dmginfo:GetDamageType()
+    local inflict = dmginfo:GetInflictor()
+    local dissConvStr = self.StalkerMain_GibDis_Conv
+    local convar = GetConVar(dissConvStr):GetInt()
+    local isDissolve = convar and convar == 1 and (bit.band(dmgT, DMG_DISSOLVE) ~= 0) or (IsValid(inflict) and inflict:GetClass() == "prop_combine_ball")
 
+    if mRng(1, gibChance) == 1 then
         self.HasDeathSounds = false 
         self.HasDeathRagdoll = false
         self.HasPainSounds = false
         self.HasDeathAnimation = false
         self.GibbedOnDeath = true
 
-        self:Spawn_Gibs()
+        self:Spawn_Gibs(dmginfo, isDissolve)
+        local sndConv = self.StalkerMain_GibSnd_Conv
+        local gibDthConv = GetConVar(sndConv):GetInt() 
+        if not gibDthConv or gibDthConv ~= 1 then return end 
         
-        local gibDthConv = GetConVar("vj_stalker_gib_death_sounds"):GetInt() 
-        if gibDthConv == 1 then 
-            local tbl = self.SoundTbl_GibDeath
-            if not tbl then return end 
-            local gibDeathSound = table.Random(tbl)
-            VJ.EmitSound(self, gibDeathSound, mRng(60, 75), mRng(85, 115))
-        end 
+        local tbl = self.SoundTbl_GibDeath
+        if not tbl then return end 
+        local gibDeathSound = table.Random(tbl)
+        VJ.EmitSound(self, gibDeathSound, mRng(60, 75), mRng(85, 115)) 
     end 
 end
 
 function ENT:HandleGibOnDeath(dmginfo, hitgroup)
-    self:Custom_GibEffects()
+    self:Custom_GibEffects(dmginfo)
     return false 
 end
 --------------------------------------------------------------------------------------------------------------------------------------------
@@ -9967,8 +11553,8 @@ ENT.GrenadeAttackSoundChance = 1
 ENT.DangerSightSoundChance = 1 -- Controls "self.SoundTbl_DangerSight", "self.SoundTbl_GrenadeSight"
 ENT.SuppressingSoundChance = 2
 ENT.WeaponReloadSoundChance = 1
-ENT.KilledEnemySoundChance = mRng(1,2)
-ENT.AllyDeathSoundChance = mRng(1,3)
+ENT.KilledEnemySoundChance = mRng(1, 2)
+ENT.AllyDeathSoundChance = mRng(1, 3)
 ENT.PainSoundChance = 2
 ENT.ImpactSoundChance = 1
 ENT.DamageByPlayerSoundChance = 1
